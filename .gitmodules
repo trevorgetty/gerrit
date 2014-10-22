@@ -21,3 +21,6 @@
 [submodule "plugins/singleusergroup"]
 	path = plugins/singleusergroup
 	url = https://gerrit.googlesource.com/plugins/singleusergroup
+[submodule "plugins/gitms-gerrit-event-plugin"]
+	path = plugins/gitms-gerrit-event-plugin
+	url = https://gerrit.wandisco.com/gitms-gerrit-event-plugin
