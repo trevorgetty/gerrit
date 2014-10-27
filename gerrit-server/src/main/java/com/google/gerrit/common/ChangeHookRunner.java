@@ -41,7 +41,6 @@ import com.google.gerrit.server.events.ChangeRestoredEvent;
 import com.google.gerrit.server.events.CommentAddedEvent;
 import com.google.gerrit.server.events.DraftPublishedEvent;
 import com.google.gerrit.server.events.EventFactory;
-import com.google.gerrit.server.events.IndexEvent;
 import com.google.gerrit.server.events.MergeFailedEvent;
 import com.google.gerrit.server.events.PatchSetCreatedEvent;
 import com.google.gerrit.server.events.RefUpdatedEvent;
@@ -453,12 +452,6 @@ public class ChangeHookRunner implements ChangeHooks, LifecycleListener {
         addArg(args, "--commit", event.patchSet.revision);
 
         runHook(change.getProject(), changeMergedHook, args);
-    }
-    
-    public void doIndexHook(final Change c, final ReviewDb db) throws OrmException {
-      final IndexEvent event = new IndexEvent();
-      event.changeid = c.getKey();
-      fireEvent(c, event, db);
     }
     
     public void doSubmitHook(final Change change, final Account account,
