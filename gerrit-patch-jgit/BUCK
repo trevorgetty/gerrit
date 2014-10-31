@@ -23,6 +23,8 @@ java_library(
     SRC + 'diff/ReplaceEdit.java',
     SRC + 'internal/storage/file/WindowCacheStatAccessor.java',
     SRC + 'lib/ObjectIdSerialization.java',
+    SRC + 'internal/storage/file/FileRepository.java',
+    SRC + 'lib/RefUpdate.java',
   ],
   deps = [
     '//lib:gson',
