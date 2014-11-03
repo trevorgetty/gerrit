@@ -859,9 +859,8 @@ public abstract class RefUpdate {
       if (appPropertiesFile.canRead()) {
         port = getProperty(appPropertiesFile, "gitms.local.jetty.port");
       } else {
-        throw new IOException("Failed to read application.properties.");
+        throw new IOException("Failed to read application.properties, gitmsconfig is not set in ~/.gitconfig");
       }
-      throw new IOException("Failed to locate application.properties, gitmsconfig is not set in ~/.gitconfig");
     }
 
       if (port != null && !port.isEmpty()) {

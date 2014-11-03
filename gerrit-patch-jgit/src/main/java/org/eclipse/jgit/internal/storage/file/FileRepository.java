@@ -297,9 +297,8 @@ public class FileRepository extends Repository {
         repGroupId = getProperty(appPropertiesFile, "gerrit.rpgroupid");
         port = getProperty(appPropertiesFile, "gitms.local.jetty.port");
       } else {
-        throw new IOException("Failed to read application.properties.");
-      }
-      throw new IOException("Failed to locate application.properties, gitmsconfig is not set in ~/.gitconfig");
+        throw new IOException("Failed to locate application.properties, gitmsconfig is not set in ~/.gitconfig");
+      }    
     } 
 
     if (repGroupId != null && !repGroupId.isEmpty() && port != null && !port.isEmpty()) {
