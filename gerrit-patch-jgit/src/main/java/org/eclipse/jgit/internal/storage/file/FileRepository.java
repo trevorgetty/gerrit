@@ -49,12 +49,15 @@ package org.eclipse.jgit.internal.storage.file;
 import java.io.BufferedReader;
 import java.io.DataOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.text.MessageFormat;
 import java.util.HashSet;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import javax.xml.bind.DatatypeConverter;
@@ -282,9 +285,22 @@ public class FileRepository extends Repository {
       // Configuration file is not in the valid format, throw exception back.
       throw new IOException(e);
     }
-
-    String repGroupId = config.getString("core", null, "repgroupid");
-    String port = config.getString("core", null, "gitmsport");
+    
+    String repGroupId = null;
+    String port = null;
+    String appProperties = config.getString("core", null, "gitmsconfig");
+    
+    
+    if (!StringUtils.isEmptyOrNull(appProperties)) {
+      File appPropertiesFile = new File(appProperties);
+      if (appPropertiesFile.canRead()) {
+        repGroupId = getProperty(appPropertiesFile, "gerrit.rpgroupid");
+        port = getProperty(appPropertiesFile, "gitms.local.jetty.port");
+      } else {
+        throw new IOException("Failed to read application.properties.");
+      }
+      throw new IOException("Failed to locate application.properties, gitmsconfig is not set in ~/.gitconfig");
+    } 
 
     if (repGroupId != null && !repGroupId.isEmpty() && port != null && !port.isEmpty()) {
       
@@ -384,6 +400,26 @@ public class FileRepository extends Repository {
               ConfigConstants.CONFIG_KEY_PRECOMPOSEUNICODE, true);
     }
     cfg.save();
+  }
+        
+  public String getProperty(File appProps, String propertyName) throws IOException{
+    Properties props = new Properties();
+    InputStream input = null;
+    try {
+      input = new FileInputStream(appProps);
+      props.load(input);
+      return props.getProperty(propertyName);
+    } catch (IOException e) {
+      throw new IOException("Could not read " + appProps.getAbsolutePath());
+    } finally {
+      if (input != null) {
+        try {
+          input.close();
+        } catch (IOException ex) {
+          
+        }
+      }
+    }
   }
 
 	/**
