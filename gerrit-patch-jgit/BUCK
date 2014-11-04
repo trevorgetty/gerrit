@@ -22,6 +22,7 @@ java_library(
     SRC + 'diff/EditDeserializer.java',
     SRC + 'diff/ReplaceEdit.java',
     SRC + 'internal/storage/file/WindowCacheStatAccessor.java',
+    SRC + 'internal/storage/file/ObjectDirectory.java',
     SRC + 'lib/ObjectIdSerialization.java',
     SRC + 'internal/storage/file/FileRepository.java',
     SRC + 'lib/RefUpdate.java',
