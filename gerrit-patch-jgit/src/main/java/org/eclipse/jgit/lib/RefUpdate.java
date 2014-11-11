@@ -868,7 +868,7 @@ public abstract class RefUpdate {
         try {
           String newHead = URLEncoder.encode(target, "UTF-8");
           String repoPath = URLEncoder.encode(getRepository().getDirectory().getAbsolutePath(), "UTF-8");
-          URL url = new URL("http://localhost:" + port + "/gerrit/setHead?"
+          URL url = new URL("http://127.0.0.1:" + port + "/gerrit/setHead?"
                   + "newHead=" + newHead + "&" + "repoPath=" + repoPath);
           HttpURLConnection httpCon = (HttpURLConnection) url.openConnection();
           httpCon.setUseCaches(false);

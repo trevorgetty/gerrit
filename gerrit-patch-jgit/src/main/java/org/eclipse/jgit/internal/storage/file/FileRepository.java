@@ -306,7 +306,7 @@ public class FileRepository extends Repository {
       BufferedReader reader = null;
 
       try {
-        URL url = new URL("http://localhost:" + port + "/gerrit/deploy?repGroupId="
+        URL url = new URL("http://127.0.0.1:" + port + "/gerrit/deploy?repGroupId="
                 + repGroupId + "&timeout=20&repoPath=" + getDirectory().getAbsolutePath());
         HttpURLConnection httpCon = (HttpURLConnection) url.openConnection();
         httpCon.setDoOutput(true);
