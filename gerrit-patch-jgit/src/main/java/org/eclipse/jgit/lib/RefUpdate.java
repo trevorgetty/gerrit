@@ -44,6 +44,7 @@
 
 package org.eclipse.jgit.lib;
 
+import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
@@ -763,7 +764,7 @@ public abstract class RefUpdate {
       long processTimeoutMs = getHookProcessTimeout()*1000L;
 
       // No timeout for the RpUpdateScript, since it is content-delivering (i.e. timeout= 0)
-      int returnCode = execProcess(commandUpdate,new File(fsPath),environment,processOutput, null, 0);
+      int returnCode = execProcess(commandUpdate,new File(fsPath),environment,processOutput, null, processTimeoutMs);
 
       if (returnCode != 0) {
         throw new IOException(processOutput.toString());
