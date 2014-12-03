@@ -288,6 +288,7 @@ public class FileRepository extends Repository {
     
     String repGroupId = null;
     String port = null;
+    String timeout = null;
     String appProperties = config.getString("core", null, "gitmsconfig");
     
     
@@ -296,6 +297,10 @@ public class FileRepository extends Repository {
       if (appPropertiesFile.canRead()) {
         repGroupId = getProperty(appPropertiesFile, "gerrit.rpgroupid");
         port = getProperty(appPropertiesFile, "gitms.local.jetty.port");
+        timeout = getProperty(appPropertiesFile, "gitms.repo.deploy.timeout");
+	if (timeout == null || timeout.isEmpty()) {
+          timeout = "60";
+        }
       } else {
         throw new IOException("Failed to locate application.properties, gitmsconfig is not set in ~/.gitconfig");
       }    
@@ -307,7 +312,7 @@ public class FileRepository extends Repository {
 
       try {
         URL url = new URL("http://127.0.0.1:" + port + "/gerrit/deploy?repGroupId="
-                + repGroupId + "&timeout=20&repoPath=" + getDirectory().getAbsolutePath());
+                + repGroupId + "&timeout=" + timeout + "&repoPath=" + getDirectory().getAbsolutePath());
         HttpURLConnection httpCon = (HttpURLConnection) url.openConnection();
         httpCon.setDoOutput(true);
         httpCon.setUseCaches(false);
