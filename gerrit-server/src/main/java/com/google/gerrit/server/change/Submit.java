@@ -274,12 +274,12 @@ public class Submit implements RestModifyView<RevisionResource, SubmitInput>,
     try {
       ChangeNotes notes = notesFactory.create(change);
       submitter = approvalsUtil.getSubmitter(db, notes, notes.getChange().currentPatchSetId());
+      hooks.doSubmitHook(change, accountCache.get(submitter.getAccountId()).getAccount(),
+            db.patchSets().get(change.currentPatchSetId()), db);
     } catch (Exception e) {
-      log.warn("Could not get submitter");
+      log.warn("Could not get submitter, skip sending SubmitEvent");
     }
     
-    hooks.doSubmitHook(change, accountCache.get(submitter.getAccountId()).getAccount(),
-            db.patchSets().get(change.currentPatchSetId()), db);
     return change;
   }
 
