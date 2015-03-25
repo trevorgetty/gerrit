@@ -34,6 +34,7 @@ import com.google.gerrit.server.mail.ReplyToChangeSender;
 import com.google.gerrit.server.project.ChangeControl;
 import com.google.gwtorm.server.AtomicUpdate;
 import com.google.gwtorm.server.OrmException;
+import com.google.gwtorm.server.ResultSet;
 import com.google.inject.Inject;
 import com.google.inject.Provider;
 
@@ -42,6 +43,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.List;
 
 public class Abandon implements RestModifyView<ChangeResource, AbandonInput>,
     UiAction<ChangeResource> {
@@ -105,6 +107,7 @@ public class Abandon implements RestModifyView<ChangeResource, AbandonInput>,
       message = newMessage(input, caller, change);
       db.changeMessages().insert(Collections.singleton(message));
       db.commit();
+      ChangesOnSlave.createAndWaitForSlaveIdWithCommit(db);
     } finally {
       db.rollback();
     }

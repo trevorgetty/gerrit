@@ -149,6 +149,8 @@ public class PostReview implements RestModifyView<RevisionResource, ReviewInput>
     if (update != null) {
       update.commit();
     }
+    
+    ChangesOnSlave.createAndWaitForSlaveIdWithCommit(db.get());
 
     CheckedFuture<?, IOException> indexWrite;
     if (dirty) {

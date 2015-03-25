@@ -9,6 +9,8 @@
   gerrit = //:gerrit
   release = //:release
   withdocs = //:withdocs
+  installer = //gerrit-installer:targerrit
+  makeself-installer = //gerrit-installer:makeself-installer
 
 [buildfile]
   includes = //tools/default.defs

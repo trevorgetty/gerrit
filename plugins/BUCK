@@ -4,7 +4,8 @@ CORE = [
   'download-commands',
   'replication',
   'reviewnotes',
-  'singleusergroup'
+  'singleusergroup',
+  'gitms-gerrit-event-plugin'
 ]
 
 # buck audit parses and resolves all deps even if not reachable

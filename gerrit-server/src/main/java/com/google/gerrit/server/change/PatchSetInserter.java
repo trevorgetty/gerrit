@@ -285,6 +285,8 @@ public class PatchSetInserter {
         insertMessage(db);
       }
 
+      ChangesOnSlave.createAndWaitForSlaveIdWithCommit(db);
+      
       if (sendMail) {
         try {
           PatchSetInfo info = patchSetInfoFactory.get(commit, patchSet.getId());

@@ -105,6 +105,7 @@ class PutTopic implements RestModifyView<ChangeResource, Input>,
           });
         db.changeMessages().insert(Collections.singleton(cmsg));
         db.commit();
+        ChangesOnSlave.createAndWaitForSlaveIdWithCommit(db);
       } finally {
         db.rollback();
       }

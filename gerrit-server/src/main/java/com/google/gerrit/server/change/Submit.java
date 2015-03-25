@@ -14,8 +14,6 @@
 
 package com.google.gerrit.server.change;
 
-import static com.google.gerrit.common.data.SubmitRecord.Status.OK;
-
 import com.google.common.base.Optional;
 import com.google.common.base.Predicate;
 import com.google.common.base.Strings;
@@ -25,7 +23,10 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Table;
+import com.google.gerrit.common.ChangeHookRunner;
+import com.google.gerrit.common.ChangeHooks;
 import com.google.gerrit.common.data.SubmitRecord;
+import static com.google.gerrit.common.data.SubmitRecord.Status.OK;
 import com.google.gerrit.extensions.api.changes.SubmitInput;
 import com.google.gerrit.extensions.restapi.AuthException;
 import com.google.gerrit.extensions.restapi.ResourceConflictException;
@@ -44,13 +45,16 @@ import com.google.gerrit.server.ChangeUtil;
 import com.google.gerrit.server.GerritPersonIdent;
 import com.google.gerrit.server.IdentifiedUser;
 import com.google.gerrit.server.ProjectUtil;
+import com.google.gerrit.server.account.AccountCache;
 import com.google.gerrit.server.account.AccountsCollection;
 import com.google.gerrit.server.change.ChangeJson.ChangeInfo;
 import com.google.gerrit.server.git.GitRepositoryManager;
 import com.google.gerrit.server.git.LabelNormalizer;
 import com.google.gerrit.server.git.MergeQueue;
+import com.google.gerrit.server.git.ReceiveCommits;
 import com.google.gerrit.server.git.VersionedMetaData.BatchMetaDataUpdate;
 import com.google.gerrit.server.index.ChangeIndexer;
+import com.google.gerrit.server.notedb.ChangeNotes;
 import com.google.gerrit.server.notedb.ChangeUpdate;
 import com.google.gerrit.server.project.ChangeControl;
 import com.google.gerrit.server.util.TimeUtil;
@@ -58,19 +62,23 @@ import com.google.gwtorm.server.AtomicUpdate;
 import com.google.gwtorm.server.OrmException;
 import com.google.inject.Inject;
 import com.google.inject.Provider;
-
-import org.eclipse.jgit.errors.RepositoryNotFoundException;
-import org.eclipse.jgit.lib.CommitBuilder;
-import org.eclipse.jgit.lib.PersonIdent;
-
 import java.io.IOException;
 import java.sql.Timestamp;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import org.eclipse.jgit.errors.RepositoryNotFoundException;
+import org.eclipse.jgit.lib.CommitBuilder;
+import org.eclipse.jgit.lib.PersonIdent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class Submit implements RestModifyView<RevisionResource, SubmitInput>,
     UiAction<RevisionResource> {
+  
+  private static final Logger log =
+      LoggerFactory.getLogger(Submit.class);
+  
   public enum Status {
     SUBMITTED, MERGED
   }
@@ -96,6 +104,9 @@ public class Submit implements RestModifyView<RevisionResource, SubmitInput>,
   private final LabelNormalizer labelNormalizer;
   private final AccountsCollection accounts;
   private final ChangesCollection changes;
+  private final ChangeHookRunner hooks;
+  private final AccountCache accountCache;
+  private final ChangeNotes.Factory notesFactory;
 
   @Inject
   Submit(@GerritPersonIdent PersonIdent serverIdent,
@@ -108,7 +119,10 @@ public class Submit implements RestModifyView<RevisionResource, SubmitInput>,
       AccountsCollection accounts,
       ChangesCollection changes,
       ChangeIndexer indexer,
-      LabelNormalizer labelNormalizer) {
+      LabelNormalizer labelNormalizer,
+      ChangeHooks hooks,
+      AccountCache accountCache,
+      ChangeNotes.Factory nf) {
     this.serverIdent = serverIdent;
     this.dbProvider = dbProvider;
     this.repoManager = repoManager;
@@ -120,6 +134,9 @@ public class Submit implements RestModifyView<RevisionResource, SubmitInput>,
     this.changes = changes;
     this.indexer = indexer;
     this.labelNormalizer = labelNormalizer;
+    this.hooks = (ChangeHookRunner) hooks;
+    this.accountCache = accountCache;
+    this.notesFactory = nf;
   }
 
   @Override
@@ -247,10 +264,23 @@ public class Submit implements RestModifyView<RevisionResource, SubmitInput>,
         return null;
       }
       db.commit();
+      ChangesOnSlave.createAndWaitForSlaveIdWithCommit(db);
     } finally {
       db.rollback();
     }
     indexer.index(db, change);
+    
+    //send a SubmitEvent to be output by event-stream  
+    PatchSetApproval submitter = null;
+    try {
+      ChangeNotes notes = notesFactory.create(change);
+      submitter = approvalsUtil.getSubmitter(db, notes, notes.getChange().currentPatchSetId());
+      hooks.doSubmitHook(change, accountCache.get(submitter.getAccountId()).getAccount(),
+            db.patchSets().get(change.currentPatchSetId()), db);
+    } catch (Exception e) {
+      log.warn("Could not get submitter, skip sending SubmitEvent");
+    }
+    
     return change;
   }
 

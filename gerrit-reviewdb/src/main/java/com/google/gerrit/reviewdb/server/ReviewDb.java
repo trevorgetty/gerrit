@@ -126,4 +126,10 @@ public interface ReviewDb extends Schema {
    */
   @Sequence
   int nextChangeMessageId() throws OrmException;
+
+  @Relation(id = 1111111)
+  SlaveWaitAccess slaveWaits();
+  
+  @Sequence
+  int nextSlaveWaitId() throws OrmException;
 }

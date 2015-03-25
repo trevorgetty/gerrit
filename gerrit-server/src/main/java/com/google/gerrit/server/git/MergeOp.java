@@ -45,6 +45,7 @@ import com.google.gerrit.server.ApprovalsUtil;
 import com.google.gerrit.server.ChangeUtil;
 import com.google.gerrit.server.IdentifiedUser;
 import com.google.gerrit.server.account.AccountCache;
+import com.google.gerrit.server.change.ChangesOnSlave;
 import com.google.gerrit.server.extensions.events.GitReferenceUpdated;
 import com.google.gerrit.server.git.strategy.SubmitStrategy;
 import com.google.gerrit.server.git.strategy.SubmitStrategyFactory;
@@ -701,6 +702,13 @@ public class MergeOp {
             potentiallyStillSubmittable.add(commit);
             break;
 
+          case REVISION_GONE:
+            if (isNotReplicated(c)) {  // we are waiting for the replication to happen
+              log.info("accjm: SKIPPING INDEX FOR {}",c.getChangeId());
+            } else { // something bad is happened, because the ref is there but not the object
+              setNew(commit, message(c, "Unspecified merge failure: " + s.name()));
+            }
+            break;
           default:
             setNew(commit, message(c, "Unspecified merge failure: " + s.name()));
             break;
@@ -713,6 +721,18 @@ public class MergeOp {
     }
   }
 
+  private boolean isNotReplicated(Change c) {
+    Map<String, Ref> allRefs = repo.getAllRefs();
+    String refName = c.currentPatchSetId().toRefName();
+    
+    boolean isThere = allRefs.get(refName)!=null;
+    log.info("accjm: checking changeId {} with ref {}. In repo? {}",new Object[] {c.getChangeId(),refName,isThere});
+    if (!allRefs.entrySet().isEmpty()) {
+      log.info("accjm: first ref in the set is: {}",allRefs.entrySet().iterator().next().getKey());
+    }
+    return !isThere;
+  }
+  
   private void updateSubscriptions(final List<Change> submitted) {
     if (mergeTip != null && (branchTip == null || branchTip != mergeTip)) {
       SubmoduleOp subOp =
@@ -837,8 +857,8 @@ public class MergeOp {
       addMergedMessage(submitter, msg);
 
       db.commit();
-
       sendMergedEmail(c, submitter);
+      ChangesOnSlave.createAndWaitForSlaveIdWithCommit(db);
       indexer.index(db, c);
       if (submitter != null) {
         try {
@@ -1014,6 +1034,7 @@ public class MergeOp {
         });
         db.changeMessages().insert(Collections.singleton(msg));
         db.commit();
+        ChangesOnSlave.createAndWaitForSlaveIdWithCommit(db);
       } finally {
         db.rollback();
       }
@@ -1131,6 +1152,7 @@ public class MergeOp {
         msg.setMessage("Project was deleted.");
         db.changeMessages().insert(Collections.singleton(msg));
         db.commit();
+        ChangesOnSlave.createAndWaitForSlaveIdWithCommit(db);
         indexer.index(db, change);
       }
     } finally {

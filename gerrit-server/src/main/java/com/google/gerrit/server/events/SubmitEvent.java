@@ -1,4 +1,4 @@
-// Copyright (C) 2010 The Android Open Source Project
+// Copyright (C) 2012 The Android Open Source Project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,12 +14,15 @@
 
 package com.google.gerrit.server.events;
 
-public abstract class ChangeEvent {
-  /**
-   * WANdisco replication for Gerrit with GitMS
-   * This flag is used to make sure that a replicated event
-   * does not become a new event to be replicated again, producing
-   * this way an infinite loop
-   */
-  public transient boolean replicated = false;
+import com.google.gerrit.server.data.AccountAttribute;
+import com.google.gerrit.server.data.ChangeAttribute;
+import com.google.gerrit.server.data.PatchSetAttribute;
+
+public class SubmitEvent extends ChangeEvent {
+    public final String type = "submit-event";
+    public ChangeAttribute change;
+    public PatchSetAttribute patchSet;
+    public AccountAttribute submitter;
+    public String reason;
 }
+
