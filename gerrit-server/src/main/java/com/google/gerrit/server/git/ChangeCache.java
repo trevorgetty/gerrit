@@ -16,6 +16,7 @@ package com.google.gerrit.server.git;
 
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import com.google.gerrit.common.ReplicatedCacheManager;
 import com.google.gerrit.extensions.events.GitReferenceUpdatedListener;
 import com.google.gerrit.reviewdb.client.Change;
 import com.google.gerrit.reviewdb.client.Project;
@@ -60,6 +61,11 @@ public class ChangeCache implements GitReferenceUpdatedListener {
   @Inject
   ChangeCache(@Named(ID_CACHE) LoadingCache<Project.NameKey, List<Change>> cache) {
     this.cache = cache;
+    attachToReplication();
+  }
+
+  final void attachToReplication() {
+    ReplicatedCacheManager.watchCache(ID_CACHE, this.cache);
   }
 
   List<Change> get(Project.NameKey name) {
@@ -74,7 +80,9 @@ public class ChangeCache implements GitReferenceUpdatedListener {
   @Override
   public void onGitReferenceUpdated(GitReferenceUpdatedListener.Event event) {
     if (event.getRefName().startsWith(RefNames.REFS_CHANGES)) {
-      cache.invalidate(new Project.NameKey(event.getProjectName()));
+      Project.NameKey prjName = new Project.NameKey(event.getProjectName());
+      cache.invalidate(prjName);
+      ReplicatedCacheManager.replicateEvictionFromCache(ID_CACHE,prjName);
     }
   }
 

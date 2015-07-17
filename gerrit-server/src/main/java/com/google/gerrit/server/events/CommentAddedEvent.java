@@ -20,10 +20,33 @@ import com.google.gerrit.server.data.ChangeAttribute;
 import com.google.gerrit.server.data.PatchSetAttribute;
 
 public class CommentAddedEvent extends ChangeEvent {
-    public final String type = "comment-added";
+    public final String type;
     public ChangeAttribute change;
     public PatchSetAttribute patchSet;
     public AccountAttribute author;
     public ApprovalAttribute[] approvals;
     public String comment;
+
+    public CommentAddedEvent(){
+      this.type = "comment-added";
+    }
+
+    public CommentAddedEvent(CommentAddedEvent e, String type){
+      this(e, type, false);
+    }
+
+    public CommentAddedEvent(CommentAddedEvent e, String type, boolean replicated){
+      this.type = type;
+      this.change = e.change;
+      this.patchSet = e.patchSet;
+      this.author = e.author;
+      this.approvals = e.approvals;
+      this.comment = e.comment;
+      this.replicated = replicated;
+    }
+
+    @Override
+    public String getType(){
+      return type;
+    }
 }

@@ -15,4 +15,15 @@
 package com.google.gerrit.server.events;
 
 public abstract class ChangeEvent {
+  /**
+   * WANdisco replication for Gerrit with GitMS
+   * This flag is used to make sure that a replicated event
+   * does not become a new event to be replicated again, producing
+   * this way an infinite loop
+   */
+  public transient boolean replicated = false;
+
+  public String getType(){
+    return null;
+  }
 }

@@ -19,9 +19,31 @@ import com.google.gerrit.server.data.ChangeAttribute;
 import com.google.gerrit.server.data.PatchSetAttribute;
 
 public class ChangeRestoredEvent extends ChangeEvent {
-    public final String type = "change-restored";
+    public final String type;
     public ChangeAttribute change;
     public PatchSetAttribute patchSet;
     public AccountAttribute restorer;
     public String reason;
+
+    public ChangeRestoredEvent(){
+      this.type = "change-restored";
+    }
+
+    public ChangeRestoredEvent(ChangeRestoredEvent e, String type){
+      this(e, type, false);
+    }
+
+    public ChangeRestoredEvent(ChangeRestoredEvent e, String type, boolean replicated){
+      this.type = type;
+      this.change = e.change;
+      this.patchSet = e.patchSet;
+      this.restorer = e.restorer;
+      this.reason = e.reason;
+      this.replicated = replicated;
+    }
+
+    @Override
+    public String getType(){
+      return type;
+    }
 }

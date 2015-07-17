@@ -19,8 +19,30 @@ import com.google.gerrit.server.data.ChangeAttribute;
 import com.google.gerrit.server.data.PatchSetAttribute;
 
 public class ReviewerAddedEvent extends ChangeEvent {
-    public final String type = "reviewer-added";
+    public final String type;
     public ChangeAttribute change;
     public PatchSetAttribute patchSet;
     public AccountAttribute reviewer;
+
+    public ReviewerAddedEvent(){
+      this.type = "reviewer-added";
+    }
+
+    public ReviewerAddedEvent(ReviewerAddedEvent e, String type){
+      this(e, type, false);
+    }
+
+    public ReviewerAddedEvent(ReviewerAddedEvent e, String type, boolean replicated){
+      this.type = type;
+      this.change = e.change;
+      this.patchSet = e.patchSet;
+      this.reviewer = e.reviewer;
+      this.replicated = replicated;
+    }
+
+    @Override
+    public String getType(){
+      return type;
+    }
+
 }

@@ -1320,6 +1320,12 @@ Allow querying for status of Gerrit's internal caches.  This capability allows
 the granted group to
 link:cmd-show-caches.html[look at some or all Gerrit caches via ssh].
 
+[[capability_viewReplicatorStats]]
+=== View Replicator Stats
+
+Allow querying for status of Gerrit's internal message exchanges with
+the WANdisco GitMS replicator. This capability allows the granted group to
+link:cmd-show-replicator-stats.html[look at some or all Gerrit stats via ssh].
 
 [[capability_viewConnections]]
 === View Connections

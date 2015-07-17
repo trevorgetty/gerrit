@@ -19,8 +19,29 @@ import com.google.gerrit.server.data.ChangeAttribute;
 import com.google.gerrit.server.data.PatchSetAttribute;
 
 public class ChangeMergedEvent extends ChangeEvent {
-    public final String type = "change-merged";
+    public final String type;
     public ChangeAttribute change;
     public PatchSetAttribute patchSet;
     public AccountAttribute submitter;
+
+    public ChangeMergedEvent(){
+      this.type = "change-merged";
+    }
+
+    public ChangeMergedEvent(ChangeMergedEvent e, String type){
+      this(e, type, false);
+    }
+
+    public ChangeMergedEvent(ChangeMergedEvent e, String type, boolean replicated){
+      this.type = type;
+      this.change = e.change;
+      this.patchSet = e.patchSet;
+      this.submitter = e.submitter;
+      this.replicated = replicated;
+    }
+
+    @Override
+    public String getType(){
+      return type;
+    }
 }

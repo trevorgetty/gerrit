@@ -295,6 +295,8 @@ public class PatchSetInserter {
         commitMessageNotForChange(updatedChange);
       }
 
+      ChangesOnSlave.createAndWaitForSlaveIdWithCommit(db);
+      
       if (sendMail) {
         try {
           PatchSetInfo info = patchSetInfoFactory.get(commit, patchSet.getId());

@@ -116,8 +116,8 @@ public class DeleteReviewer implements RestModifyView<ReviewerResource, Input> {
         changeMessage.setMessage(msg.toString());
         cmUtil.addChangeMessage(db, update, changeMessage);
       }
-
       db.commit();
+      ChangesOnSlave.createAndWaitForSlaveIdWithCommit(db);
     } finally {
       db.rollback();
     }

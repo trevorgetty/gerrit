@@ -18,7 +18,28 @@ import com.google.gerrit.server.data.AccountAttribute;
 import com.google.gerrit.server.data.RefUpdateAttribute;
 
 public class RefUpdatedEvent extends ChangeEvent {
-  public final String type = "ref-updated";
+  public final String type;
   public AccountAttribute submitter;
   public RefUpdateAttribute refUpdate;
+
+  public RefUpdatedEvent(){
+    this.type = "ref-updated";
+  }
+
+  public RefUpdatedEvent(RefUpdatedEvent e, String type){
+    this(e, type, false);
+  }
+
+  public RefUpdatedEvent(RefUpdatedEvent e, String type, boolean replicated){
+    this.type = type;
+    this.submitter = e.submitter;
+    this.refUpdate = e.refUpdate;
+    this.replicated = replicated;
+  }
+
+  @Override
+  public String getType(){
+    return type;
+  }
+
 }

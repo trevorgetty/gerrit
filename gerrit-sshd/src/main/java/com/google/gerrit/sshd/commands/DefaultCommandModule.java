@@ -44,6 +44,7 @@ public class DefaultCommandModule extends CommandModule {
     command(gerrit, LsUserRefs.class);
     command(gerrit, Query.class);
     command(gerrit, ShowCaches.class);
+    command(gerrit, ShowReplicatorStats.class);
     command(gerrit, ShowConnections.class);
     command(gerrit, ShowQueue.class);
     command(gerrit, StreamEvents.class);
@@ -70,6 +71,7 @@ public class DefaultCommandModule extends CommandModule {
     command(git, "upload-pack").to(Upload.class);
     command("suexec").to(SuExec.class);
     listener().to(ShowCaches.StartupListener.class);
+    listener().to(ShowReplicatorStats.StartupListener.class);
 
     // The following commands can only be ran on a server in Master mode
     command(gerrit, CreateAccountCommand.class);

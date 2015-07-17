@@ -17,6 +17,7 @@ package com.google.gerrit.sshd.commands;
 import static com.google.gerrit.sshd.CommandMetaData.Mode.MASTER_OR_SLAVE;
 
 import com.google.common.base.Strings;
+import com.google.gerrit.common.ReplicatedCacheManager;
 import com.google.gerrit.common.Version;
 import com.google.gerrit.common.data.GlobalCapability;
 import com.google.gerrit.extensions.annotations.RequiresCapability;
@@ -124,15 +125,18 @@ final class ShowCaches extends SshCommand {
     stdout.print('\n');
 
     stdout.print(String.format(//
-        "%1s %-"+nw+"s|%-21s|  %-5s |%-9s|\n" //
+        "%1s %-"+nw+"s|%-21s|  %-5s |%-9s|%-9s|%-9s|%-9s|\n" //
         , "" //
         , "Name" //
         , "Entries" //
         , "AvgGet" //
         , "Hit Ratio" //
+        , "Evct Sent" //
+        , "Evct Recv" //
+        , "Reld Recv" //
     ));
     stdout.print(String.format(//
-        "%1s %-"+nw+"s|%6s %6s %7s|  %-5s  |%-4s %-4s|\n" //
+        "%1s %-"+nw+"s|%6s %6s %7s|  %-5s  |%-4s %-4s|%-9s|%-9s|%-9s|\n" //
         , "" //
         , "" //
         , "Mem" //
@@ -141,12 +145,15 @@ final class ShowCaches extends SshCommand {
         , "" //
         , "Mem" //
         , "Disk" //
+        ,""
+        ,""
+        ,""
     ));
     stdout.print("--");
     for (int i = 0; i < nw; i++) {
       stdout.print('-');
     }
-    stdout.print("+---------------------+---------+---------+\n");
+    stdout.print("+---------------------+---------+---------+---------+---------+---------+\n");
 
     Collection<CacheInfo> caches = getCaches();
     printMemoryCoreCaches(caches);
@@ -208,7 +215,7 @@ final class ShowCaches extends SshCommand {
 
   private void printCache(CacheInfo cache) {
     stdout.print(String.format(
-        "%1s %-"+nw+"s|%6s %6s %7s| %7s |%4s %4s|\n",
+        "%1s %-"+nw+"s|%6s %6s %7s| %7s |%4s %4s|%9s|%9s|%9s|\n",
         CacheType.DISK.equals(cache.type) ? "D" : "",
         cache.name,
         nullToEmpty(cache.entries.mem),
@@ -216,7 +223,10 @@ final class ShowCaches extends SshCommand {
         Strings.nullToEmpty(cache.entries.space),
         Strings.nullToEmpty(cache.averageGet),
         formatAsPercent(cache.hitRatio.mem),
-        formatAsPercent(cache.hitRatio.disk)
+        formatAsPercent(cache.hitRatio.disk),
+        ReplicatedCacheManager.getEvictionsSent().count(cache.name),
+        ReplicatedCacheManager.getEvictionsPerformed().count(cache.name),
+        ReplicatedCacheManager.getReloadsPerformed().count(cache.name)
       ));
   }
 

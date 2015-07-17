@@ -19,9 +19,30 @@ import com.google.gerrit.server.data.ChangeAttribute;
 import com.google.gerrit.server.data.PatchSetAttribute;
 
 public class ChangeAbandonedEvent extends ChangeEvent {
-    public final String type = "change-abandoned";
+    public final String type;
     public ChangeAttribute change;
     public PatchSetAttribute patchSet;
     public AccountAttribute abandoner;
     public String reason;
+
+    public ChangeAbandonedEvent(){
+      this.type = "change-abandoned";
+    }
+
+    public ChangeAbandonedEvent(ChangeAbandonedEvent e, String type){
+      this(e, type, false);
+    }
+
+    public ChangeAbandonedEvent(ChangeAbandonedEvent e, String type, boolean replicated){
+      this.type = type;
+      this.change = e.change;
+      this.patchSet = e.patchSet;
+      this.abandoner = e.abandoner;
+      this.reason = e.reason;
+      this.replicated = replicated;
+    }
+
+    public String getType(){
+      return type;
+    }
 }

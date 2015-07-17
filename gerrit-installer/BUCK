@@ -1,0 +1,9 @@
+include_defs('//tools/git.defs')
+
+genrule(
+  name='makeself-installer',
+  deps=['//:release'],
+  srcs=['makeself.py'],
+  bash='python $SRCS $(location //:release) "%s" > $OUT' % git_describe(),
+  out='gerritms-installer.sh'
+)

@@ -97,6 +97,9 @@ public class GlobalCapability {
   /** Can view all pending tasks in the queue (not just the filtered set). */
   public static final String VIEW_QUEUE = "viewQueue";
 
+  /** Can view all statistics from the WANdisco replicator. */
+  public static final String VIEW_REPLICATOR_STATS = "viewReplicatorStats";
+  
   private static final List<String> NAMES_ALL;
   private static final List<String> NAMES_LC;
 
@@ -120,6 +123,7 @@ public class GlobalCapability {
     NAMES_ALL.add(VIEW_CONNECTIONS);
     NAMES_ALL.add(VIEW_PLUGINS);
     NAMES_ALL.add(VIEW_QUEUE);
+    NAMES_ALL.add(VIEW_REPLICATOR_STATS);
 
     NAMES_LC = new ArrayList<>(NAMES_ALL.size());
     for (String name : NAMES_ALL) {

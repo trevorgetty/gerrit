@@ -18,6 +18,7 @@ import com.google.common.base.Optional;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableSet;
+import com.google.gerrit.common.ReplicatedCacheManager;
 import com.google.gerrit.reviewdb.client.Account;
 import com.google.gerrit.reviewdb.client.AccountExternalId;
 import com.google.gerrit.reviewdb.client.AccountGroup;
@@ -77,8 +78,15 @@ public class AccountCacheImpl implements AccountCache {
       @Named(BYUSER_NAME) LoadingCache<String, Optional<Account.Id>> byUsername) {
     this.byId = byId;
     this.byName = byUsername;
+    
+    attachToReplication();
   }
 
+  final void attachToReplication() {
+    ReplicatedCacheManager.watchCache(BYID_NAME, this.byId);
+    ReplicatedCacheManager.watchCache(BYUSER_NAME, this.byName);
+  }
+  
   public AccountState get(Account.Id accountId) {
     try {
       return byId.get(accountId);
@@ -106,12 +114,14 @@ public class AccountCacheImpl implements AccountCache {
   public void evict(Account.Id accountId) {
     if (accountId != null) {
       byId.invalidate(accountId);
+      ReplicatedCacheManager.replicateEvictionFromCache(BYID_NAME,accountId);
     }
   }
 
   public void evictByUsername(String username) {
     if (username != null) {
       byName.invalidate(username);
+      ReplicatedCacheManager.replicateEvictionFromCache(BYUSER_NAME,username);
     }
   }
 

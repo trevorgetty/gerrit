@@ -45,6 +45,7 @@ import com.google.gerrit.server.events.MergeFailedEvent;
 import com.google.gerrit.server.events.PatchSetCreatedEvent;
 import com.google.gerrit.server.events.RefUpdatedEvent;
 import com.google.gerrit.server.events.ReviewerAddedEvent;
+import com.google.gerrit.server.events.SubmitEvent;
 import com.google.gerrit.server.events.TopicChangedEvent;
 import com.google.gerrit.server.git.GitRepositoryManager;
 import com.google.gerrit.server.git.WorkQueue;
@@ -52,16 +53,9 @@ import com.google.gerrit.server.project.ProjectCache;
 import com.google.gerrit.server.project.ProjectControl;
 import com.google.gerrit.server.project.ProjectState;
 import com.google.gwtorm.server.OrmException;
+import com.google.gwtorm.server.SchemaFactory;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-
-import org.eclipse.jgit.lib.Config;
-import org.eclipse.jgit.lib.ObjectId;
-import org.eclipse.jgit.lib.RefUpdate;
-import org.eclipse.jgit.lib.Repository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -80,6 +74,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.eclipse.jgit.lib.Config;
+import org.eclipse.jgit.lib.ObjectId;
+import org.eclipse.jgit.lib.RefUpdate;
+import org.eclipse.jgit.lib.Repository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Spawns local executables when a hook action occurs. */
 @Singleton
@@ -218,6 +218,9 @@ public class ChangeHookRunner implements ChangeHooks, LifecycleListener {
 
     /** Timeout value for synchronous hooks */
     private final int syncHookTimeout;
+    
+    private final SchemaFactory<ReviewDb> schema;
+    //private final Provider<ReviewDb> dbProvider;
 
     /**
      * Create a new ChangeHookRunner.
@@ -238,7 +241,8 @@ public class ChangeHookRunner implements ChangeHooks, LifecycleListener {
       final AccountCache accountCache,
       final EventFactory eventFactory,
       final SitePaths sitePaths,
-      final DynamicSet<ChangeListener> unrestrictedListeners) {
+      final DynamicSet<ChangeListener> unrestrictedListeners,
+      final SchemaFactory<ReviewDb> schema) {
         this.anonymousCowardName = anonymousCowardName;
         this.repoManager = repoManager;
         this.hookQueue = queue.createQueue(1, "hook");
@@ -247,6 +251,7 @@ public class ChangeHookRunner implements ChangeHooks, LifecycleListener {
         this.eventFactory = eventFactory;
         this.sitePaths = sitePath;
         this.unrestrictedListeners = unrestrictedListeners;
+        this.schema = schema;
 
         final File hooksPath = sitePath.resolve(getValue(config, "hooks", "path", sitePath.hooks_dir.getAbsolutePath()));
 
@@ -267,6 +272,19 @@ public class ChangeHookRunner implements ChangeHooks, LifecycleListener {
             new ThreadFactoryBuilder()
               .setNameFormat("SyncHook-%d")
               .build());
+        // Initialise the replicated events manager for Wandisco event replication
+        initReplicatedEventsManager(config);
+    }
+
+    private void initReplicatedEventsManager(Config config) {
+        // Initialise the replicated events manager
+        ReplicatedEventsManager hookOnListeners = ReplicatedEventsManager.hookOnListeners(this,schema,config);
+        if (hookOnListeners != null) {
+          unrestrictedListeners.add(hookOnListeners.listener);
+          log.info("ReplicatedEvents change listener added");
+        } else {
+          log.info("ReplicatedEvents is not enabled");
+        }
     }
 
     public void addChangeListener(ChangeListener listener, IdentifiedUser user) {
@@ -461,6 +479,17 @@ public class ChangeHookRunner implements ChangeHooks, LifecycleListener {
         addArg(args, "--commit", event.patchSet.revision);
 
         runHook(change.getProject(), changeMergedHook, args);
+    }
+    
+    public void doSubmitHook(final Change change, final Account account,
+            final PatchSet patchSet, final ReviewDb db) throws OrmException {
+      
+      final SubmitEvent event = new SubmitEvent();
+      event.change = eventFactory.asChangeAttribute(change);
+      event.submitter = eventFactory.asAccountAttribute(account);
+      event.patchSet = eventFactory.asPatchSetAttribute(patchSet);
+      
+      fireEvent(change, event, db);
     }
 
     public void doMergeFailedHook(final Change change, final Account account,

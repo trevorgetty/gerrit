@@ -80,6 +80,7 @@ import com.google.gerrit.server.change.ChangeInserter;
 import com.google.gerrit.server.change.ChangeKind;
 import com.google.gerrit.server.change.ChangeKindCache;
 import com.google.gerrit.server.change.ChangesCollection;
+import com.google.gerrit.server.change.ChangesOnSlave;
 import com.google.gerrit.server.change.MergeabilityChecker;
 import com.google.gerrit.server.change.RevisionResource;
 import com.google.gerrit.server.change.Submit;
@@ -165,6 +166,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -510,7 +512,7 @@ public class ReceiveCommits {
   public ReceivePack getReceivePack() {
     return rp;
   }
-
+  
   /** Determine if the user can upload commits. */
   public Capable canUpload() {
     Capable result = projectControl.canPushToAtLeastOneRef();
@@ -784,6 +786,13 @@ public class ReceiveCommits {
       for (CreateRequest create : newChanges) {
         futures.add(create.insertChange());
       }
+
+      // It has no effect to wait here for changes to appear!
+      /*log.info("Entering waiting loop of changes...");
+      for (CreateRequest create : newChanges) {
+        waitForChangeOnSlave(create.change.getId());
+      }
+      log.info("Exited loop of changes");*/
 
       for (CheckedFuture<?, InsertException> f : futures) {
         f.checkedGet();
@@ -1609,10 +1618,12 @@ public class ReceiveCommits {
         public Void call() throws OrmException, IOException {
           if (caller == Thread.currentThread()) {
             insertChange(db);
+            // No point in waiting here for the change to appear, it's useless because problema already happened
           } else {
             ReviewDb db = schemaFactory.open();
             try {
               insertChange(db);
+              // No point in waiting here for the change to appear, it's useless because problema already happened
             } finally {
               db.close();
             }
@@ -1988,6 +1999,7 @@ public class ReceiveCommits {
       return msg;
     }
 
+    @SuppressWarnings("SleepWhileInLoop")
     PatchSet.Id insertPatchSet(ReviewDb db) throws OrmException, IOException {
       final Account.Id me = currentUser.getAccountId();
       final List<FooterLine> footerLines = newCommit.getFooterLines();
@@ -2079,6 +2091,8 @@ public class ReceiveCommits {
         db.rollback();
       }
       update.commit();
+
+      ChangesOnSlave.createAndWaitForSlaveIdWithCommit(db,change.getId());
 
       if (mergedIntoRef != null) {
         // Change was already submitted to a branch, close it.
@@ -2462,6 +2476,7 @@ public class ReceiveCommits {
 
       cmUtil.addChangeMessage(db, update, msg);
       db.commit();
+      ChangesOnSlave.createAndWaitForSlaveIdWithCommit(db,change.getId());
     } finally {
       db.rollback();
     }

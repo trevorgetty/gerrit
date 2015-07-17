@@ -18,6 +18,7 @@ import static com.google.gerrit.reviewdb.client.AccountExternalId.SCHEME_USERNAM
 
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import com.google.gerrit.common.ReplicatedCacheManager;
 import com.google.gerrit.common.errors.InvalidSshKeyException;
 import com.google.gerrit.reviewdb.client.AccountExternalId;
 import com.google.gerrit.reviewdb.client.AccountSshKey;
@@ -79,6 +80,11 @@ public class SshKeyCacheImpl implements SshKeyCache {
   SshKeyCacheImpl(
       @Named(CACHE_NAME) LoadingCache<String, Iterable<SshKeyCacheEntry>> cache) {
     this.cache = cache;
+    attachToReplication();
+  }
+  
+  final void attachToReplication() {
+    ReplicatedCacheManager.watchCache(CACHE_NAME, this.cache);
   }
 
   Iterable<SshKeyCacheEntry> get(String username) {
@@ -93,6 +99,7 @@ public class SshKeyCacheImpl implements SshKeyCache {
   public void evict(String username) {
     if (username != null) {
       cache.invalidate(username);
+      ReplicatedCacheManager.replicateEvictionFromCache(CACHE_NAME,username);
     }
   }
 

@@ -116,6 +116,7 @@ public class Restore implements RestModifyView<ChangeResource, RestoreInput>,
       message = newMessage(input, caller, change);
       cmUtil.addChangeMessage(db, update, message);
       db.commit();
+      ChangesOnSlave.createAndWaitForSlaveIdWithCommit(db);
     } finally {
       db.rollback();
     }

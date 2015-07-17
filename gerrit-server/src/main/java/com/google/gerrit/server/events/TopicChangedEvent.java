@@ -18,8 +18,30 @@ import com.google.gerrit.server.data.AccountAttribute;
 import com.google.gerrit.server.data.ChangeAttribute;
 
 public class TopicChangedEvent extends ChangeEvent {
-  public final String type = "topic-changed";
+  public final String type;
   public ChangeAttribute change;
   public AccountAttribute changer;
   public String oldTopic;
+
+  public TopicChangedEvent(){
+    this.type = "topic-changed";
+  }
+
+  public TopicChangedEvent(TopicChangedEvent e, String type){
+    this(e, type, false);
+  }
+
+  public TopicChangedEvent(TopicChangedEvent e, String type, boolean replicated){
+    this.type = type;
+    this.change = e.change;
+    this.changer = e.changer;
+    this.oldTopic = e.oldTopic;
+    this.replicated = replicated;
+  }
+
+  @Override
+  public String getType(){
+    return type;
+  }
+
 }

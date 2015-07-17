@@ -192,6 +192,9 @@ public class ChangeInserter {
       db.rollback();
     }
     update.commit();
+    
+    ChangesOnSlave.createAndWaitForSlaveIdWithCommit(db);
+    
     CheckedFuture<?, IOException> f = mergeabilityChecker.newCheck()
         .addChange(change)
         .reindex()

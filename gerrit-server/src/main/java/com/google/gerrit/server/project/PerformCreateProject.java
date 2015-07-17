@@ -16,6 +16,7 @@ package com.google.gerrit.server.project;
 
 import com.google.common.base.Objects;
 import com.google.gerrit.common.ProjectUtil;
+import com.google.gerrit.common.ReplicatedCacheManager;
 import com.google.gerrit.common.data.AccessSection;
 import com.google.gerrit.common.data.GroupDescription;
 import com.google.gerrit.common.data.GroupReference;
@@ -219,6 +220,9 @@ public class PerformCreateProject {
       md.close();
     }
     projectCache.onCreateProject(createProjectArgs.getProject());
+    // If we trigger the call from inside the function projectCache.onCreateProject() itself, this would create a replication loop
+    // between the nodes
+    ReplicatedCacheManager.replicateMethodCallFromCache(ReplicatedCacheManager.projectCache, "onCreateProject", createProjectArgs.getProject());
     repoManager.setProjectDescription(createProjectArgs.getProject(),
         createProjectArgs.projectDescription);
   }

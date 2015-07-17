@@ -19,8 +19,30 @@ import com.google.gerrit.server.data.ChangeAttribute;
 import com.google.gerrit.server.data.PatchSetAttribute;
 
 public class DraftPublishedEvent extends ChangeEvent {
-    public final String type = "draft-published";
+    public final String type;
     public ChangeAttribute change;
     public PatchSetAttribute patchSet;
     public AccountAttribute uploader;
+
+    public DraftPublishedEvent(){
+      this.type = "draft-published";
+    }
+
+    public DraftPublishedEvent(DraftPublishedEvent e, String type){
+      this(e, type, false);
+    }
+
+    public DraftPublishedEvent(DraftPublishedEvent e, String type, boolean replicated){
+      this.type = type;
+      this.change = e.change;
+      this.patchSet = e.patchSet;
+      this.uploader = e.uploader;
+      this.replicated = replicated;
+    }
+
+    @Override
+    public String getType(){
+      return type;
+    }
+
 }

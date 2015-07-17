@@ -34,7 +34,11 @@ public class MergeIfNecessary extends SubmitStrategy {
     if (mergeTip == null) {
       // The branch is unborn. Take a fast-forward resolution to
       // create the branch.
-      mergeTip = toMerge.remove(0);
+      if (toMerge != null && toMerge.size() > 0) { // avoid IndexOutOfBoundException
+        mergeTip = toMerge.remove(0);
+      } else if (toMerge != null && toMerge.isEmpty()) {
+        return mergeTip;
+      }
     }
 
     mergeTip =

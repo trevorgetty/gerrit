@@ -150,21 +150,34 @@ public class PostReview implements RestModifyView<RevisionResource, ReviewInput>
     }
 
     ChangeUpdate update = null;
-    db.get().changes().beginTransaction(revision.getChange().getId());
     boolean dirty = false;
     try {
-      change = db.get().changes().get(revision.getChange().getId());
-      ChangeUtil.updated(change);
-      timestamp = change.getLastUpdatedOn();
 
-      update = updateFactory.create(revision.getControl(), timestamp);
-      update.setPatchSetId(revision.getPatchSet().getId());
-      dirty |= insertComments(revision, update, input.comments, input.drafts);
-      dirty |= updateLabels(revision, update, input.labels);
-      dirty |= insertMessage(revision, input.message, update);
-      if (dirty) {
-        db.get().changes().update(Collections.singleton(change));
-        db.get().commit();
+      // ac: Loop to retry the transaction if it fails for deadlock
+      for (int retriedSoFar = 0; ; retriedSoFar++) {
+        db.get().changes().beginTransaction(revision.getChange().getId());
+        dirty = false;
+        try {
+          change = db.get().changes().get(revision.getChange().getId());
+          ChangeUtil.updated(change);
+          timestamp = change.getLastUpdatedOn();
+
+          update = updateFactory.create(revision.getControl(), timestamp);
+          update.setPatchSetId(revision.getPatchSet().getId());
+          dirty |= insertComments(revision, update, input.comments, input.drafts);
+          dirty |= updateLabels(revision, update, input.labels);
+          dirty |= insertMessage(revision, input.message, update);
+          if (dirty) {
+            db.get().changes().update(Collections.singleton(change));
+            db.get().commit();
+          }
+          break;
+        } catch (OrmException maybeSqlTransactionRollback) {
+          if (!ChangesOnSlave.checkIfTransactionDeadlocksAndRollback(db.get(),maybeSqlTransactionRollback,retriedSoFar)) {
+            log.error("Got {}, not SQLTransactionRollbackException",maybeSqlTransactionRollback);
+            throw maybeSqlTransactionRollback;
+          }
+        }
       }
     } finally {
       db.get().rollback();
@@ -172,6 +185,8 @@ public class PostReview implements RestModifyView<RevisionResource, ReviewInput>
     if (update != null) {
       update.commit();
     }
+    
+    ChangesOnSlave.createAndWaitForSlaveIdWithCommit(db.get());
 
     CheckedFuture<?, IOException> indexWrite;
     if (dirty) {

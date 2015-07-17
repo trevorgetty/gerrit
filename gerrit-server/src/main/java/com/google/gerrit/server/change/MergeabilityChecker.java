@@ -149,6 +149,7 @@ public class MergeabilityChecker implements GitReferenceUpdatedListener {
             public ListenableFuture<List<Object>> apply(List<Change> changes) {
               List<ListenableFuture<?>> result =
                   Lists.newArrayListWithCapacity(changes.size());
+              
               for (final Change c : changes) {
                 ListenableFuture<Boolean> b =
                     executor.submit(new Task(c, force));
@@ -160,6 +161,31 @@ public class MergeabilityChecker implements GitReferenceUpdatedListener {
                         public ListenableFuture<Object> apply(
                             Boolean indexUpdated) throws Exception {
                           if (!indexUpdated) {
+                            log.info("ac: queueing {} change to be indexed...",c.getId().get());
+                            if (true) {
+                              ReviewDb theDb = null;
+                              try {
+                                theDb = schemaFactory.open();
+                                final ReviewDb db = theDb;
+                                for (int i=0; i < 100; i++) {
+                                  Change theChange = db.changes().get(c.getId());
+                                  if ( theChange == null) {
+                                    log.error("ac: {} is not on the db",c.getId().get());
+                                    log.error("ac: Waiting... {}/100",i+1);
+                                    Thread.sleep(200L);
+                                  } else {
+                                    log.info("ac: {} is on db",c.getId().get());
+                                    break;
+                                  }
+                                }
+                              } catch (OrmException e) {
+                                log.error("ac: Could not open db",e);
+                              } finally {
+                                if (theDb != null) {
+                                  theDb.close();
+                                }
+                              }
+                            }
                             return (ListenableFuture<Object>)
                                 indexer.indexAsync(c.getId());
                           }
