@@ -6,6 +6,20 @@ function info() {
   fi
 }
 
+## $1 version to check if allowed
+function versionAllowed() {
+  local check_version="$1"
+
+  for var in "${PREVIOUS_ALLOWED_RP_GERRIT_VERSIONS[@]}"
+  do
+    if [ "$var" == "$check_version" ]; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 function header() {
   if [ ! "$NON_INTERACTIVE" == "1" ]; then
     clear
@@ -84,7 +98,24 @@ function prereqs() {
       info "Installation aborted by user"
       exit 0
     fi
+
     FIRST_NODE=$(get_boolean "Is this the first node GerritMS will be installed to?" "true")
+
+    if [ "$FIRST_NODE" == "true" ]; then
+      ## Have to check specifically for MySQL - if the path is not set in GERRIT_MYSQL, it should
+      ## be prompted for
+      if [[ -z "$GERRIT_MYSQL" || ! -x "$GERRIT_MYSQL" ]]; then
+        local detected_mysql=$(command -v mysql)
+        bold " MySQL path is not set"
+        info ""
+        info " Could not find a MySQL path set in GERRIT_MYSQL. Please specify the correct MySQL"
+        info " path to use"
+        info ""
+        get_executable "Path to MySQL:" "$detected_mysql"
+        GERRIT_MYSQL="$EXECUTABLE_PATH"
+        info ""
+      fi
+    fi
   fi
 }
 
@@ -110,7 +141,7 @@ function check_user() {
 
 function check_executables() {
   local bins=0
-  for bin in cp rm mv cut rsync mktemp curl grep tar gzip unzip xmllint git md5sum mysql; do
+  for bin in cp rm mv cut rsync mktemp curl grep tar gzip unzip xmllint git md5sum; do
     if ! type -p "$bin" >/dev/null 2>&1; then
       if [[ "$bins" -eq 0 ]]; then
         header
@@ -132,7 +163,8 @@ function check_executables() {
   if [ "$bins" -ne 0 ]; then
     exit 1
   fi
-  return 1
+
+  return 0
 }
 
 function create_scratch_dir() {
@@ -251,6 +283,35 @@ function get_directory() {
       fi
     else
       echo " ERROR: $INPUT_DIR does not exist"
+    fi
+  done
+}
+
+## Reads input until the user specifies an executable which both exists
+## and is executable
+## $1: String to display in the prompt
+## $2: Default option
+function get_executable() {
+
+  local default=""
+
+  if [ ! -z "$2" ]; then
+    default="[$2] "
+  fi
+
+  while true
+  do
+    read -e -p " $1 $default" EXECUTABLE_PATH
+    if [ -z "$EXECUTABLE_PATH" ]; then
+      EXECUTABLE_PATH=$2
+    fi
+
+    if [ -x "$EXECUTABLE_PATH" ]; then
+      break
+    else
+      info ""
+      info " \033[1mERROR:\033[0m path does not exist or is not executable"
+      info ""
     fi
   done
 }
@@ -400,15 +461,142 @@ function check_gerrit_root() {
 
   ## Check the version of the detected gerrit.war
   OLD_GERRIT_VERSION=$(get_gerrit_version "$gerrit_war_path")
-  OLD_GERRIT_VERSION=$(echo "$OLD_GERRIT_VERSION" | cut -f1 -d"-")
+  if versionAllowed "$OLD_GERRIT_VERSION"; then
+    REPLICATED_UPGRADE="true"
+  fi
+  OLD_BASE_GERRIT_VERSION=$(echo "$OLD_GERRIT_VERSION" | cut -f1 -d"-")
 
-  if [ ! "$OLD_GERRIT_VERSION" == "$NEW_GERRIT_VERSION" ]; then
-    echo -e " \033[1mERROR:\033[0m Gerrit version detected at this location is at version: $OLD_GERRIT_VERSION"
+  if [[ ! "$OLD_BASE_GERRIT_VERSION" == "$NEW_GERRIT_VERSION" && ! "$REPLICATED_UPGRADE" == "true" ]]; then
+    ## Gerrit version we're installing does not match the version already installed
+    echo -e " \033[1mERROR:\033[0m Gerrit version detected at this location is at version: $OLD_BASE_GERRIT_VERSION"
     echo " The current Gerrit version should be: $NEW_GERRIT_VERSION"
     return 1
   fi
 
   return 0
+}
+
+function replicated_upgrade() {
+
+  if [ ! "$REPLICATED_UPGRADE" == "true" ]; then
+    return
+  fi
+
+  info ""
+  bold " Upgrade Detected"
+  info ""
+  bold " Gerrit Re-init"
+  info ""
+  info " You are currently upgrading from WANDisco GerritMS ${OLD_GERRIT_VERSION} to ${WD_GERRIT_VERSION}"
+  info " This requires an upgrade in the database schema to be performed by Gerrit as detailed here:"
+  info " ${GERRIT_RELEASE_NOTES}"
+  info ""
+  info " This will require running the command with the format: "
+  bold "   java -jar gerrit.war init -d site_path"
+  info ""
+  info " The upgrade from 2.9.4 will cause the creation of a new All-Users repository. This will automatically"
+  info " be added to replication in GitMS as it is created, but this requires that all nodes in the "
+  info " configured replication group (ID: $GERRIT_RPGROUP_ID) are available."
+  info ""
+  info " Note: This command must be run across all nodes being upgraded, even if a replicated/shared"
+  info " database is in use. This is required to update locally stored 3rd party dependencies not "
+  info " included in the gerrit.war file."
+  info ""
+
+  local perform_init
+
+  if [ ! "$NON_INTERACTIVE" == "1" ]; then
+    perform_init=$(get_boolean "Do you want this installer to run the re-init command above now?" "true")
+  else
+    if [ "$RUN_GERRIT_INIT" == "true" ]; then
+      perform_init="true"
+    else
+      perform_init="false"
+    fi
+  fi
+
+
+  if [ "$perform_init" == "true" ]; then
+    info ""
+    info " Running Gerrit re-init..."
+    info ""
+
+    ## Find Java - it should be referenced by JAVA_HOME
+    if [[ -z "$JAVA_HOME"  || ! -d "$JAVA_HOME" || ! -x "${JAVA_HOME}/bin/java" ]]; then
+      bold " Could not find java using JAVA_HOME."
+      info ""
+      info " Please provide the full path to the java executable you wish to use to perform the re-init."
+      info ""
+
+      ## Search for java on the path first, so if we find it we can offer it as a default option
+      local detected_java_path=$(command -v java)
+      get_executable "Path to Java:" "$detected_java_path"
+      JAVA_BIN="$EXECUTABLE_PATH"
+      info ""
+    else
+      ## JAVA_HOME is set and seems to be sane
+      JAVA_BIN="${JAVA_HOME}/bin/java"
+    fi
+
+    local ret_code
+    $JAVA_BIN -jar "${GERRIT_ROOT}/bin/gerrit.war" init -d "${GERRIT_ROOT}" --batch
+    ret_code="$?"
+
+    if [ "$ret_code" -ne "0" ]; then
+      info ""
+      info " \033[1mWARNING:\033[0m Re-init process failed with return code: \033[1m${ret_code}\033[0m."
+      info " The re-init will have to be performed manually."
+      info ""
+    else
+      info ""
+      info " Finished re-init"
+    fi
+  fi
+
+  info ""
+  bold " Gerrit Caches"
+  info ""
+  info " This version of Gerrit has the ability to replicate cache information between nodes.  This is "
+  info " enabled by default, but you are upgrading from a version of Gerrit where the local Gerrit settings"
+  info " have caching disabled. Do you want to reset the cache settings back to the default?"
+  info ""
+  info " Note, if you have existing custom cache settings in place this will reset them too. In such a case "
+  info " you may wish to re-enable caches manually."
+  info ""
+
+  local reset_cache
+
+  if [ ! "$NON_INTERACTIVE" == "1" ]; then
+    reset_cache=$(get_boolean "Reset Cache Settings?" "true")
+  else
+    if [ "$RESET_GERRIT_CACHES" == "true" ]; then
+      reset_cache="true"
+    else
+      reset_cache="false"
+    fi
+  fi
+
+  if [ "$reset_cache" == "true" ]; then
+    GIT_CONFIG="$GERRIT_ROOT/etc/gerrit.config"
+    export GIT_CONFIG
+    git config --remove-section cache >/dev/null 2>&1 || true
+    git config --remove-section cache.sshkeys >/dev/null 2>&1 || true
+    git config --remove-section cache.project_list >/dev/null 2>&1 || true
+    git config --remove-section cache.projects >/dev/null 2>&1 || true
+    git config --remove-section cache.plugin_resources >/dev/null 2>&1 || true
+    git config --remove-section cache.permission_sort >/dev/null 2>&1 || true
+    git config --remove-section cache.ldap_groups >/dev/null 2>&1 || true
+    git config --remove-section cache.groups_byinclude >/dev/null 2>&1 || true
+    git config --remove-section cache.groups >/dev/null 2>&1 || true
+    git config --remove-section cache.git_tags >/dev/null 2>&1 || true
+    git config --remove-section cache.diff >/dev/null 2>&1 || true
+    git config --remove-section cache.changes >/dev/null 2>&1 || true
+    git config --remove-section cache.adv_bases >/dev/null 2>&1 || true
+    git config --remove-section cache.accounts_byemail >/dev/null 2>&1 || true
+    git config --remove-section cache.accounts >/dev/null 2>&1 || true
+    git config --remove-section cache.diff_intraline >/dev/null 2>&1 || true
+    unset GIT_CONFIG
+  fi
 }
 
 
@@ -502,12 +690,22 @@ function get_config_from_user() {
     fi
   fi
 
+  ## Check if Gerrit is running now that we know the Gerrit root
+  if check_gerrit_status -ne 0; then
+    ##Gerrit was detected as running, display a warning
+    info ""
+    info " \033[1mERROR:\033[0m A process has been detected on the Gerrit HTTP port \033[1m$(get_gerrit_port)\033[0m."
+    info " Is Gerrit still running? Please make this port available and re-run the installer."
+    info ""
+    exit 1
+  fi
+
   set_property "gerrit.root" "$GERRIT_ROOT"
   if ps aux|grep GerritCodeReview|grep $GERRIT_ROOT |grep -v " grep " > /dev/null 2>&1; then
     info ""
     info " \033[1mWARNING:\033[0m Looks like Gerrit is currently running"
     info ""
-  fi 
+  fi
 
   if [ -z "$GERRIT_USERNAME" ]; then
     GERRIT_USERNAME=$(get_string "Gerrit Admin Username")
@@ -665,6 +863,36 @@ function get_config_from_user() {
   fi
 }
 
+## Check if a port is currently being used
+# $1 port to check
+# returns 0 if port isn't in use
+function is_port_available() {
+  netstat -an | grep "$1" | grep -i "LISTEN" > /dev/null 2>&1
+  if [ $? -eq 0 ]; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+function check_gerrit_status() {
+  local gerrit_port=$(get_gerrit_port)
+
+  if is_port_available "$gerrit_port"; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+function get_gerrit_port() {
+  local gerrit_config_file="$GERRIT_ROOT/etc/gerrit.config"
+  export GIT_CONFIG="$gerrit_config_file"
+  local gerrit_port=$(git config httpd.listenUrl | cut -d":" -f3 | cut -d"/" -f1)
+  unset GIT_CONFIG
+  echo "$gerrit_port"
+}
+
 ## Creates a temporary file with the credentials for the database
 ## $1: username
 ## $2: password
@@ -809,43 +1037,7 @@ function write_gerrit_config() {
 
   GIT_CONFIG="$tmp_gerrit_config"
   export GIT_CONFIG
-
   git config receive.timeout 900000
-  if [ "$GERRIT_REPLICATED_CACHE_ENABLED" != "true" ]; then
-    git config --remove-section cache >/dev/null 2>&1 || true
-    git config cache.accounts.memorylimit 0
-    git config cache.accounts.disklimit 0
-    git config cache.accounts_byemail.memorylimit 0
-    git config cache.accounts_byemail.disklimit 0
-    git config cache.adv_bases.memorylimit 0
-    git config cache.adv_bases.disklimit 0
-    git config cache.changes.memorylimit 0
-    git config cache.changes.disklimit 0
-    git config cache.diff.memorylimit 0
-    git config cache.diff.disklimit 0
-    git config cache.diff_intraline.memorylimit 0
-    git config cache.diff_intraline.disklimit 0
-    git config cache.git_tags.memorylimit 0
-    git config cache.git_tags.disklimit 0
-    git config cache.groups.memorylimit 0
-    git config cache.groups.disklimit 0
-    git config cache.groups_byinclude.memorylimit 0
-    git config cache.groups_byinclude.disklimit 0
-    git config cache.ldap_groups.memorylimit 0
-    git config cache.ldap_groups.disklimit 0
-    git config cache.permission_sort.memorylimit 0
-    git config cache.permission_sort.disklimit 0
-    git config cache.plugin_resources.memorylimit 0
-    git config cache.plugin_resources.disklimit 0
-    git config cache.projects.memorylimit 0
-    git config cache.projects.disklimit 0
-    git config cache.projects.checkfrequency 0
-    git config cache.project_list.memorylimit 0
-    git config cache.project_list.disklimit 0
-    git config cache.sshkeys.memorylimit 0
-    git config cache.sshkeys.disklimit 0
-  fi
-
   unset GIT_CONFIG
 
   local timestamped=$(date +%Y%m%d%H%M%S)
@@ -893,15 +1085,16 @@ function write_new_config() {
   replace_gerrit_war
   replace_gitms_gerrit_plugin
   install_gerrit_scripts
+  replicated_upgrade
 
   info ""
   info " GitMS and Gerrit have now been configured."
   info ""
   bold " Next Steps:"
   info ""
-  info " * Restart GitMS on this node now to finalize the configuration"
+  info " * Restart GitMS on this node now to finalize the configuration changes"
 
-  if [ ! "$FIRST_NODE" == "true" ]; then
+  if [[ ! "$FIRST_NODE" == "true" && ! "$REPLICATED_UPGRADE" == "true" ]]; then
     info " * If you have rsync'd this Gerrit installation from a previous node"
     info "   please ensure you have updated the $(sanitize_path "${GERRIT_ROOT}/etc/gerrit.config")"
     info "   file for this node. In particular, the canonicalWebUrl and database settings should"
@@ -909,18 +1102,23 @@ function write_new_config() {
   else
     local gerrit_base_path=$(get_gerrit_base_path "$GERRIT_ROOT")
 
-    info " * rsync $GERRIT_ROOT to all of your GerritMS nodes"
-    if [[ "${gerrit_base_path#$GERRIT_ROOT/}" = /* ]]; then
-      info " * rsync $gerrit_base_path to all of your GerritMS nodes"
+    if [ ! "$REPLICATED_UPGRADE" == "true" ]; then
+      info " * rsync $GERRIT_ROOT to all of your GerritMS nodes"
+      if [[ "${gerrit_base_path#$GERRIT_ROOT/}" = /* ]]; then
+        info " * rsync $gerrit_base_path to all of your GerritMS nodes"
+      fi
+
+      info " * On each of your Gerrit nodes, update gerrit.config:"
+      info "\t- change the hostname of canonicalURL to the hostname for that node"
+      info "\t- ensure that database details are correct"
+
+      info " * Run $(sanitize_path "$SCRIPT_INSTALL_DIR/sync_repo.sh") on one node to add any existing"
+      info "   Gerrit repositories to GitMS. Note that even if this is a new install of"
+      info "   Gerrit with no user added repositories, running sync_repo.sh is still"
+      info "   required to ensure that All-Projects and All-Users are properly replicated."
     fi
+
     info " * Run this installer on all of your other Gerrit nodes"
-    info " * On each of your Gerrit nodes, update gerrit.config:"
-    info "\t- change the hostname of canonicalURL to the hostname for that node"
-    info "\t- ensure that database details are correct"
-    info " * Run $(sanitize_path "$SCRIPT_INSTALL_DIR/sync_repo.sh") on one node to add any existing"
-    info "   Gerrit repositories to GitMS. Note that even if this is a new install of"
-    info "   Gerrit with no user added repositories, running sync_repo.sh is still"
-    info "   required to ensure that All-Projects and All-Users are properly replicated."
     info " * When all nodes have been installed, you are ready to start the Gerrit services"
     info "   across all nodes."
   fi
@@ -1041,10 +1239,11 @@ function check_for_non_interactive_mode() {
     ## Check that all variables are now set to something
     if [[ ! -z "$GERRIT_ROOT" && ! -z "$GERRIT_USERNAME" && ! -z "$GERRIT_PASSWORD"
       && ! -z "$GERRIT_RPGROUP_ID" && ! -z "$GERRIT_REPO_HOME" && ! -z "$GERRIT_EVENTS_PATH"
-      && ! -z "$GERRIT_REPLICATED_EVENTS_SEND" && ! -z "$GERRIT_REPLICATED_EVENTS_RECEIVE" 
-      && ! -z "$GERRIT_REPLICATED_EVENTS_RECEIVE_DISTINCT" && ! -z "$GERRIT_REPLICATED_EVENTS_LOCAL_REPUBLISH_DISTINCT" 
-      && ! -z "$GERRIT_REPLICATED_EVENTS_DISTINCT_PREFIX" && ! -z "$GERRIT_REPLICATED_CACHE_ENABLED" 
-      && ! -z "$GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD" ]]; then
+      && ! -z "$GERRIT_REPLICATED_EVENTS_SEND" && ! -z "$GERRIT_REPLICATED_EVENTS_RECEIVE"
+      && ! -z "$GERRIT_REPLICATED_EVENTS_RECEIVE_DISTINCT" && ! -z "$GERRIT_REPLICATED_EVENTS_LOCAL_REPUBLISH_DISTINCT"
+      && ! -z "$GERRIT_REPLICATED_EVENTS_DISTINCT_PREFIX" && ! -z "$GERRIT_REPLICATED_CACHE_ENABLED"
+      && ! -z "$GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD" && ! -z "$RUN_GERRIT_INIT"
+      && ! -z "$RESET_GERRIT_CACHES" ]]; then
 
       ## GERRIT_ROOT must exist as well
       if [ ! -d "$GERRIT_ROOT" ]; then
@@ -1104,8 +1303,15 @@ create_scratch_dir
 NON_INTERACTIVE=0
 WD_GERRIT_VERSION=$(get_gerrit_version "release.war")
 NEW_GERRIT_VERSION=$(echo $WD_GERRIT_VERSION | cut -f1 -d '-')
-#GERRIT_RELEASE_NOTES="http://gerrit-documentation.storage.googleapis.com/ReleaseNotes/ReleaseNotes-2.9.4.html"
-GERRITMS_INSTALL_DOC="http://docs.wandisco.com/git/gerrit/1.4/gerrit_install.html"
+GERRIT_RELEASE_NOTES="http://gerrit-documentation.storage.googleapis.com/ReleaseNotes/ReleaseNotes-2.10.html"
+GERRITMS_INSTALL_DOC="http://docs.wandisco.com/git/gerrit/1.6/gerrit_install.html"
+
+## Versions of Gerrit that we allow the user to upgrade from. Generally a user is not allowed to skip a major
+## version, but can skip minor versions. This is not a hard and fast rule however, as the reality of when an
+## upgrade can be safely skipped is down to Gerrit upgrade behaviour. This should have all the release versions
+## of the previous major version number, and any release versions of the current major version number.
+PREVIOUS_ALLOWED_RP_GERRIT_VERSIONS=("v2.9.4-RP-1.2.0.1" "v2.9.4-RP-1.2.1.1")
+REPLICATED_UPGRADE="false"
 
 check_for_non_interactive_mode
 
