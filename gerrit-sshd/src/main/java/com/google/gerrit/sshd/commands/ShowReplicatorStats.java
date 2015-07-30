@@ -8,11 +8,13 @@ import static com.google.gerrit.sshd.CommandMetaData.Mode.MASTER_OR_SLAVE;
 import com.google.gerrit.common.data.GlobalCapability;
 import com.google.gerrit.extensions.annotations.RequiresCapability;
 import com.google.gerrit.extensions.events.LifecycleListener;
+import com.google.gerrit.server.IdentifiedUser;
 import com.google.gerrit.server.events.ChangeEventWrapper;
 import com.google.gerrit.server.util.TimeUtil;
 import com.google.gerrit.sshd.CommandMetaData;
 import com.google.gerrit.sshd.SshCommand;
 
+import com.google.inject.Inject;
 import org.apache.sshd.server.Environment;
 
 import java.io.IOException;
@@ -26,6 +28,9 @@ import java.util.Date;
 final class ShowReplicatorStats extends SshCommand {
   private static volatile long serverStarted;
 
+  @Inject
+  private IdentifiedUser currentUser;
+
   static class StartupListener implements LifecycleListener {
     @Override
     public void start() {
@@ -37,23 +42,19 @@ final class ShowReplicatorStats extends SshCommand {
     }
   }
 
-  private int columns = 80;
-
   @Override
   public void start(final Environment env) throws IOException {
-    String s = env.getEnv().get(Environment.ENV_COLUMNS);
-    if (s != null && !s.isEmpty()) {
-      try {
-        columns = Integer.parseInt(s);
-      } catch (NumberFormatException err) {
-        columns = 80;
-      }
-    }
     super.start(env);
   }
 
   @Override
   protected void run() throws Failure {
+    if (!currentUser.getCapabilities().canViewReplicatorStats()) {
+      String msg = String.format("fatal: %s does not have \"View Replicator Stats\" capability.",
+          currentUser.getUserName());
+      throw new UnloggedFailure(msg);
+    }
+
     Date now = new Date();
     stdout.format(
         "%-25s %-20s      now  %16s\n",
@@ -75,7 +76,7 @@ final class ShowReplicatorStats extends SshCommand {
 
     ImmutableMultiset<ChangeEventWrapper.Originator> totalPublishedForeignEventsByType = repl.getTotalPublishedForeignEventsByType();
     ImmutableMultiset<ChangeEventWrapper.Originator> totalPublishedLocalEventsByType = repl.getTotalPublishedLocalEventsByType();
-    
+
     for(ChangeEventWrapper.Originator orig: ChangeEventWrapper.Originator.values()) {
       stdout.print(String.format("%-30s | %19s | %19s |\n", //
           orig+" messages:",
@@ -102,15 +103,15 @@ final class ShowReplicatorStats extends SshCommand {
         "Total gzipped MiB published:",
         (repl.getTotalPublishedLocalEventsBytes()*6/100/(1024*1024)*10)/10.0,
         (repl.getTotalPublishedForeignEventsBytes()*6/100/(1024*1024)*10)/10.0));
-    
+
     long localProposals = repl.getTotalPublishedLocalEventsProsals();
     long foreignProposals = repl.getTotalPublishedForeignEventsProsals();
-    
+
     stdout.print(String.format("%-30s | %19s | %19s |\n", //
         "Total proposals published:",
         localProposals,
         foreignProposals));
-    
+
     stdout.print(String.format("%-30s | %19s | %19s |\n", //
         "Avg Events/proposal:",
         localProposals == 0 ? "n/a": (repl.getTotalPublishedLocalEvents()*10/localProposals)/10.0,

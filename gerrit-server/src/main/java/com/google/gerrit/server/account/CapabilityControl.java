@@ -146,6 +146,12 @@ public class CapabilityControl {
       || canAdministrateServer();
   }
 
+  /** @return true if the user can view the replicator statistics. */
+  public boolean canViewReplicatorStats() {
+    return canPerform(GlobalCapability.VIEW_REPLICATOR_STATS)
+      || canAdministrateServer();
+  }
+
   /** @return true if the user can access the database (with gsql). */
   public boolean canAccessDatabase() {
     return canPerform(GlobalCapability.ACCESS_DATABASE);
