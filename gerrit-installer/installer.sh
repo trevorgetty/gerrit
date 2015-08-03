@@ -463,6 +463,22 @@ function check_gerrit_root() {
   OLD_GERRIT_VERSION=$(get_gerrit_version "$gerrit_war_path")
   if versionAllowed "$OLD_GERRIT_VERSION"; then
     REPLICATED_UPGRADE="true"
+
+    ## check here for NON_INTERACTIVE mode - it requires upgrade
+    ## variables to be set
+    if [ "$NON_INTERACTIVE" == "1" ]; then
+      if [[ -z "$UPGRADE" || -z "$RESET_GERRIT_CACHES" || -z "$RUN_GERRIT_INIT" ]]; then
+        echo ""
+        echo "Error: This install has been detected as an upgrade, but the upgrade flags: "
+        echo ""
+        echo " * UPGRADE"
+        echo " * RESET_GERRIT_CACHES"
+        echo " * RUN_GERRIT_INIT"
+        echo ""
+        echo "have not been set. Non-interactive upgrade requires that these flags are set."
+        exit 1
+      fi
+    fi
   fi
   OLD_BASE_GERRIT_VERSION=$(echo "$OLD_GERRIT_VERSION" | cut -f1 -d"-")
 
@@ -1242,8 +1258,18 @@ function check_for_non_interactive_mode() {
       && ! -z "$GERRIT_REPLICATED_EVENTS_SEND" && ! -z "$GERRIT_REPLICATED_EVENTS_RECEIVE"
       && ! -z "$GERRIT_REPLICATED_EVENTS_RECEIVE_DISTINCT" && ! -z "$GERRIT_REPLICATED_EVENTS_LOCAL_REPUBLISH_DISTINCT"
       && ! -z "$GERRIT_REPLICATED_EVENTS_DISTINCT_PREFIX" && ! -z "$GERRIT_REPLICATED_CACHE_ENABLED"
-      && ! -z "$GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD" && ! -z "$RUN_GERRIT_INIT"
-      && ! -z "$RESET_GERRIT_CACHES" ]]; then
+      && ! -z "$GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD" ]]; then
+
+      ## On an upgrade, some extra variables must be set. If they are not, non-interactive
+      ## mode will not be set
+      if [ ! -z "$UPGRADE" ]; then
+        if [[ -z "$RUN_GERRIT_INIT" || -z "$RESET_GERRIT_CACHES" ]]; then
+          ## not non-interactive, need to set upgrade variables
+          NON_INTERACTIVE=0
+          return
+        fi
+      fi
+
 
       ## GERRIT_ROOT must exist as well
       if [ ! -d "$GERRIT_ROOT" ]; then
