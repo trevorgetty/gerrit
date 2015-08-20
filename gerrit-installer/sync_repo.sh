@@ -161,7 +161,7 @@ function add_repo() {
   fi
 
   local xml=$(printf '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><git-repository><fileSystemPath>%s</fileSystemPath><name>%s</name><replicationGroupId>%s</replicationGroupId></git-repository>' "$repoPath" "$repoName" $GITMS_RPGROUP_ID)
-  echo "$xml" | curl -u "$GITMS_USERNAME:$GITMS_PASSWORD" -X POST -H "Content-Type: application/xml" -d @- "$deploy_url"
+  echo "$xml" | curl -ku "$GITMS_USERNAME:$GITMS_PASSWORD" -X POST -H "Content-Type: application/xml" -d @- "$deploy_url"
 
   if [ "$?" -ne 0 ]; then
     echo "ERROR: Could not add repository $repoPath"
