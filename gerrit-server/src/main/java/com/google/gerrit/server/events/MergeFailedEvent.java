@@ -23,4 +23,13 @@ public class MergeFailedEvent extends PatchSetEvent {
   public MergeFailedEvent() {
     super("merge-failed");
   }
+  public MergeFailedEvent(MergeFailedEvent e, String type){
+    this(e, type, false);
+  }
+
+  public MergeFailedEvent(MergeFailedEvent e, String type, boolean replicated){
+    super(e, type, replicated);
+    this.submitter = e.submitter;
+    this.reason = e.reason;
+  }
 }

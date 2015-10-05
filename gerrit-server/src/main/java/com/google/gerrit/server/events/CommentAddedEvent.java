@@ -25,4 +25,15 @@ public class CommentAddedEvent extends PatchSetEvent {
   public CommentAddedEvent() {
     super("comment-added");
   }
+
+  public CommentAddedEvent(CommentAddedEvent e, String type){
+    this(e, type, false);
+  }
+
+  public CommentAddedEvent(CommentAddedEvent e, String type, boolean replicated){
+    super(e, type, replicated);
+    this.author = e.author;
+    this.approvals = e.approvals;
+    this.comment = e.comment;
+  }
 }

@@ -16,6 +16,7 @@ package com.google.gerrit.server.project;
 
 import com.google.common.base.MoreObjects;
 import com.google.gerrit.common.ProjectUtil;
+import com.google.gerrit.common.ReplicatedCacheManager;
 import com.google.gerrit.common.data.AccessSection;
 import com.google.gerrit.common.data.GroupDescription;
 import com.google.gerrit.common.data.GroupReference;
@@ -30,6 +31,7 @@ import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.reviewdb.client.RefNames;
 import com.google.gerrit.server.GerritPersonIdent;
 import com.google.gerrit.server.IdentifiedUser;
+import com.google.gerrit.server.StringUtil;
 import com.google.gerrit.server.account.GroupBackend;
 import com.google.gerrit.server.config.GerritServerConfig;
 import com.google.gerrit.server.config.ProjectOwnerGroups;
@@ -41,6 +43,7 @@ import com.google.gerrit.server.git.RepositoryCaseMismatchException;
 import com.google.inject.Inject;
 import com.google.inject.assistedinject.Assisted;
 
+import org.apache.commons.lang.StringUtils;
 import org.eclipse.jgit.errors.ConfigInvalidException;
 import org.eclipse.jgit.errors.RepositoryNotFoundException;
 import org.eclipse.jgit.lib.CommitBuilder;
@@ -154,7 +157,8 @@ public class PerformCreateProject {
           + " The other project has the same name, only spelled in a"
           + " different case.", e);
     } catch (RepositoryNotFoundException badName) {
-      throw new ProjectCreationFailedException("Cannot create " + nameKey, badName);
+      String errorMessage = getErrorString(badName);
+      throw new ProjectCreationFailedException("Cannot create " + nameKey + " - " + errorMessage, badName);
     } catch (IllegalStateException err) {
       try {
         final Repository repo = repoManager.openRepository(nameKey);
@@ -175,6 +179,37 @@ public class PerformCreateProject {
       final String msg = "Cannot create " + nameKey;
       log.error(msg, e);
       throw new ProjectCreationFailedException(msg, e);
+    }
+  }
+
+  /**
+   * Returns the desired error message for the UI depending on the stack trace coming from RepositoryNotFoundException.
+   *
+   * @param badName RepositoryNotFoundException stack trace
+   * @return the error message to display on UI
+   */
+  private String getErrorString(RepositoryNotFoundException badName) {
+
+    String errorString = badName.getMessage();
+
+    if (StringUtils.isBlank(errorString)) {
+      return "Unexpected Internal Server Error";
+    }
+
+    if (errorString.contains("Quorum")) {
+      return "Cannot create repository due to Quorum failure.";
+    } else if (errorString.contains("RepositoryDeployTimeoutException")) {
+      return "Cannot create repository due to Timeout failure.";
+    } else if (errorString.contains("ConnectException")) {
+      return "Cannot create repository because cannot connect to GitMS replicator.";
+    } else if (errorString.contains("RepositoryNameInUseException")) {
+      return "The repository with this name already exists in GitMS.";
+    } else if (errorString.contains("RepositoryIsNotWriteableException")) {
+      return "Cannot create repository because the directory is not writable.";
+    } else if (errorString.contains("ReplicationGroupNotFoundException")) {
+      return "Cannot create repository because there is an error with the Replication Group.";
+    } else {
+      return errorString;
     }
   }
 
@@ -220,6 +255,9 @@ public class PerformCreateProject {
       md.close();
     }
     projectCache.onCreateProject(createProjectArgs.getProject());
+    // If we trigger the call from inside the function projectCache.onCreateProject() itself, this would create a replication loop
+    // between the nodes
+    ReplicatedCacheManager.replicateMethodCallFromCache(ReplicatedCacheManager.projectCache, "onCreateProject", createProjectArgs.getProject());
     repoManager.setProjectDescription(createProjectArgs.getProject(),
         createProjectArgs.projectDescription);
   }

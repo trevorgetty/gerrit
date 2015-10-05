@@ -22,4 +22,13 @@ public class DraftPublishedEvent extends PatchSetEvent {
   public DraftPublishedEvent() {
     super("draft-published");
   }
+
+  public DraftPublishedEvent(DraftPublishedEvent e, String type) {
+    this(e, type, false);
+  }
+
+  public DraftPublishedEvent(DraftPublishedEvent e, String type, boolean replicated) {
+    super(e, type, replicated);
+    this.uploader = e.uploader;
+  }
 }

@@ -176,8 +176,10 @@ public class CreateBranch implements RestModifyView<ProjectResource, Input> {
 
         return new BranchInfo(ref, revid.getName(), refControl.canDelete());
       } catch (IOException err) {
-        log.error("Cannot create branch \"" + name + "\"", err);
-        throw err;
+        String branchError = "Cannot create branch \"" + name + "\"";
+        log.error(branchError, err);
+        throw new IOException(branchError + ". " + err.getMessage());
+
       }
     } catch (InvalidRevisionException e) {
       throw new BadRequestException("invalid revision \"" + input.revision + "\"");

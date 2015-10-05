@@ -132,6 +132,9 @@ link:cmd-logging-set-level.html[gerrit logging set-level]::
 link:cmd-ls-user-refs.html[gerrit ls-user-refs]::
 	Lists refs visible for a specified user.
 
+link:cmd-show-replicator-stats.html[gerrit show-replicator-stats]::
+	Display statistics from the WANdisco GitMS replicator.
+
 link:cmd-plugin-install.html[gerrit plugin add]::
 	Alias for 'gerrit plugin install'.
 

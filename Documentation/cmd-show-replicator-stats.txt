@@ -1,0 +1,60 @@
+gerrit show-replicator-stats
+=============================
+
+== NAME
+gerrit show-replicator-stats - Display statistics from the WANdisco GitMS
+replicator
+
+== SYNOPSIS
+--
+'ssh' -p <port> <host> 'gerrit show-replicator-stats'
+--
+
+== DESCRIPTION
+Display statistics about the size and count of replicated messages with WD GitMS.
+
+== OPTIONS
+There are no options
+
+== ACCESS
+The caller must be a member of a group that is granted the
+link:access-control.html#capability_viewReplicatorStats[View Replicator Stats]
+capability or the link:access-control.html#capability_administrateServer[
+Administrate Server] capability.
+
+== SCRIPTING
+Intended for interactive use only.
+
+== EXAMPLES
+
+====
+  $ ssh -p 29418 review.example.com gerrit show-replicator-stats
+  Gerrit Code Review        2.10-rc1-134-g9442a94-dirty      now    15:30:29   BST
+                                                          uptime     4 days 2 hours
+  ---------------------------------------------------------------------------+
+  Statistic                      |                Sent |            Received |
+  ---------------------------------------------------------------------------+
+  GERRIT_EVENT messages:         |              983911 |             1963651 |
+  CACHE_EVENT messages:          |              231160 |              461259 |
+  Total published events:        |             1215071 |             2424910 |
+        of which with errors:    |                   0 |                   0 |
+  Total bytes published:         |          1339062153 |          2672380145 |
+  Total MiB published:           |              1277.0 |              2548.5 |
+  Total gzipped MiB published:   |                76.6 |               152.9 |
+  Total proposals published:     |               40478 |               80935 |
+  Avg bvents/proposal:           |                30.0 |                29.9 |
+  Avg bytes/proposal:            |               33081 |               33018 |
+  Avg gzipped bytes/proposal:    |                1984 |                1981 |
+  Errors in events, retries:     |                 n/a |                   0 |
+  Errors in events, failed:      |                 n/a |                   0 |
+====
+
+== SEE ALSO
+
+
+GERRIT
+------
+Part of link:index.html[Gerrit Code Review]
+
+SEARCHBOX
+---------

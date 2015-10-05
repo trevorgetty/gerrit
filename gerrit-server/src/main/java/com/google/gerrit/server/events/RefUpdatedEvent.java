@@ -35,4 +35,16 @@ public class RefUpdatedEvent extends RefEvent {
   public String getRefName() {
     return refUpdate.refName;
   }
+
+  public RefUpdatedEvent(RefUpdatedEvent e, String type) {
+    this(e, type, false);
+  }
+
+  public RefUpdatedEvent(RefUpdatedEvent e, String type, boolean replicated) {
+    super(type);
+    this.submitter = e.submitter;
+    this.refUpdate = e.refUpdate;
+    this.eventCreatedOn = e.eventCreatedOn;
+    this.replicated = replicated;
+  }
 }

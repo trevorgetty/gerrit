@@ -381,7 +381,8 @@ public class ChangeEditModifier {
     ru.setForceUpdate(true);
     RefUpdate.Result res = ru.update(rw);
     if (res != RefUpdate.Result.NEW &&
-        res != RefUpdate.Result.FORCED) {
+        res != RefUpdate.Result.FORCED &&
+        res != RefUpdate.Result.FAST_FORWARD) {
       throw new IOException("update failed: " + ru);
     }
     return res;

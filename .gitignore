@@ -21,3 +21,5 @@
 /gwt-unitCache
 *.swp
 *.asc
+*.iml
+release.war

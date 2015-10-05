@@ -17,6 +17,7 @@ package com.google.gerrit.server.account;
 import com.google.common.base.Optional;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import com.google.gerrit.common.ReplicatedCacheManager;
 import com.google.gerrit.reviewdb.client.AccountGroup;
 import com.google.gerrit.reviewdb.client.AccountGroupName;
 import com.google.gerrit.reviewdb.server.ReviewDb;
@@ -87,6 +88,14 @@ public class GroupCacheImpl implements GroupCache {
     this.byName = byName;
     this.byUUID = byUUID;
     this.schema = schema;
+
+    attachToReplication();
+  }
+
+  final void attachToReplication() {
+    ReplicatedCacheManager.watchCache(BYID_NAME, this.byId);
+    ReplicatedCacheManager.watchCache(BYNAME_NAME, this.byName);
+    ReplicatedCacheManager.watchCache(BYUUID_NAME, this.byUUID);
   }
 
   @Override
@@ -104,12 +113,15 @@ public class GroupCacheImpl implements GroupCache {
   public void evict(final AccountGroup group) {
     if (group.getId() != null) {
       byId.invalidate(group.getId());
+      ReplicatedCacheManager.replicateEvictionFromCache(BYID_NAME,group.getId());
     }
     if (group.getNameKey() != null) {
       byName.invalidate(group.getNameKey().get());
+      ReplicatedCacheManager.replicateEvictionFromCache(BYNAME_NAME,group.getNameKey());
     }
     if (group.getGroupUUID() != null) {
       byUUID.invalidate(group.getGroupUUID().get());
+      ReplicatedCacheManager.replicateEvictionFromCache(BYUUID_NAME,group.getGroupUUID());
     }
   }
 
@@ -118,9 +130,11 @@ public class GroupCacheImpl implements GroupCache {
       final AccountGroup.NameKey newName) {
     if (oldName != null) {
       byName.invalidate(oldName.get());
+      ReplicatedCacheManager.replicateEvictionFromCache(BYNAME_NAME,oldName);
     }
     if (newName != null) {
       byName.invalidate(newName.get());
+      ReplicatedCacheManager.replicateEvictionFromCache(BYNAME_NAME,newName);
     }
   }
 
@@ -168,6 +182,7 @@ public class GroupCacheImpl implements GroupCache {
   @Override
   public void onCreateGroup(AccountGroup.NameKey newGroupName) {
     byName.invalidate(newGroupName.get());
+    ReplicatedCacheManager.replicateEvictionFromCache(BYNAME_NAME,newGroupName.get());
   }
 
   private static AccountGroup missing(AccountGroup.Id key) {

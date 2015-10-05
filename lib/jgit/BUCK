@@ -1,15 +1,16 @@
 include_defs('//lib/maven.defs')
 
-REPO = MAVEN_CENTRAL # Leave here even if set to MAVEN_CENTRAL.
+REPO = MAVEN_CENTRAL
 VERS = '4.0.1.201506240215-r'
+VERS_WD = '4.0.1.201506240215-r_WDv6'
 
 maven_jar(
   name = 'jgit',
-  id = 'org.eclipse.jgit:org.eclipse.jgit:' + VERS,
-  bin_sha1 = '3bdf2d666df1a5373f7ad291c075ab1329560afd',
-  src_sha1 = 'c8ab3011612a4680791df394e2ef1ab8debeaed6',
+  id = 'org.eclipse.jgit:org.eclipse.jgit:' + VERS_WD,
+  bin_sha1 = '16b09484a382c442c8bee75426737fe5bf9df5e3',
+  src_sha1 = 'd590a92d734d7df4786ea18067645d498b5dc4fc',
   license = 'jgit',
-  repository = REPO,
+  repository = 'http://artifacts.wandisco.com:8081/artifactory/libs-release-local',
   unsign = True,
   deps = [':ewah'],
   exclude = [
@@ -79,5 +80,6 @@ genrule(
     'org/eclipse/jgit/diff/Edit.java;' +
     'cd $TMP;' +
     'zip -Dq $OUT org/eclipse/jgit/diff/Edit.java',
+#  srcs = [genfile('jgit/org.eclipse.jgit-%s-src.jar' % VERS_WD)],
   out = 'edit-src.jar',
 )

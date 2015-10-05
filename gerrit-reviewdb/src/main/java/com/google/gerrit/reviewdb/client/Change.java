@@ -102,7 +102,7 @@ import java.util.Arrays;
  * or when notice of the change submission occurs.
  */
 public final class Change {
-  public static class Id extends IntKey<com.google.gwtorm.client.Key<?>> {
+  public static class Id extends IntKey<com.google.gwtorm.client.Key<?>> implements Comparable<Id> {
     private static final long serialVersionUID = 1L;
 
     @Column(id = 1)
@@ -191,6 +191,38 @@ public final class Change {
       }
       return i;
     }
+    
+    @Override
+    public int compareTo(Id o) {
+      if (o == null) {
+        return 1;
+      } else {
+        return this.id - o.id;
+      }
+    }
+
+    @Override
+    public int hashCode() {
+      int hash = 7 * id;
+      return hash;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      if (obj == null) {
+        return false;
+      }
+      if (getClass() != obj.getClass()) {
+        return false;
+      }
+      final Id other = (Id) obj;
+      if (this.id != other.id) {
+        return false;
+      }
+      return true;
+    }
+    
+  
   }
 
   /** Globally unique identification of this change. */

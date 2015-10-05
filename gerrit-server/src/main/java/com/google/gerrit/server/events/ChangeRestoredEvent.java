@@ -23,4 +23,14 @@ public class ChangeRestoredEvent extends PatchSetEvent {
   public ChangeRestoredEvent () {
     super("change-restored");
   }
+
+  public ChangeRestoredEvent(ChangeRestoredEvent e, String type){
+    this(e, type, false);
+  }
+
+  public ChangeRestoredEvent(ChangeRestoredEvent e, String type, boolean replicated){
+    super(e, type, replicated);
+    this.restorer = e.restorer;
+    this.reason = e.reason;
+  }
 }

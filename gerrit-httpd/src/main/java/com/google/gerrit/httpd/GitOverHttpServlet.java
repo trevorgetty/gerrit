@@ -16,6 +16,7 @@ package com.google.gerrit.httpd;
 
 import com.google.common.cache.Cache;
 import com.google.common.collect.Lists;
+import com.google.gerrit.common.ReplicatedCacheManager;
 import com.google.gerrit.common.data.Capable;
 import com.google.gerrit.extensions.registration.DynamicSet;
 import com.google.gerrit.reviewdb.client.Project;
@@ -342,6 +343,11 @@ public class GitOverHttpServlet extends GitServlet {
     ReceiveFilter(
         @Named(ID_CACHE) Cache<AdvertisedObjectsCacheKey, Set<ObjectId>> cache) {
       this.cache = cache;
+      attachToReplication();
+    }
+
+    final void attachToReplication() {
+      ReplicatedCacheManager.watchCache(ID_CACHE, this.cache);
     }
 
     @Override
@@ -387,11 +393,13 @@ public class GitOverHttpServlet extends GitServlet {
 
       if (isGet) {
         cache.invalidate(cacheKey);
+        ReplicatedCacheManager.replicateEvictionFromCache(ID_CACHE,cacheKey);
       } else {
         Set<ObjectId> ids = cache.getIfPresent(cacheKey);
         if (ids != null) {
           rp.getAdvertisedObjects().addAll(ids);
           cache.invalidate(cacheKey);
+          ReplicatedCacheManager.replicateEvictionFromCache(ID_CACHE,cacheKey);
         }
       }
 

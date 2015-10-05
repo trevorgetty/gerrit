@@ -244,6 +244,14 @@ public class PostReviewers implements RestModifyView<ChangeResource, AddReviewer
     }
 
     update.commit();
+    
+    // TODO: Antonio: How do we check here that the slave has been updated???
+    // we could replace all the checks so far with a new table where we
+    // insert a row in the master, and wait for that row to be read on the slave.
+    // Since the replication happens in an ordered way, the last insertion in the
+    // master will be the last insertion in the slave. So before the commit() we
+    // could add the row and wait for the row. One single call to a utility function.
+    
     CheckedFuture<?, IOException> indexFuture =
         indexer.indexAsync(rsrc.getChange().getId());
     result.reviewers = Lists.newArrayListWithCapacity(added.size());

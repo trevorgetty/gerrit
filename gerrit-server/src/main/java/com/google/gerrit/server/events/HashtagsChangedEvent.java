@@ -25,4 +25,16 @@ public class HashtagsChangedEvent extends ChangeEvent {
   public HashtagsChangedEvent () {
     super("hashtags-changed");
   }
+
+  public HashtagsChangedEvent(HashtagsChangedEvent e, String type){
+    this(e, type, false);
+  }
+
+  public HashtagsChangedEvent(HashtagsChangedEvent e, String type, boolean replicated){
+    super(e, type, replicated);
+    this.editor = e.editor;
+    this.added = e.added;
+    this.removed = e.removed;
+    this.hashtags = e.hashtags;
+  }
 }

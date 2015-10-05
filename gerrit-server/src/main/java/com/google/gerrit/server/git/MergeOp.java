@@ -46,6 +46,7 @@ import com.google.gerrit.server.ChangeMessagesUtil;
 import com.google.gerrit.server.ChangeUtil;
 import com.google.gerrit.server.IdentifiedUser;
 import com.google.gerrit.server.account.AccountCache;
+import com.google.gerrit.server.change.ChangesOnSlave;
 import com.google.gerrit.server.extensions.events.GitReferenceUpdated;
 import com.google.gerrit.server.git.strategy.SubmitStrategy;
 import com.google.gerrit.server.git.strategy.SubmitStrategyFactory;
@@ -92,6 +93,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.sql.SQLTransactionRollbackException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -814,6 +816,13 @@ public class MergeOp {
             potentiallyStillSubmittable.add(commit);
             break;
 
+          case REVISION_GONE:
+            if (isNotReplicated(c)) {  // we are waiting for the replication to happen
+              log.info("accjm: SKIPPING INDEX FOR {}",c.getChangeId());
+            } else { // something bad is happened, because the ref is there but not the object
+              setNew(commit, message(c, "Unspecified merge failure: " + s.name()));
+            }
+            break;
           default:
             setNew(commit,
                 message(c, "Unspecified merge failure: " + s.name()));
@@ -825,6 +834,18 @@ public class MergeOp {
         logWarn("Error updating change status for " + c.getId(), err);
       }
     }
+  }
+
+  private boolean isNotReplicated(Change c) {
+    Map<String, Ref> allRefs = repo.getAllRefs();
+    String refName = c.currentPatchSetId().toRefName();
+    
+    boolean isThere = allRefs.get(refName)!=null;
+    log.info("accjm: checking changeId {} with ref {}. In repo? {}",new Object[] {c.getChangeId(),refName,isThere});
+    if (!allRefs.entrySet().isEmpty()) {
+      log.info("accjm: first ref in the set is: {}",allRefs.entrySet().iterator().next().getKey());
+    }
+    return !isThere;
   }
 
   private void updateSubscriptions(List<Change> submitted) {
@@ -954,31 +975,44 @@ public class MergeOp {
     PatchSetApproval submitter;
     PatchSet merged;
     try {
-      db.changes().beginTransaction(c.getId());
+      // ac: Loop to retry the transaction if it fails for deadlock
+      for (int retriedSoFar = 0; ; retriedSoFar++) {
+        try {
+          db.changes().beginTransaction(c.getId());
 
-      // We must pull the patchset out of commits, because the patchset ID is
-      // modified when using the cherry-pick merge strategy.
-      CodeReviewCommit commit = commits.get(c.getId());
-      PatchSet.Id mergedId = commit.change().currentPatchSetId();
-      merged = db.patchSets().get(mergedId);
-      c = setMergedPatchSet(c.getId(), mergedId);
-      submitter = approvalsUtil.getSubmitter(db, commit.notes(), mergedId);
-      ChangeControl control = commit.getControl();
-      update = updateFactory.create(control, c.getLastUpdatedOn());
+          // We must pull the patchset out of commits, because the patchset ID is
+          // modified when using the cherry-pick merge strategy.
+          CodeReviewCommit commit = commits.get(c.getId());
+          PatchSet.Id mergedId = commit.change().currentPatchSetId();
+          merged = db.patchSets().get(mergedId);
+          c = setMergedPatchSet(c.getId(), mergedId);
+          submitter = approvalsUtil.getSubmitter(db, commit.notes(), mergedId);
+          ChangeControl control = commit.getControl();
+          update = updateFactory.create(control, c.getLastUpdatedOn());
 
-      // TODO(yyonas): we need to be able to change the author of the message
-      // is not the person for whom the change was made. addMergedMessage
-      // did this in the past.
-      if (msg != null) {
-        cmUtil.addChangeMessage(db, update, msg);
+          // TODO(yyonas): we need to be able to change the author of the message
+          // is not the person for whom the change was made. addMergedMessage
+          // did this in the past.
+          if (msg != null) {
+            cmUtil.addChangeMessage(db, update, msg);
+          }
+
+          db.commit();
+          break;
+        } catch (OrmException maybeSqlTransactionRollback) {
+          if (!ChangesOnSlave.checkIfTransactionDeadlocksAndRollback(db,maybeSqlTransactionRollback,retriedSoFar)) {
+            log.error("Got OrmException, not SQLTransactionRollbackException",maybeSqlTransactionRollback);
+            throw maybeSqlTransactionRollback;
+          }
+        }
       }
-      db.commit();
 
     } finally {
       db.rollback();
     }
     update.commit();
     sendMergedEmail(c, submitter);
+    ChangesOnSlave.createAndWaitForSlaveIdWithCommit(db);
     indexer.index(db, c);
     if (submitter != null && mergeResultRev != null) {
       try {
@@ -1140,30 +1174,42 @@ public class MergeOp {
     Change change = null;
     ChangeUpdate update = null;
     try {
-      db.changes().beginTransaction(c.getId());
       try {
-        change = db.changes().atomicUpdate(
-            c.getId(),
-            new AtomicUpdate<Change>() {
-          @Override
-          public Change update(Change c) {
-            if (c.getStatus().isOpen()) {
-              if (setStatusNew) {
-                c.setStatus(Change.Status.NEW);
+        // ac: Loop to retry the transaction if it fails for deadlock
+        for (int retriedSoFar = 0;; retriedSoFar++) {
+          db.changes().beginTransaction(c.getId());
+          try {
+            change = db.changes().atomicUpdate(
+                c.getId(),
+                new AtomicUpdate<Change>() {
+              @Override
+              public Change update(Change c) {
+                if (c.getStatus().isOpen()) {
+                  if (setStatusNew) {
+                    c.setStatus(Change.Status.NEW);
+                  }
+                  ChangeUtil.updated(c);
+                }
+                return c;
               }
-              ChangeUtil.updated(c);
-            }
-            return c;
-          }
-        });
-        ChangeControl control = changeControl(change);
+            });
+            ChangeControl control = changeControl(change);
 
-        //TODO(yyonas): atomic change is not propagated.
-        update = updateFactory.create(control, c.getLastUpdatedOn());
-        if (msg != null) {
-          cmUtil.addChangeMessage(db, update, msg);
+            //TODO(yyonas): atomic change is not propagated.
+            update = updateFactory.create(control, c.getLastUpdatedOn());
+            if (msg != null) {
+              cmUtil.addChangeMessage(db, update, msg);
+            }
+            db.commit();
+            break;
+          } catch (OrmException maybeSqlTransactionRollback) {
+            if (!ChangesOnSlave.checkIfTransactionDeadlocksAndRollback(db, maybeSqlTransactionRollback, retriedSoFar)) {
+              log.error("Got OrmException, not SQLTransactionRollbackException", maybeSqlTransactionRollback);
+              throw maybeSqlTransactionRollback;
+            }
+          }
         }
-        db.commit();
+        ChangesOnSlave.createAndWaitForSlaveIdWithCommit(db);
       } finally {
         db.rollback();
       }
@@ -1176,7 +1222,7 @@ public class MergeOp {
 
     CheckedFuture<?, IOException> indexFuture;
     if (change != null) {
-      indexFuture = indexer.indexAsync(change.getId());
+      indexFuture = indexer.indexAsyncNoRepl(change.getId());
     } else {
       indexFuture = null;
     }
@@ -1292,6 +1338,7 @@ public class MergeOp {
         //TODO(yyonas): atomic change is not propagated.
         cmUtil.addChangeMessage(db, update, msg);
         db.commit();
+        ChangesOnSlave.createAndWaitForSlaveIdWithCommit(db);
         indexer.index(db, change);
       }
     } finally {

@@ -57,6 +57,7 @@
 .. link:cmd-index.html[Command Line Tools]
 .. Reading show-caches efficiently
 .. How to read stats from the JVM
+.. How to read stats from the WANdisco GitMS
 . High availability
 . Replication
 . link:config-plugins.html[Plugins]
