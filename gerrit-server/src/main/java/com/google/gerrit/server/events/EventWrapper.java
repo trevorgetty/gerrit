@@ -22,7 +22,8 @@ public class EventWrapper  {
   public static enum Originator {
     GERRIT_EVENT,
     CACHE_EVENT,
-    INDEX_EVENT
+    INDEX_EVENT,
+    PACKFILE_EVENT
   }
   public final String event;
   public final String className;
