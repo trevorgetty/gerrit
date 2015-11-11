@@ -129,6 +129,10 @@ final class ShowReplicatorStats extends SshCommand {
         "Errors in events, retries:", "n/a",repl.getFailedRetryIndexingEvents()));
     stdout.print(String.format("%-30s | %19s | %19s |\n", //
         "Errors in events, failed:", "n/a",repl.getFailedDefinitelyIndexingEvents()));
+    stdout.print(String.format("%-30s | %19s | %19s |\n", //
+        "Files in Incoming directory:", "n/a",repl.getIncomingDirFileCount()));
+    stdout.print(String.format("%-30s | %19s | %19s |\n", //
+        "Files in Outgoing directory:", "n/a",repl.getOutgoingDirFileCount()));
 
     stdout.println();
   }

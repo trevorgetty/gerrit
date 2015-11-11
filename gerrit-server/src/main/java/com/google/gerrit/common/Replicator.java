@@ -119,8 +119,12 @@ public class Replicator implements Runnable {
   
   private long lastCheckedFailedDirTime = 0;
   private long lastCheckedDefFailedDirTime = 0;
+  private long lastCheckedIncomingDirTime = 0;
+  private long lastCheckedOutgoingDirTime = 0;
   private int lastFailedDirValue = -1;
   private int lastDefFailedDirValue = -1;
+  private int lastIncomingDirValue = -1;
+  private int lastOutgoingDirValue = -1;
   public static long DEFAULT_STATS_UPDATE_TIME = 20000L;
   
   // Statistics end
@@ -340,10 +344,47 @@ public class Replicator implements Runnable {
       long now = System.currentTimeMillis();
       if (now - lastCheckedFailedDirTime > DEFAULT_STATS_UPDATE_TIME) {
         // we cache the last result for DEFAULT_STATS_UPDATE_TIME ms, so that continous requests do not disturb
-        lastFailedDirValue = failedRetryDir.listFiles().length;
+        File[] listFilesResult = failedRetryDir.listFiles();
+        if (listFilesResult != null) {
+          lastFailedDirValue = failedRetryDir.listFiles().length;
+          result = lastFailedDirValue;
+        }
         lastCheckedFailedDirTime = now;
       }
-      result = lastFailedDirValue;
+    }
+    return result;
+  }
+
+  public int getIncomingDirFileCount() {
+    int result = -1;
+    if (incomingReplEventsDirectory != null) {
+      long now = System.currentTimeMillis();
+      if (now - lastCheckedIncomingDirTime > DEFAULT_STATS_UPDATE_TIME) {
+        // we cache the last result for DEFAULT_STATS_UPDATE_TIME ms, so that continuous requests do not disturb
+        File[] listFilesResult = incomingReplEventsDirectory.listFiles();
+        if (listFilesResult != null) {
+          lastIncomingDirValue = incomingReplEventsDirectory.listFiles().length;
+          result = lastIncomingDirValue;
+        }
+        lastCheckedIncomingDirTime = now;
+      }
+    }
+    return result;
+  }
+
+  public int getOutgoingDirFileCount() {
+    int result = -1;
+    if (outgoingReplEventsDirectory != null) {
+      long now = System.currentTimeMillis();
+      if (now - lastCheckedOutgoingDirTime > DEFAULT_STATS_UPDATE_TIME) {
+        // we cache the last result for DEFAULT_STATS_UPDATE_TIME ms, so that continuous requests do not disturb
+        File[] listFilesResult = outgoingReplEventsDirectory.listFiles();
+        if (listFilesResult != null) {
+          lastOutgoingDirValue = outgoingReplEventsDirectory.listFiles().length;
+          result = lastOutgoingDirValue;
+        }
+        lastCheckedOutgoingDirTime = now;
+      }
     }
     return result;
   }
@@ -354,10 +395,13 @@ public class Replicator implements Runnable {
       long now = System.currentTimeMillis();
       if (now - lastCheckedDefFailedDirTime > DEFAULT_STATS_UPDATE_TIME) {
         // we cache the last result for DEFAULT_STATS_UPDATE_TIME ms, so that continous requests do not disturb
-        lastDefFailedDirValue = failedDefinitelyDir.listFiles().length;
+        File[] listFilesResult = failedDefinitelyDir.listFiles();
+        if (listFilesResult != null) {
+          lastDefFailedDirValue = failedDefinitelyDir.listFiles().length;
+          result = lastDefFailedDirValue;
+        }
         lastCheckedDefFailedDirTime = now;
       }
-      result = lastDefFailedDirValue;
     }
     return result;
   }
