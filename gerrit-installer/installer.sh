@@ -98,7 +98,9 @@ function prereqs() {
       info "Installation aborted by user"
       exit 0
     fi
+    FIRST_NODE=$(get_boolean "Is this the first node GerritMS will be installed to?" "true")
   fi
+
 }
 
 function check_user() {
