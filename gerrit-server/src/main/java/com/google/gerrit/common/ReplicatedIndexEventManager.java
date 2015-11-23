@@ -267,7 +267,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
     if (listFiles == null) {
       log.error("RC Directory {} cannot have files listed! (too many files open?)",indexEventsDirectory,new IllegalStateException("Cannot read index directory"));
     } else if (listFiles.length > 0) {
-      log.info("RC Found {} files", listFiles.length);
+      log.debug("RC Found {} files", listFiles.length);
 
       // Read each file and create a list with the changes to try reindex
       List<IndexToFile> indexList = new ArrayList<>();
@@ -323,7 +323,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
       }
     }
     if (totalDone > 0) {
-      log.info(String.format("RC finished to reindex local amount of %d out of %d", totalDone,size));
+      log.debug(String.format("RC finished to reindex local amount of %d out of %d", totalDone,size));
     }
     return totalDone;
   }
@@ -342,7 +342,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
       try {
         Class<?> eventClass = Class.forName(newEvent.className);
         IndexToReplicateComparable originalEvent = new IndexToReplicateComparable((IndexToReplicate) gson.fromJson(newEvent.event, eventClass));
-        log.info("RC Received this event from replication: {}",originalEvent);
+        log.debug("RC Received this event from replication: {}",originalEvent);
         // index the change
         //success = indexChange(originalEvent, false);
         incomingChangeEventsToIndex.add(originalEvent);
@@ -395,7 +395,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
 
       db = dbProvider.get();
 
-      log.info("RC Going to index {} changes...",mapOfChanges.size());
+      log.debug("RC Going to index {} changes...",mapOfChanges.size());
       
       // fetch changes from db
       ResultSet<Change> changesOnDb = db.changes().get(mapOfChanges.keySet());
@@ -430,7 +430,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
           log.error("RC Error while trying to reindex change {}",changeOnDb.getChangeId(),e);
         }
       }
-      log.info(String.format("RC Finished indexing %d changes... (%d)",mapOfChanges.size(), totalDone));
+      log.debug(String.format("RC Finished indexing %d changes... (%d)",mapOfChanges.size(), totalDone));
     } catch (OrmException e) {
       log.error("RC Error while trying to reindex change", e);
     } finally {
@@ -844,7 +844,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
             }
           }
           if (eventsGot > 0) {
-            log.info(String.format("RC Sent %d elements from the queue",eventsGot));
+            log.debug(String.format("RC Sent %d elements from the queue",eventsGot));
           }
           // The collection (queue) of changes is effective only if many of them are collected for uiniqueness.
           // So it's worth waiting in the loop to make them build up in the queue, to avoid sending duplicates around
