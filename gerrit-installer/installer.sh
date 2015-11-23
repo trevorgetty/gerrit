@@ -87,7 +87,6 @@ function prereqs() {
   info " * Have a version of GitMS (1.7 or higher) installed and running"
   info " * Have a replication group created in GitMS containing all Gerrit nodes"
   info " * Have a valid GitMS admin username/password"
-  info " * Have a valid Gerrit admin username/password"
   info " * Stop the Gerrit service on this node"
   info ""
 
@@ -199,8 +198,6 @@ function fetch_config_from_application_properties() {
   SSL_ENABLED=$(fetch_property "ssl.enabled")
   GERRIT_ENABLED=$(fetch_property "gerrit.enabled")
   GERRIT_ROOT=$(fetch_property "gerrit.root")
-  GERRIT_USERNAME=$(fetch_property "gerrit.username")
-  GERRIT_PASSWORD=$(fetch_property "gerrit.password")
   GERRIT_RPGROUP_ID=$(fetch_property "gerrit.rpgroupid")
   GERRIT_REPO_HOME=$(fetch_property "gerrit.repo.home")
   GERRIT_EVENTS_PATH=$(fetch_property "gerrit.events.basepath")
@@ -824,38 +821,6 @@ function get_config_from_user() {
     info ""
   fi
 
-  if [ -z "$GERRIT_USERNAME" ]; then
-    GERRIT_USERNAME=$(get_string "Gerrit Admin Username")
-  else
-    info " Gerrit Admin Username: $GERRIT_USERNAME"
-  fi
-
-  set_property "gerrit.username" "$GERRIT_USERNAME"
-
-  if [ -z "$GERRIT_PASSWORD" ]; then
-    while true
-    do
-      get_password "Gerrit Admin Password"
-      info ""
-      local pw_one="$USER_PASSWORD"
-      get_password "Confirm Gerrit Admin Password"
-      info ""
-      local pw_two="$USER_PASSWORD"
-
-      if [ "$pw_one" == "$pw_two" ]; then
-        GERRIT_PASSWORD="$pw_one"
-        break
-      else
-        info " \033[1mWARNING:\033[0m: Passwords did not match"
-      fi
-    done
-
-  else
-    info " Gerrit Admin Password: ********"
-  fi
-
-  set_property "gerrit.password" "$GERRIT_PASSWORD"
-
   if [ -z "$GERRIT_REPO_HOME" ]; then
     get_directory "Gerrit Repository Directory" "false"
     GERRIT_REPO_HOME="$INPUT_DIR"
@@ -1214,8 +1179,6 @@ function check_for_non_interactive_mode() {
     ## Need to fetch values from application.properties first, as they should take
     ## precedence over env variables
     local tmp_gerrit_root=$(fetch_property "gerrit.root")
-    local tmp_gerrit_username=$(fetch_property "gerrit.username")
-    local tmp_gerrit_password=$(fetch_property "gerrit.password")
     local tmp_gerrit_rpgroup_id=$(fetch_property "gerrit.rpgroupid")
     local tmp_gerrit_repo_home=$(fetch_property "gerrit.repo.home")
     local tmp_gerrit_events_path=$(fetch_property "gerrit.events.basepath")
@@ -1230,14 +1193,6 @@ function check_for_non_interactive_mode() {
     ## Override env variables where the property already exists
     if [ ! -z "$tmp_gerrit_root" ]; then
       GERRIT_ROOT="$tmp_gerrit_root"
-    fi
-
-    if [ ! -z "$tmp_gerrit_username" ]; then
-      GERRIT_USERNAME="$tmp_gerrit_username"
-    fi
-
-    if [ ! -z "$tmp_gerrit_password" ]; then
-      GERRIT_PASSWORD="$tmp_gerrit_password"
     fi
 
     if [ ! -z "$tmp_gerrit_rpgroup_id" ]; then
@@ -1281,7 +1236,7 @@ function check_for_non_interactive_mode() {
     fi
 
     ## Check that all variables are now set to something
-    if [[ ! -z "$GERRIT_ROOT" && ! -z "$GERRIT_USERNAME" && ! -z "$GERRIT_PASSWORD"
+    if [[ ! -z "$GERRIT_ROOT"
       && ! -z "$GERRIT_RPGROUP_ID" && ! -z "$GERRIT_REPO_HOME" && ! -z "$GERRIT_EVENTS_PATH"
       && ! -z "$GERRIT_REPLICATED_EVENTS_SEND" && ! -z "$GERRIT_REPLICATED_EVENTS_RECEIVE"
       && ! -z "$GERRIT_REPLICATED_EVENTS_RECEIVE_DISTINCT" && ! -z "$GERRIT_REPLICATED_EVENTS_LOCAL_REPUBLISH_DISTINCT"
@@ -1376,8 +1331,6 @@ if [ "$NON_INTERACTIVE" == "1" ]; then
   echo "Using settings: "
   echo "GITMS_ROOT: $GITMS_ROOT"
   echo "GERRIT_ROOT: $GERRIT_ROOT"
-  echo "GERRIT_USERNAME: $GERRIT_USERNAME"
-  echo "GERRIT_PASSWORD: $GERRIT_PASSWORD"
   echo "GERRIT_RPGROUP_ID: $GERRIT_RPGROUP_ID"
   echo "GERRIT_REPO_HOME: $GERRIT_REPO_HOME"
   echo "GERRIT_EVENTS_PATH: $GERRIT_EVENTS_PATH"
