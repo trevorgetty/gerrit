@@ -192,12 +192,25 @@ function set_property() {
   echo "$1=$2" >> "$TMP_APPLICATION_PROPERTIES"
 }
 
+## Remove a property in TMP_APPLICATION_PROPERTIES
+function remove_property() {
+  local tmp_file="$TMP_APPLICATION_PROPERTIES.tmp"
+  for var in "$@"; do
+    ## The property must have the .'s escaped when we delete them, or they'll match
+    ## against any character
+    local escaped_property=$(echo "$var" | sed 's/\./\\./g')
+    ## Remove the property
+    sed -e "/^$escaped_property=/ d" "$TMP_APPLICATION_PROPERTIES" > "$tmp_file" && mv "$tmp_file" "$TMP_APPLICATION_PROPERTIES"
+  done
+}
+
 ## With the GitMS root location, we can look up a lot of information
 ## and avoid asking the user questions
 function fetch_config_from_application_properties() {
   SSL_ENABLED=$(fetch_property "ssl.enabled")
   GERRIT_ENABLED=$(fetch_property "gerrit.enabled")
   GERRIT_ROOT=$(fetch_property "gerrit.root")
+  GERRIT_USERNAME=$(fetch_property "gerrit.username")
   GERRIT_RPGROUP_ID=$(fetch_property "gerrit.rpgroupid")
   GERRIT_REPO_HOME=$(fetch_property "gerrit.repo.home")
   GERRIT_EVENTS_PATH=$(fetch_property "gerrit.events.basepath")
@@ -297,7 +310,7 @@ function get_executable() {
   done
 }
 
-## Reats input until the user specifies a string which is not empty
+## Reads input until the user specifies a string which is not empty
 ## $1: The string to display
 ## $2: Set to "true" to allow an empty imput
 function get_string() {
@@ -820,6 +833,24 @@ function get_config_from_user() {
     info " \033[1mWARNING:\033[0m Looks like Gerrit is currently running"
     info ""
   fi
+
+  if [ ! "$NON_INTERACTIVE" == "1" ]; then
+    if [ -n "$GERRIT_USERNAME" ]; then
+      info ""
+      bold " Gerrit Admin Username and Password"
+      info ""
+      REMOVE_UNAME_AND_PASSWD=$(get_boolean "It is no longer necessary to keep your Gerrit Admin Username or Password. Would you like to remove them?" "true")
+      if [ "$REMOVE_UNAME_AND_PASSWD" == "true" ]; then
+        remove_property "gerrit.username" "gerrit.password"
+      else
+        info " Not removing Gerrit Admin Username and Password."
+
+      fi
+    fi
+  else
+    remove_property "gerrit.username" "gerrit.password"
+  fi
+  info
 
   if [ -z "$GERRIT_REPO_HOME" ]; then
     get_directory "Gerrit Repository Directory" "false"
