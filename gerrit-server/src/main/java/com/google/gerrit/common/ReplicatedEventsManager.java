@@ -487,7 +487,7 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
         Properties props = new Properties();
         try (FileInputStream propsFile = new FileInputStream(applicationProperties)) {
           props.load(propsFile);
-          replicatedEventsSend = Boolean.parseBoolean(props.getProperty(GERRIT_REPLICATED_EVENTS_ENABLED_SEND,"true"));
+          replicatedEventsSend = true; // they must be always enabled, not dependant on GERRIT_REPLICATED_EVENTS_ENABLED_SEND
           replicatedEventsReceive = Boolean.parseBoolean(props.getProperty(GERRIT_REPLICATED_EVENTS_ENABLED_RECEIVE,"true"));
           replicatedEventsReplicateOriginalEvents = Boolean.parseBoolean(props.getProperty(GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL,"true"));
           replicatedEventsReplicateDistinctEvents = Boolean.parseBoolean(props.getProperty(GERRIT_REPLICATED_EVENTS_RECEIVE_DISTINCT,"false"));
