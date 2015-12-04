@@ -89,8 +89,6 @@ public class Replicator implements Runnable {
   private static File internalLogFile = null; // used for debug
   private static boolean syncFiles=false;
   private static String defaultBaseDir;
-  private static File failedRetryDir = null;
-  private static File failedDefinitelyDir = null;
   private static volatile Replicator instance = null;
   private static final Gson gson = new Gson();
   private static Config gerritConfig = null;
@@ -338,23 +336,6 @@ public class Replicator implements Runnable {
     return ImmutableMultiset.copyOf(totalPublishedLocalEventsByType);
   }
 
-  public int getFailedRetryIndexingEvents() {
-    int result = -1;
-    if (failedRetryDir != null) {
-      long now = System.currentTimeMillis();
-      if (now - lastCheckedFailedDirTime > DEFAULT_STATS_UPDATE_TIME) {
-        // we cache the last result for DEFAULT_STATS_UPDATE_TIME ms, so that continous requests do not disturb
-        File[] listFilesResult = failedRetryDir.listFiles();
-        if (listFilesResult != null) {
-          lastFailedDirValue = failedRetryDir.listFiles().length;
-          result = lastFailedDirValue;
-        }
-        lastCheckedFailedDirTime = now;
-      }
-    }
-    return result;
-  }
-
   public int getIncomingDirFileCount() {
     int result = -1;
     if (incomingReplEventsDirectory != null) {
@@ -384,23 +365,6 @@ public class Replicator implements Runnable {
           result = lastOutgoingDirValue;
         }
         lastCheckedOutgoingDirTime = now;
-      }
-    }
-    return result;
-  }
-
-  public int getFailedDefinitelyIndexingEvents() {
-    int result = -1;
-    if (failedDefinitelyDir != null) {
-      long now = System.currentTimeMillis();
-      if (now - lastCheckedDefFailedDirTime > DEFAULT_STATS_UPDATE_TIME) {
-        // we cache the last result for DEFAULT_STATS_UPDATE_TIME ms, so that continous requests do not disturb
-        File[] listFilesResult = failedDefinitelyDir.listFiles();
-        if (listFilesResult != null) {
-          lastDefFailedDirValue = failedDefinitelyDir.listFiles().length;
-          result = lastDefFailedDirValue;
-        }
-        lastCheckedDefFailedDirTime = now;
       }
     }
     return result;
@@ -751,8 +715,6 @@ public class Replicator implements Runnable {
             if (defaultBaseDir == null) {
               defaultBaseDir = DEFAULT_BASE_DIR;
             }
-            failedRetryDir = new File(defaultBaseDir,GERRIT_RETRY_EVENTS_DIRECTORY);
-            failedDefinitelyDir = new File (defaultBaseDir,GERRIT_DEFINITELY_FAILED_EVENTS_DIRECTORY);
             defaultBaseDir+=File.separator+REPLICATED_EVENTS_DIRECTORY_NAME;
           }
           incomingEventsAreGZipped = Boolean.parseBoolean(props.getProperty(GERRIT_REPLICATED_EVENTS_INCOMING_ARE_GZIPPED,"false"));

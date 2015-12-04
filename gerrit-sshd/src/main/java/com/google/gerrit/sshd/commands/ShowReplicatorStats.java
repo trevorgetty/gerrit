@@ -126,10 +126,6 @@ final class ShowReplicatorStats extends SshCommand {
         localProposals == 0 ? "n/a": repl.getTotalPublishedLocalEventsBytes()*6/100/localProposals,
         foreignProposals == 0 ? "n/a": repl.getTotalPublishedForeignEventsBytes()*6/100/foreignProposals));
     stdout.print(String.format("%-30s | %19s | %19s |\n", //
-        "Errors in events, retries:", "n/a",repl.getFailedRetryIndexingEvents()));
-    stdout.print(String.format("%-30s | %19s | %19s |\n", //
-        "Errors in events, failed:", "n/a",repl.getFailedDefinitelyIndexingEvents()));
-    stdout.print(String.format("%-30s | %19s | %19s |\n", //
         "Files in Incoming directory:", "n/a",repl.getIncomingDirFileCount()));
     stdout.print(String.format("%-30s | %19s | %19s |\n", //
         "Files in Outgoing directory:", "n/a",repl.getOutgoingDirFileCount()));
