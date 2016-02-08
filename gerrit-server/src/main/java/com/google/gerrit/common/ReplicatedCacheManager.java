@@ -116,7 +116,7 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
         ((Cache) cache).invalidate(key);
         done = true;
       } else {
-        log.error("CACHE is not supported!", new Exception("Class is missing"));
+        log.error("CACHE is not supported!", new Exception("Class is missing: "+cache.getClass().getName()));
       }
       return done;
     }
@@ -126,13 +126,17 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
       if (cache instanceof LoadingCache) {
         try {
           Object obj = ((LoadingCache) cache).get(key);
-          log.debug("{} loaded into the cache.",obj);
+          log.debug("{} loaded into the cache (1).",obj);
           done = true;
         } catch (Exception ex) {
           log.error("Error while trying to reload a key from the cache!", ex);
         }
+      } else if (cache instanceof Cache) {
+          Object obj = ((Cache) cache).getIfPresent(key);
+          log.debug("{} loaded into the cache (2).",obj);
+          done = true;
       } else {
-        log.error("CACHE is not supported!", new Exception("Class is missing"));
+        log.error("CACHE is not supported!", new Exception("Class is missing: "+cache.getClass().getName()));
       }
       return done;
     }

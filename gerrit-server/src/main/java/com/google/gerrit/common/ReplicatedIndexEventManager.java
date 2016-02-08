@@ -500,7 +500,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
           // the one in the change itself
           if (changeOnDb.getLastUpdatedOn().before(indexToReplicate.lastUpdatedOn) && !changeIndexedMoreThanOneHourAgo) {
             instance.incomingChangeEventsToIndex.add(indexToReplicate);
-            log.info("Change {} pushed back in the queue",indexToReplicate.indexNumber);
+            log.info("Change {} pushed back in the queue [db={}, index={}]",indexToReplicate.indexNumber,changeOnDb.getLastUpdatedOn(),indexToReplicate.lastUpdatedOn);
           } else {
             try {
               indexer.indexRepl(db,changeOnDb);
