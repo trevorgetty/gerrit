@@ -75,10 +75,12 @@ public class Replicator implements Runnable {
   public static final String OUTGOING_DIR = "outgoing";
   public static final String INCOMING_DIR = "incoming";
   public static final String INDEXING_DIR = "index_events";
+  public static final String INCOMING_PERSISTED_DIR = "incoming-persisted";
   public static final boolean internalLogEnabled = false;
   private static File replicatedEventsBaseDirectory = null;
   private static File outgoingReplEventsDirectory = null;
   private static File incomingReplEventsDirectory = null;
+  private static File incomingPersistedReplEventsDirectory = null;
   private static File indexingEventsDirectory = null;
   private static long maxSecsToWaitBeforeProposingEvents=15;
   private static int maxNumberOfEventsBeforeProposing=30; // as shown by statistics this means less than 2K gzipped proposals
@@ -158,6 +160,7 @@ public class Replicator implements Runnable {
           outgoingReplEventsDirectory = new File(replicatedEventsBaseDirectory,OUTGOING_DIR);
           incomingReplEventsDirectory = new File(replicatedEventsBaseDirectory,INCOMING_DIR);
           indexingEventsDirectory =     new File(replicatedEventsBaseDirectory,INDEXING_DIR);
+          incomingPersistedReplEventsDirectory = new File(replicatedEventsBaseDirectory,INCOMING_PERSISTED_DIR);
 
           if (eventReaderAndPublisherThread == null) {
             instance = new Replicator();
@@ -211,6 +214,10 @@ public class Replicator implements Runnable {
   
   public File getIndexingEventsDirectory() {
     return indexingEventsDirectory;
+  }
+  
+  public File getIncomingPersistedReplEventsDirectory() {
+    return incomingPersistedReplEventsDirectory;
   }
   
   /**
