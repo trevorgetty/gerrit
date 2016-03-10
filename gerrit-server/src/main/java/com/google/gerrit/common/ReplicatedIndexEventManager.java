@@ -149,10 +149,9 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
     }
     return instance;
   }
-  
   /**
    * Main method used by the gerrit ChangeIndexer to communicate that a new index event has happened
-   * and must be replicated across the nodes
+   * and must be replicated across the nodes.
    * 
    * This will enqueue the the event for async replication
    * 
@@ -161,12 +160,40 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
    * @param lastUpdatedOn 
    */
   public static void queueReplicationIndexEvent(int indexNumber, String projectName, Timestamp lastUpdatedOn) {
+    queueReplicationIndexEvent(indexNumber, projectName, lastUpdatedOn, false);
+  }
+  
+  /**
+   * Queue a notification to be made to replica nodes regarding the deletion of an index. This must be done
+   * independently of the delete() call in ChangeIndexer, as in that context, the Change is no longer
+   * accessible, preventing lookup of the project name and the subsequent attempt to tie the change to
+   * a specific DSM in the replicator.
+   * 
+   * @param indexNumber
+   * @param projectName 
+   */
+  public static void queueReplicationIndexDeletionEvent(int indexNumber, String projectName) {
+    queueReplicationIndexEvent(indexNumber, projectName, new Timestamp(0), true);
+  }
+  
+  /**
+   * Used by the gerrit ChangeIndexer to communicate that a new index event has happened
+   * and must be replicated across the nodes with an additional boolean flag to indicate if the index
+   * to be updated is being deleted.
+   * 
+   * This will enqueue the the event for async replication
+   * 
+   * @param indexNumber
+   * @param projectName
+   * @param lastUpdatedOn 
+   */
+  private static void queueReplicationIndexEvent(int indexNumber, String projectName, Timestamp lastUpdatedOn, boolean deleteIndex) {
     if (instance == null) {
       log.error("RC ReplicatedIndexEventManager instance is null!",new IllegalStateException("Should have been initialised at this point"));
     } else if (!instance.gerritIndexerRunning)  { // we only take the event if it's normal Gerrit functioning. If it's indexing we ignore them
       for(int i =0; i < 100; i++) {  // let's try 100 times before giving up. 
         try {
-          IndexToReplicate indexToReplicate = new IndexToReplicate(indexNumber, projectName, lastUpdatedOn);
+          IndexToReplicate indexToReplicate = new IndexToReplicate(indexNumber, projectName, lastUpdatedOn, deleteIndex);
           instance.unfilteredQueue.add(indexToReplicate);
           log.debug("RC Just added {} to cache queue",indexToReplicate);
           break;
@@ -512,7 +539,17 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
       Provider<ReviewDb> dbProvider = Providers.of(schemaFactory.open()); 
 
       db = dbProvider.get();
-
+      
+      for (IndexToReplicateComparable i : mapOfChanges.values()) {
+        if (i.delete) {
+          try {
+            indexer.delete(new Change.Id(i.indexNumber));
+          } catch (IOException e) {
+            log.error("RC Error while trying to delete change index {}",i.indexNumber,e);
+          }
+        }
+      }
+      
       log.debug("RC Going to index {} changes...",mapOfChanges.size());
       
       // fetch changes from db
@@ -637,8 +674,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
     Change change = db.changes().get(new Change.Id(indexEvent.indexNumber));
   
     // Each change has a timestamp which is the time when it was last modified.
-    // If on the database we don't have an update-date >= timestamp, then we wait until the
-    // data comes to this instance of the (replicated) database
+    // If on the database we don't have an update-date >= timestamp, then we wait until the      
     if (!forceIndexing && change.getLastUpdatedOn().before(indexEvent.lastUpdatedOn)) {
       // we need to wait until the change has been updated
       log.info("RC Change {} is still to be updated ****************** ",indexEvent.indexNumber);
@@ -830,42 +866,47 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
     public final long currentTime;
     public static final long STANDARD_REINDEX_DELAY = 30*1000; // 30 seconds
     public final int timeZoneRawOffset;
+    public final boolean delete;
 
     public IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn) {
-      this.indexNumber = indexNumber;
-      this.projectName = projectName;
-      this.lastUpdatedOn = new Timestamp(lastUpdatedOn.getTime());
-      this.currentTime = System.currentTimeMillis();
-      this.timeZoneRawOffset = TimeZone.getDefault().getRawOffset();
+      this(indexNumber, projectName, lastUpdatedOn, System.currentTimeMillis(), 
+              TimeZone.getDefault().getRawOffset(), false);
+    }
+    
+    public IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, boolean delete) {
+      this(indexNumber, projectName, lastUpdatedOn, System.currentTimeMillis(), 
+              TimeZone.getDefault().getRawOffset(), delete);
     }
 
     protected IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, long currentTime) {
-      this.indexNumber = indexNumber;
-      this.projectName = projectName;
-      this.lastUpdatedOn = new Timestamp(lastUpdatedOn.getTime());
-      this.currentTime = currentTime;
-      this.timeZoneRawOffset = TimeZone.getDefault().getRawOffset();
+      this(indexNumber, projectName, lastUpdatedOn, currentTime, 
+              TimeZone.getDefault().getRawOffset(), false);
     }
 
     private IndexToReplicate(IndexToReplicateDelayed delayed) {
-      this.indexNumber = delayed.indexNumber;
-      this.projectName = delayed.projectName;
-      this.lastUpdatedOn = delayed.lastUpdatedOn;
-      this.currentTime = delayed.currentTime;
-      this.timeZoneRawOffset = TimeZone.getDefault().getRawOffset();
+      this(delayed.indexNumber, delayed.projectName, delayed.lastUpdatedOn, 
+              delayed.currentTime, TimeZone.getDefault().getRawOffset(), false);
     }
 
     protected IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, long currentTime, int rawOffset) {
+      this(indexNumber, projectName, lastUpdatedOn, currentTime, rawOffset, false);
+    }
+    
+    protected IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, long currentTime, int rawOffset, boolean delete) {
       this.indexNumber = indexNumber;
       this.projectName = projectName;
       this.lastUpdatedOn = new Timestamp(lastUpdatedOn.getTime());
       this.currentTime = currentTime;
       this.timeZoneRawOffset = rawOffset;
+      this.delete = delete;
     }
 
     @Override
     public String toString() {
-      return "IndexToReplicate{" + "indexNumber=" + indexNumber + ", projectName=" + projectName + ", lastUpdatedOn=" + lastUpdatedOn + ", currentTime=" + currentTime + ", timeZoneRawOffset=" + timeZoneRawOffset + '}';
+      return "IndexToReplicate{" + "indexNumber=" + indexNumber + ", projectName=" 
+              + projectName + ", lastUpdatedOn=" + lastUpdatedOn + ", currentTime=" 
+              + currentTime + ", timeZoneRawOffset=" + timeZoneRawOffset + ", delete="
+              + delete + '}';
     }
     
     @Override
@@ -914,7 +955,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
       super(indexNumber, projectName, lastUpdatedOn, currentTime);
     }
     public IndexToReplicateComparable(IndexToReplicate index) {
-      super(index.indexNumber, index.projectName, index.lastUpdatedOn, index.currentTime, index.timeZoneRawOffset);
+      super(index.indexNumber, index.projectName, index.lastUpdatedOn, index.currentTime, index.timeZoneRawOffset, index.delete);
     }
     @Override
     public int hashCode() {
