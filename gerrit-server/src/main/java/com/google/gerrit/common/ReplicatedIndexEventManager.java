@@ -556,7 +556,8 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
       ResultSet<Change> changesOnDb = db.changes().get(mapOfChanges.keySet());
       
       int totalDone = 0;
-      int thisNodeTimeZoneOffset = TimeZone.getDefault().getRawOffset();
+      int thisNodeTimeZoneOffset = TimeZone.getDefault().getRawOffset() + TimeZone.getDefault().getDSTSavings();
+      log.debug("thisNodeTimeZoneOffset={}",thisNodeTimeZoneOffset);
       // compare changes from db with the changes landed from the index change replication
       for (Change changeOnDb: changesOnDb) {
         try {
@@ -564,6 +565,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
           // the put it back in the queue
           IndexToReplicateComparable indexToReplicate = mapOfChanges.get(changeOnDb.getId());
           int landedIndexTimeZoneOffset = indexToReplicate.timeZoneRawOffset;
+          log.debug("landedIndexTimeZoneOffset={}",landedIndexTimeZoneOffset);
           
           boolean changeIndexedMoreThanOneHourAgo = 
               (System.currentTimeMillis()-thisNodeTimeZoneOffset 
@@ -572,7 +574,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
           Timestamp normalisedChangeTimestamp = new Timestamp(changeOnDb.getLastUpdatedOn().getTime()-thisNodeTimeZoneOffset);
           Timestamp normalisedIndexToReplicate = new Timestamp(indexToReplicate.lastUpdatedOn.getTime()-landedIndexTimeZoneOffset);
           
-          log.info("Comparing {} to {}. MoreThan is {}",normalisedChangeTimestamp,normalisedIndexToReplicate,changeIndexedMoreThanOneHourAgo);
+          log.debug("Comparing {} to {}. MoreThan is {}",normalisedChangeTimestamp,normalisedIndexToReplicate,changeIndexedMoreThanOneHourAgo);
           // reindex the change if it's more than an hour it's been in the queue, or if the timestamp on the database is newer than
           // the one in the change itself
           if (normalisedChangeTimestamp.before(normalisedIndexToReplicate) && !changeIndexedMoreThanOneHourAgo) {
@@ -870,22 +872,22 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
 
     public IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn) {
       this(indexNumber, projectName, lastUpdatedOn, System.currentTimeMillis(), 
-              TimeZone.getDefault().getRawOffset(), false);
+              TimeZone.getDefault().getRawOffset() + TimeZone.getDefault().getDSTSavings(), false);
     }
     
     public IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, boolean delete) {
       this(indexNumber, projectName, lastUpdatedOn, System.currentTimeMillis(), 
-              TimeZone.getDefault().getRawOffset(), delete);
+              TimeZone.getDefault().getRawOffset() + TimeZone.getDefault().getDSTSavings(), delete);
     }
 
     protected IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, long currentTime) {
       this(indexNumber, projectName, lastUpdatedOn, currentTime, 
-              TimeZone.getDefault().getRawOffset(), false);
+              TimeZone.getDefault().getRawOffset() + TimeZone.getDefault().getDSTSavings(), false);
     }
 
     private IndexToReplicate(IndexToReplicateDelayed delayed) {
       this(delayed.indexNumber, delayed.projectName, delayed.lastUpdatedOn, 
-              delayed.currentTime, TimeZone.getDefault().getRawOffset(), false);
+              delayed.currentTime, TimeZone.getDefault().getRawOffset() + TimeZone.getDefault().getDSTSavings(), false);
     }
 
     protected IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, long currentTime, int rawOffset) {
