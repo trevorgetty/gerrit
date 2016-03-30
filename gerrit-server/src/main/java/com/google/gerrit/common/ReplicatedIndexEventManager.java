@@ -674,6 +674,11 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
   
   private boolean indexSingleChange(ReviewDb db, IndexToReplicate indexEvent, boolean enqueueIfUnsuccessful, boolean forceIndexing) throws OrmException {
     Change change = db.changes().get(new Change.Id(indexEvent.indexNumber));
+
+    if (change == null) {
+      log.info("RC Change {} not reindexed, not found -- deleted",indexEvent.indexNumber);
+      return true;
+    }
   
     // Each change has a timestamp which is the time when it was last modified.
     // If on the database we don't have an update-date >= timestamp, then we wait until the      
