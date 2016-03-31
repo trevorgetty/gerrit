@@ -222,7 +222,8 @@ public class ChangeInserter {
     }
 
     update.commit();
-
+    
+    ChangesOnSlave.createAndWaitForSlaveIdWithCommit(db);
     if (hashtags != null && hashtags.size() > 0) {
       try {
         HashtagsInput input = new HashtagsInput();

@@ -23,4 +23,13 @@ public class ChangeMergedEvent extends PatchSetEvent {
   public ChangeMergedEvent() {
     super("change-merged");
   }
+  public ChangeMergedEvent(ChangeMergedEvent e, String type) {
+    this(e, type, false);
+  }
+
+  public ChangeMergedEvent(ChangeMergedEvent e, String type, boolean replicated) {
+    super(e, type, replicated);
+    this.newRev = e.newRev;
+    this.submitter = e.submitter;
+  }
 }

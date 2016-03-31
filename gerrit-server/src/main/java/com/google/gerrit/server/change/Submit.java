@@ -30,6 +30,8 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Table;
 import com.google.gerrit.common.TimeUtil;
 import com.google.gerrit.common.data.ParameterizedString;
+import com.google.gerrit.common.ChangeHookRunner;
+import com.google.gerrit.common.ChangeHooks;
 import com.google.gerrit.common.data.SubmitRecord;
 import com.google.gerrit.extensions.api.changes.SubmitInput;
 import com.google.gerrit.extensions.common.ChangeInfo;
@@ -51,13 +53,16 @@ import com.google.gerrit.server.ChangeMessagesUtil;
 import com.google.gerrit.server.GerritPersonIdent;
 import com.google.gerrit.server.IdentifiedUser;
 import com.google.gerrit.server.ProjectUtil;
+import com.google.gerrit.server.account.AccountCache;
 import com.google.gerrit.server.account.AccountsCollection;
 import com.google.gerrit.server.config.GerritServerConfig;
 import com.google.gerrit.server.git.GitRepositoryManager;
 import com.google.gerrit.server.git.LabelNormalizer;
 import com.google.gerrit.server.git.MergeQueue;
+import com.google.gerrit.server.git.ReceiveCommits;
 import com.google.gerrit.server.git.VersionedMetaData.BatchMetaDataUpdate;
 import com.google.gerrit.server.index.ChangeIndexer;
+import com.google.gerrit.server.notedb.ChangeNotes;
 import com.google.gerrit.server.notedb.ChangeUpdate;
 import com.google.gerrit.server.project.ChangeControl;
 import com.google.gerrit.server.project.SubmitRuleEvaluator;
@@ -85,6 +90,8 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Singleton
 public class Submit implements RestModifyView<RevisionResource, SubmitInput>,
@@ -134,6 +141,10 @@ public class Submit implements RestModifyView<RevisionResource, SubmitInput>,
   private final boolean submitWholeTopic;
   private final Provider<InternalChangeQuery> queryProvider;
 
+  private final ChangeHookRunner hooks;
+  private final AccountCache accountCache;
+  private final ChangeNotes.Factory notesFactory;
+
   @Inject
   Submit(@GerritPersonIdent PersonIdent serverIdent,
       Provider<ReviewDb> dbProvider,
@@ -149,7 +160,10 @@ public class Submit implements RestModifyView<RevisionResource, SubmitInput>,
       ChangeIndexer indexer,
       LabelNormalizer labelNormalizer,
       @GerritServerConfig Config cfg,
-      Provider<InternalChangeQuery> queryProvider) {
+      Provider<InternalChangeQuery> queryProvider,
+      ChangeHooks hooks,
+      AccountCache accountCache,
+      ChangeNotes.Factory nf) {
     this.serverIdent = serverIdent;
     this.dbProvider = dbProvider;
     this.repoManager = repoManager;
@@ -177,6 +191,9 @@ public class Submit implements RestModifyView<RevisionResource, SubmitInput>,
         cfg.getString("change", null, "submitTopicTooltip"),
         DEFAULT_TOPIC_TOOLTIP));
     this.queryProvider = queryProvider;
+    this.hooks = (ChangeHookRunner) hooks;
+    this.accountCache = accountCache;
+    this.notesFactory = nf;
   }
 
   @Override
@@ -374,20 +391,44 @@ public class Submit implements RestModifyView<RevisionResource, SubmitInput>,
     ChangeUpdate update = updateFactory.create(rsrc.getControl(), timestamp);
     update.submit(submitRecords);
 
-    db.changes().beginTransaction(change.getId());
     try {
-      BatchMetaDataUpdate batch = approve(rsrc, update, caller, timestamp);
-      // Write update commit after all normalized label commits.
-      batch.write(update, new CommitBuilder());
-      change = submitToDatabase(db, change.getId(), timestamp);
-      if (change == null) {
-        return null;
+      // ac: Loop to retry the transaction if it fails for deadlock
+      for (int retriedSoFar = 0; ; retriedSoFar++) {
+        db.changes().beginTransaction(change.getId());
+        try {
+          BatchMetaDataUpdate batch = approve(rsrc, update, caller, timestamp);
+          // Write update commit after all normalized label commits.
+          batch.write(update, new CommitBuilder());
+          change = submitToDatabase(db, change.getId(), timestamp);
+          if (change == null) {
+            return null;
+          }
+          db.commit();
+          break;
+        } catch (OrmException maybeSqlTransactionRollback) {
+          if (!ChangesOnSlave.checkIfTransactionDeadlocksAndRollback(db,maybeSqlTransactionRollback,retriedSoFar)) {
+            log.error("Got OrmException, not SQLTransactionRollbackException",maybeSqlTransactionRollback);
+            throw maybeSqlTransactionRollback;
+          }
+        }
       }
-      db.commit();
+      ChangesOnSlave.createAndWaitForSlaveIdWithCommit(db);
     } finally {
       db.rollback();
     }
     indexer.index(db, change);
+    
+    //send a SubmitEvent to be output by event-stream  
+    PatchSetApproval submitter = null;
+    try {
+      ChangeNotes notes = notesFactory.create(change);
+      submitter = approvalsUtil.getSubmitter(db, notes, notes.getChange().currentPatchSetId());
+      hooks.doSubmitHook(change, accountCache.get(submitter.getAccountId()).getAccount(),
+            db.patchSets().get(change.currentPatchSetId()), db);
+    } catch (Exception e) {
+      log.warn("Could not get submitter, skip sending SubmitEvent");
+    }
+    
     return change;
   }
 

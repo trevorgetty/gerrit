@@ -20,6 +20,7 @@ import static com.google.gerrit.server.query.change.ChangeData.asChanges;
 import com.google.common.base.Optional;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
+import com.google.gerrit.common.ReplicatedIndexEventManager;
 import com.google.gerrit.common.TimeUtil;
 import com.google.gerrit.extensions.restapi.ResourceNotFoundException;
 import com.google.gerrit.reviewdb.client.Change;
@@ -454,6 +455,8 @@ public class ChangeUtil {
       }
 
       db.commit();
+      ReplicatedIndexEventManager.queueReplicationIndexDeletionEvent(
+              change.getId().get(),change.getProject().get());
       indexer.delete(change.getId());
     } finally {
       db.rollback();

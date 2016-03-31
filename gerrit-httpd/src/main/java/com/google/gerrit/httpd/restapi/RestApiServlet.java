@@ -987,7 +987,7 @@ public class RestApiServlet extends HttpServlet {
 
     if (!res.isCommitted()) {
       res.reset();
-      replyError(req, res, SC_INTERNAL_SERVER_ERROR, "Internal server error", err);
+      replyError(req, res, SC_INTERNAL_SERVER_ERROR, err.getMessage(), err);
     }
   }
 

@@ -161,21 +161,33 @@ public class PostReview implements RestModifyView<RevisionResource, ReviewInput>
     db.get().changes().beginTransaction(revision.getChange().getId());
     boolean dirty = false;
     try {
-      change = db.get().changes().get(revision.getChange().getId());
-      if (change.getLastUpdatedOn().before(timestamp)) {
-        change.setLastUpdatedOn(timestamp);
-      }
+      // ac: Loop to retry the transaction if it fails for deadlock
+      for (int retriedSoFar = 0; ; retriedSoFar++) {
+        try {
+          change = db.get().changes().get(revision.getChange().getId());
+          if (change.getLastUpdatedOn().before(timestamp)) {
+            change.setLastUpdatedOn(timestamp);
+          }
 
-      ChangeUpdate update = updateFactory.create(revision.getControl(), timestamp);
-      update.setPatchSetId(revision.getPatchSet().getId());
-      dirty |= insertComments(revision, update, input.comments, input.drafts);
-      dirty |= updateLabels(revision, update, input.labels);
-      dirty |= insertMessage(revision, input.message, update);
-      if (dirty) {
-        db.get().changes().update(Collections.singleton(change));
-        db.get().commit();
+          ChangeUpdate update = updateFactory.create(revision.getControl(), timestamp);
+          update.setPatchSetId(revision.getPatchSet().getId());
+          dirty |= insertComments(revision, update, input.comments, input.drafts);
+          dirty |= updateLabels(revision, update, input.labels);
+          dirty |= insertMessage(revision, input.message, update);
+          if (dirty) {
+            db.get().changes().update(Collections.singleton(change));
+            db.get().commit();
+          }
+          update.commit();
+          ChangesOnSlave.createAndWaitForSlaveIdWithCommit(db.get());
+          break;
+        } catch (OrmException maybeSqlTransactionRollback) {
+          if (!ChangesOnSlave.checkIfTransactionDeadlocksAndRollback(db.get(),maybeSqlTransactionRollback,retriedSoFar)) {
+            log.error("Got OrmException, not SQLTransactionRollbackException",maybeSqlTransactionRollback);
+            throw maybeSqlTransactionRollback;
+          }
+        }
       }
-      update.commit();
     } finally {
       db.get().rollback();
     }

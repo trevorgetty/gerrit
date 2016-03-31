@@ -22,4 +22,12 @@ public class PatchSetCreatedEvent extends PatchSetEvent {
   public PatchSetCreatedEvent() {
     super("patchset-created");
   }
+  public PatchSetCreatedEvent(PatchSetCreatedEvent e, String type) {
+    this(e, type, false);
+  }
+
+  public PatchSetCreatedEvent(PatchSetCreatedEvent e, String type, boolean replicated) {
+    super(e, type, replicated);
+    this.uploader = e.uploader;
+  }
 }

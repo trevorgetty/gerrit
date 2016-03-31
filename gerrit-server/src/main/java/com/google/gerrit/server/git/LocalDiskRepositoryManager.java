@@ -238,10 +238,16 @@ public class LocalDiskRepositoryManager implements GitRepositoryManager {
       loc = FileKey.exact(new File(path, n), FS.DETECTED);
     }
 
-    try {
-      Repository db = RepositoryCache.open(loc, false);
-      db.create(true /* bare */);
+    Repository db = null;
 
+    try {
+      db = RepositoryCache.open(loc, false);
+      db.create(true /* bare */);
+    } catch (IOException e1) {
+      throw new RepositoryNotFoundException(e1.getMessage(), e1);
+    }
+
+    try {
       StoredConfig config = db.getConfig();
       config.setBoolean(ConfigConstants.CONFIG_CORE_SECTION,
         null, ConfigConstants.CONFIG_KEY_LOGALLREFUPDATES, true);

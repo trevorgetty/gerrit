@@ -18,6 +18,7 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
+import com.google.gerrit.common.ReplicatedCacheManager;
 import com.google.gerrit.reviewdb.client.AccountGroup;
 import com.google.gerrit.reviewdb.client.AccountGroupById;
 import com.google.gerrit.reviewdb.server.ReviewDb;
@@ -83,8 +84,16 @@ public class GroupIncludeCacheImpl implements GroupIncludeCache {
     this.subgroups = subgroups;
     this.parentGroups = parentGroups;
     this.external = external;
+  
+    attachToReplication();
   }
 
+  final void attachToReplication() {
+    ReplicatedCacheManager.watchCache(PARENT_GROUPS_NAME, this.parentGroups);
+    ReplicatedCacheManager.watchCache(SUBGROUPS_NAME, this.subgroups);
+    ReplicatedCacheManager.watchCache(EXTERNAL_NAME, this.external);
+  }
+  
   @Override
   public Set<AccountGroup.UUID> subgroupsOf(AccountGroup.UUID groupId) {
     try {
@@ -109,6 +118,7 @@ public class GroupIncludeCacheImpl implements GroupIncludeCache {
   public void evictSubgroupsOf(AccountGroup.UUID groupId) {
     if (groupId != null) {
       subgroups.invalidate(groupId);
+      ReplicatedCacheManager.replicateEvictionFromCache(SUBGROUPS_NAME,groupId);
     }
   }
 
@@ -116,9 +126,11 @@ public class GroupIncludeCacheImpl implements GroupIncludeCache {
   public void evictParentGroupsOf(AccountGroup.UUID groupId) {
     if (groupId != null) {
       parentGroups.invalidate(groupId);
+      ReplicatedCacheManager.replicateEvictionFromCache(PARENT_GROUPS_NAME,groupId);
 
       if (!AccountGroup.isInternalGroup(groupId)) {
         external.invalidate(EXTERNAL_NAME);
+        ReplicatedCacheManager.replicateEvictionFromCache(EXTERNAL_NAME,groupId);
       }
     }
   }

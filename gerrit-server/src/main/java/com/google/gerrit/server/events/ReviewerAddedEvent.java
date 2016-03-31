@@ -22,4 +22,13 @@ public class ReviewerAddedEvent extends PatchSetEvent {
   public ReviewerAddedEvent() {
     super("reviewer-added");
   }
+
+  public ReviewerAddedEvent(ReviewerAddedEvent e, String type){
+    this(e, type, false);
+  }
+
+  public ReviewerAddedEvent(ReviewerAddedEvent e, String type, boolean replicated){
+    super(e, type, replicated);
+    this.reviewer = e.reviewer;
+  }
 }

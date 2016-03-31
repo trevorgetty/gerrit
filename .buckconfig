@@ -13,6 +13,8 @@
   safari = //:safari
   soyc = //gerrit-gwtui:ui_soyc
   withdocs = //:withdocs
+  installer = //gerrit-installer:targerrit
+  makeself-installer = //gerrit-installer:makeself-installer
 
 [buildfile]
   includes = //tools/default.defs

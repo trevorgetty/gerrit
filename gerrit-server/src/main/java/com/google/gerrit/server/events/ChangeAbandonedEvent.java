@@ -23,4 +23,13 @@ public class ChangeAbandonedEvent extends PatchSetEvent {
   public ChangeAbandonedEvent() {
     super("change-abandoned");
   }
+  public ChangeAbandonedEvent(ChangeAbandonedEvent e, String type){
+    this(e, type, false);
+  }
+
+  public ChangeAbandonedEvent(ChangeAbandonedEvent e, String type, boolean replicated){
+    super(e,type,replicated);
+    this.abandoner = e.abandoner;
+    this.reason = e.reason;
+  }
 }

@@ -36,6 +36,7 @@ import com.google.gerrit.server.notedb.ChangeUpdate;
 import com.google.gerrit.server.project.ChangeControl;
 import com.google.gwtorm.server.AtomicUpdate;
 import com.google.gwtorm.server.OrmException;
+import com.google.gwtorm.server.ResultSet;
 import com.google.inject.Inject;
 import com.google.inject.Provider;
 import com.google.inject.Singleton;
@@ -44,6 +45,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
 
 @Singleton
 public class Abandon implements RestModifyView<ChangeResource, AbandonInput>,
@@ -118,6 +121,7 @@ public class Abandon implements RestModifyView<ChangeResource, AbandonInput>,
       message = newMessage(input, caller, change);
       cmUtil.addChangeMessage(db, update, message);
       db.commit();
+      ChangesOnSlave.createAndWaitForSlaveIdWithCommit(db);
     } finally {
       db.rollback();
     }
