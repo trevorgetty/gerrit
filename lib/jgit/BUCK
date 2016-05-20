@@ -10,7 +10,7 @@ maven_jar(
   bin_sha1 = '16b09484a382c442c8bee75426737fe5bf9df5e3',
   src_sha1 = 'd590a92d734d7df4786ea18067645d498b5dc4fc',
   license = 'jgit',
-  repository = 'http://artifacts.wandisco.com:8081/artifactory/libs-release-local',
+  repository = 'http://<USE_YOUR_ARTIFACTORY_URL_HERE>',
   unsign = True,
   deps = [':ewah'],
   exclude = [
