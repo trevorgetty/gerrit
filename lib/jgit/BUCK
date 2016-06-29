@@ -2,13 +2,13 @@ include_defs('//lib/maven.defs')
 
 REPO = MAVEN_CENTRAL
 VERS = '4.0.1.201506240215-r'
-VERS_WD = '4.0.1.201506240215-r_WDv6'
+VERS_WD = '4.0.1.201506240215-r_WDv7'
 
 maven_jar(
   name = 'jgit',
   id = 'org.eclipse.jgit:org.eclipse.jgit:' + VERS_WD,
-  bin_sha1 = '16b09484a382c442c8bee75426737fe5bf9df5e3',
-  src_sha1 = 'd590a92d734d7df4786ea18067645d498b5dc4fc',
+  bin_sha1 = '675f7a079ca7c4a88e1e4687e00ec3e84234abbb',
+  src_sha1 = '8c6b3cedf6260541388a594cb0dc7aa3ad99cc2d',
   license = 'jgit',
   repository = 'http://<USE_YOUR_ARTIFACTORY_URL_HERE>',
   unsign = True,
