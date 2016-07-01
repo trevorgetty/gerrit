@@ -82,7 +82,11 @@ function prereqs() {
   info " Welcome to the GerritMS installation. Before the install can continue,"
   info " you must:"
   info ""
-  info " * Have Gerrit $NEW_GERRIT_VERSION installed before beginning"
+  info " * Have one of the following gerrit versions installed before beginning:"
+  info "     - Gerrit: $NEW_GERRIT_VERSION"
+  for version in "${PREVIOUS_ALLOWED_RP_GERRIT_VERSIONS[@]}"; do
+    info "     - Gerrit MS: $version"
+  done
   info " * Have backed up your existing Gerrit database"
   info " * Have a version of GitMS (1.7 or higher) installed and running"
   info " * Have a replication group created in GitMS containing all Gerrit nodes"
@@ -1356,7 +1360,7 @@ GERRITMS_INSTALL_DOC="http://docs.wandisco.com/git/gerrit/1.7/gerrit_install.htm
 ## version, but can skip minor versions. This is not a hard and fast rule however, as the reality of when an
 ## upgrade can be safely skipped is down to Gerrit upgrade behaviour. This should have all the release versions
 ## of the previous major version number, and any release versions of the current major version number.
-PREVIOUS_ALLOWED_RP_GERRIT_VERSIONS=("v2.10.6-RP-1.6.0.1" "v2.10.6-RP-1.6.0.2" "v2.11.5-RP-1.7.0.1" "v2.11.6-RP-1.7.1.1" "v2.11.7-RP-1.7.1.4")
+PREVIOUS_ALLOWED_RP_GERRIT_VERSIONS=("v2.10.6-RP-1.6.0.2" "v2.11.5-RP-1.7.0.1" "v2.11.7-RP-1.7.1.4")
 REPLICATED_UPGRADE="false"
 SPINNER=("|" "/" "-" "\\")
 
