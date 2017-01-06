@@ -217,6 +217,7 @@ function fetch_config_from_application_properties() {
   GERRIT_USERNAME=$(fetch_property "gerrit.username")
   GERRIT_RPGROUP_ID=$(fetch_property "gerrit.rpgroupid")
   GERRIT_REPO_HOME=$(fetch_property "gerrit.repo.home")
+  DELETED_REPO_DIRECTORY=$(fetch_property "deleted.repo.directory")
   GERRIT_EVENTS_PATH=$(fetch_property "gerrit.events.basepath")
   GERRIT_DB_SLAVEMODE_SLEEPTIME=$(fetch_property "gerrit.db.slavement.sleepTime")
   GITMS_REST_PORT=$(fetch_property "jetty.http.port")
@@ -826,6 +827,7 @@ function get_config_from_user() {
 
   set_property "gerrit.repo.home" "$GERRIT_REPO_HOME"
 
+
   if [ -z "$GERRIT_EVENTS_PATH" ]; then
     get_directory "Gerrit Events Directory" "true"
     GERRIT_EVENTS_PATH="$INPUT_DIR"
@@ -913,6 +915,41 @@ function get_config_from_user() {
     set_property "gerrit.db.slavemode.sleepTime" "0"
   fi
 
+  #prompt for directory to save deleted repos to
+  if [ -z "$DELETED_REPO_DIRECTORY" ]; then
+    info ""
+    bold " Deleted Repositories Directory "
+    info "
+    The Deleted Repositories Directory is only needed if you are using the Gerrit Delete Project Plugin.
+    Remember that you should periodically review the repositories that are in the Deleted Repositories Directory
+    and physically remove those that are no longer needed. You will need this directory to be capable of storing
+    all deleted project's repositories until they can be reviewed and removed."
+    info ""
+
+    #provide a default
+    DELETED_REPO_DEFAULT_DIRECTORY="$GERRIT_REPO_HOME/archiveOfDeletedGitRepositories"
+    while true
+    do
+      read -e -p " Location for deleted repositories to be moved to : $DELETED_REPO_DEFAULT_DIRECTORY " INPUT
+
+      #If the input is empty then set the directory to the default directory
+      if [ -z "$INPUT" ]; then
+        INPUT=$DELETED_REPO_DEFAULT_DIRECTORY
+        create_directory "$INPUT"
+        break
+      fi
+
+      #If the input is not empty check if the directory already exists, if not offer to create it
+      if [ ! -z "$INPUT" ]; then
+        create_directory "$INPUT"
+      fi
+    done
+  else
+    info " Deleted Repo Directory: $DELETED_REPO_DIRECTORY"
+  fi
+
+  set_property "deleted.repo.directory" $DELETED_REPO_DIRECTORY
+
   if [ ! "$NON_INTERACTIVE" == "1" ]; then
     info ""
     bold " Helper Scripts"
@@ -938,6 +975,39 @@ function get_config_from_user() {
       fi
     done
     SCRIPT_INSTALL_DIR="$INPUT"
+  fi
+}
+
+function create_directory {
+  INPUT_DIR="$1"
+
+  if [[ ! -d "$INPUT_DIR" && ! -e "$INPUT_DIR" ]]; then
+    local create_dir=$(get_boolean "This directory does not exist, do you want to create it?" "true")
+
+    if [ "$create_dir" == "true" ]; then
+      mkdir -p "$INPUT_DIR"
+      if [ "$?" == "0" ]; then
+        DELETED_REPO_DIRECTORY="$INPUT_DIR"
+        break
+      else
+        echo " ERROR: Directory could not be created"
+        continue
+      fi
+    else
+      #user does not want to create the directory so prompt them again
+      continue
+    fi
+  elif [ -d "$INPUT_DIR" ]; then
+    if [ -w "$INPUT_DIR" ]; then
+      DELETED_REPO_DIRECTORY="$INPUT_DIR"
+      break
+    else
+      echo " ERROR: $INPUT_DIR is not writable"
+      continue
+    fi
+  else
+    echo " ERROR: $INPUT_DIR does not exist"
+    continue
   fi
 }
 
@@ -1177,6 +1247,7 @@ function check_for_non_interactive_mode() {
     local tmp_gerrit_root=$(fetch_property "gerrit.root")
     local tmp_gerrit_rpgroup_id=$(fetch_property "gerrit.rpgroupid")
     local tmp_gerrit_repo_home=$(fetch_property "gerrit.repo.home")
+    local tmp_deleted_repo_directory=$(fetch_property "deleted.repo.directory")
     local tmp_gerrit_events_path=$(fetch_property "gerrit.events.basepath")
     local tmp_gerrit_replicated_events_send=$(fetch_property "gerrit.replicated.events.enabled.send")
     local tmp_gerrit_replicated_events_receive=$(fetch_property "gerrit.replicated.events.enabled.receive")
@@ -1197,6 +1268,10 @@ function check_for_non_interactive_mode() {
 
     if [ ! -z "$tmp_gerrit_repo_home" ]; then
       GERRIT_REPO_HOME="$tmp_gerrit_repo_home"
+    fi
+
+    if [ ! -z "$tmp_deleted_repo_directory" ]; then
+      DELETED_REPO_DIRECTORY="$tmp_deleted_repo_directory"
     fi
 
     if [ ! -z "$tmp_gerrit_events_path" ]; then
@@ -1233,7 +1308,7 @@ function check_for_non_interactive_mode() {
 
     ## Check that all variables are now set to something
     if [[ ! -z "$GERRIT_ROOT"
-      && ! -z "$GERRIT_RPGROUP_ID" && ! -z "$GERRIT_REPO_HOME" && ! -z "$GERRIT_EVENTS_PATH"
+      && ! -z "$GERRIT_RPGROUP_ID" && ! -z "$GERRIT_REPO_HOME" && ! -z "$GERRIT_EVENTS_PATH" && ! -z "$DELETED_REPO_DIRECTORY"
       && ! -z "$GERRIT_REPLICATED_EVENTS_SEND" && ! -z "$GERRIT_REPLICATED_EVENTS_RECEIVE"
       && ! -z "$GERRIT_REPLICATED_EVENTS_RECEIVE_DISTINCT" && ! -z "$GERRIT_REPLICATED_EVENTS_LOCAL_REPUBLISH_DISTINCT"
       && ! -z "$GERRIT_REPLICATED_EVENTS_DISTINCT_PREFIX" && ! -z "$GERRIT_REPLICATED_CACHE_ENABLED"
@@ -1249,12 +1324,21 @@ function check_for_non_interactive_mode() {
         fi
       fi
 
-
       ## GERRIT_ROOT must exist as well
       if [ ! -d "$GERRIT_ROOT" ]; then
         info "ERROR: Non-interactive installation aborted, the GERRIT_ROOT at $GERRIT_ROOT does not exist"
         exit 1
       fi
+
+      ## DELETED_REPO_DIRECTORY must exist, if it does not attempt to create it
+      if [ ! -d "$DELETED_REPO_DIRECTORY" ]; then
+        mkdir -p "$DELETED_REPO_DIRECTORY"
+        if [ "$?" != "0" ]; then
+          info "ERROR: Non-interactive installation aborted, the DELETED_REPO_DIRECTORY at $DELETED_REPO_DIRECTORY does not exist and can not be created"
+          exit 1
+        fi
+      fi
+
       NON_INTERACTIVE=1
     fi
   fi
@@ -1329,6 +1413,7 @@ if [ "$NON_INTERACTIVE" == "1" ]; then
   echo "GERRIT_ROOT: $GERRIT_ROOT"
   echo "GERRIT_RPGROUP_ID: $GERRIT_RPGROUP_ID"
   echo "GERRIT_REPO_HOME: $GERRIT_REPO_HOME"
+  echo "DELETED_REPO_DIRECTORY: $DELETED_REPO_DIRECTORY"
   echo "GERRIT_EVENTS_PATH: $GERRIT_EVENTS_PATH"
   echo "GERRIT_REPLICATED_EVENTS_SEND: $GERRIT_REPLICATED_EVENTS_SEND"
   echo "GERRIT_REPLICATED_EVENTS_RECEIVE: $GERRIT_REPLICATED_EVENTS_RECEIVE"

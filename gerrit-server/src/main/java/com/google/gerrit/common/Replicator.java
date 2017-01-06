@@ -46,10 +46,10 @@ import org.eclipse.jgit.util.FS;
  * This is the class in charge to exchange messages with the GitMS replicator, using files.
  * So this class will call the methods in Gerrit to replicate events coming from GitMS and
  * will send events coming from Gerrit to GitMS to be replicated to the other nodes.
- * 
+ *
  * The main thread will poll for events in the queue and will write those events to files
  * which will be read by GitMS. Then it will read incoming files and publish those events to Gerrit.
- * 
+ *
  * @author antonio
  */
 public class Replicator implements Runnable {
@@ -127,21 +127,21 @@ public class Replicator implements Runnable {
   private long totalPublishedLocalGoodEventsBytes = 0;
   private long totalPublishedLocalEventsBytes = 0;
   private final Multiset<EventWrapper.Originator> totalPublishedLocalEventsByType = HashMultiset.create();
-  
+
   private long lastCheckedIncomingDirTime = 0;
   private long lastCheckedOutgoingDirTime = 0;
   private int lastIncomingDirValue = -1;
   private int lastOutgoingDirValue = -1;
   public static long DEFAULT_STATS_UPDATE_TIME = 20000L;
-  
+
   // Statistics end
-  
+
   public interface GerritPublishable {
      public boolean publishIncomingReplicatedEvents(EventWrapper newEvent);
   }
-  
+
   private final static Map<EventWrapper.Originator,Set<GerritPublishable>> eventListeners = new HashMap<>();
-  
+
   // Queue of events to replicate
   private final ConcurrentLinkedQueue<EventWrapper> queue =   new ConcurrentLinkedQueue<>();
 
@@ -153,7 +153,7 @@ public class Replicator implements Runnable {
   }
 
   public static Replicator getInstance() {
-    
+
     if (internalLogEnabled) {
       internalLogFile = new File(new File(DEFAULT_BASE_DIR),"replEvents.log"); // used for debug
     }
@@ -184,19 +184,19 @@ public class Replicator implements Runnable {
     }
     return instance;
   }
-  
+
   private Replicator() {
     log.debug("RE Replicator constructor called...");
   }
-  
+
   static void setGerritConfig(Config config) {
     gerritConfig = config;
   }
-  
+
   private static synchronized void clearThread() {
     eventReaderAndPublisherThread = null;
   }
-  
+
   public static void subscribeEvent(EventWrapper.Originator eventType,GerritPublishable toCall) {
     synchronized(eventListeners) {
       Set<GerritPublishable> set = eventListeners.get(eventType);
@@ -218,21 +218,21 @@ public class Replicator implements Runnable {
       }
     }
   }
-  
+
   public File getIndexingEventsDirectory() {
     return indexingEventsDirectory;
   }
-  
+
   public File getIncomingPersistedReplEventsDirectory() {
     return incomingPersistedReplEventsDirectory;
   }
-  
+
   /**
    * This functions is just to log something when the Gerrit logger is not yet available
    * and you need to know if it's working. To be used for debugging purposes.
    * Gerrit will not log anything until the log system will be initialized.
    * @param msg
-   * @param t 
+   * @param t
    */
   static void logMe(String msg, Throwable t) {
     if (!internalLogEnabled) {
@@ -251,14 +251,14 @@ public class Replicator implements Runnable {
       ex.printStackTrace(System.err);
     }
   }
-  
+
   /**
    * Main thread which will poll for events in the queue, events which
    * are published by Gerrit, and will save them to files.
    * When enough (customizable) time has passed or when enough (customizable)
    * events have been saved to a file, this will be renamed with a pattern
    * that will be taken care of by the GitMS replicator, and then deleted.
-   * 
+   *
    * After this or while this happens, the thread will also look for files
    * coming from the replicator, which need to be read and published as they
    * are incoming events.
@@ -268,7 +268,7 @@ public class Replicator implements Runnable {
   public void run() {
     log.info("RE ReplicateEvents thread is starting...");
     logMe("ReplicateEvents thread is starting...",null);
-    
+
     // we need to make this thread never fail, otherwise we'll lose events.
     while (!finished) {
       try {
@@ -297,7 +297,7 @@ public class Replicator implements Runnable {
     clearThread();
     finished = true;
   }
-  
+
   public void queueEventForReplication(EventWrapper event) {
     queue.offer(event); // queue is unbound, no need to check for result
   }
@@ -383,7 +383,7 @@ public class Replicator implements Runnable {
     }
     return result;
   }
-  
+
   /**
    * poll for the events published by gerrit and send to the other nodes through files
    * read by the replicator
@@ -404,7 +404,7 @@ public class Replicator implements Runnable {
     setFileReadyIfFull(false);
     return eventGot;
   }
-  
+
   /**
    * This will create append to the current file the last event received.
    * If the project name of the this event is different from the the last one,
@@ -413,7 +413,7 @@ public class Replicator implements Runnable {
    *
    * @param originalEvent
    * @return true if the event was successfully appended to the file
-   * @throws IOException 
+   * @throws IOException
    */
   private boolean appendToFile(final EventWrapper originalEvent) throws IOException {
     boolean result = false;
@@ -434,7 +434,7 @@ public class Replicator implements Runnable {
       lastWrittenMessages++;
       lastProjectName = originalEvent.projectName;
       result = true;
-      
+
       totalPublishedLocalGoodEventsBytes += bytes.length;
       totalPublishedLocalGoodEvents++;
       totalPublishedLocalEventsByType.add(originalEvent.originator);
@@ -471,7 +471,7 @@ public class Replicator implements Runnable {
 
   private void setFileReadyIfFull(boolean projectIsDifferent) {
     long diff = System.currentTimeMillis() - lastTimeCreated;
-    
+
     if (projectIsDifferent || diff > maxSecsToWaitBeforeProposingEvents*1000 || lastWrittenMessages >= maxNumberOfEventsBeforeProposing) {
       if (lastWrittenMessages == 0) {
         log.debug("RE No events to send. Waiting...");
@@ -505,7 +505,7 @@ public class Replicator implements Runnable {
       }
     }
   }
-  
+
   private File getNewFile()  {
     String currTime = ""+System.currentTimeMillis();
     File newFile = new File(outgoingReplEventsDirectory,NEXT_EVENTS_FILE.replaceFirst(TIME_PH, currTime));
@@ -528,11 +528,11 @@ public class Replicator implements Runnable {
     }
     return newFile;
   }
-  
+
   /**
    * Look for files written by the replicator in the right directory
    * and read them to publish the contained events
-   * 
+   *
    * @return true if something has been published
    */
   private boolean readAndPublishIncomingEvents() {
@@ -570,10 +570,10 @@ public class Replicator implements Runnable {
                 reader.close(); // superfluos?
               }
             }
-            
+
             publishEvents(bos.toByteArray());
             result = true;
-            
+
             boolean deleted = file.delete();
             if (!deleted) {
               log.error("RE Could not delete file {}",file.getAbsolutePath());
@@ -590,7 +590,7 @@ public class Replicator implements Runnable {
     }
     return result;
   }
-  
+
   private void copyFile(InputStream source, OutputStream dest) throws IOException {
     try (InputStream fis = source) {
       byte[] buf= new byte[4096];
@@ -606,10 +606,11 @@ public class Replicator implements Runnable {
    * recreate the event using the name of the class embedded in the json text.
    * We then add the replicated flag to the object to avoid loops in sending
    * this event over and over again
-   * @param eventsBytes 
+   * @param eventsBytes
    */
   private void publishEvents(byte[] eventsBytes) {
     log.debug("RE Trying to publish original events...");
+
     String[] events = new String(eventsBytes,StandardCharsets.UTF_8).split("\n");
     totalPublishedForeignEventsBytes += eventsBytes.length;
     totalPublishedForeignEventsProsals++;
@@ -624,6 +625,9 @@ public class Replicator implements Runnable {
             totalPublishedForeignEventsByType.add(changeEventWrapper.originator);
             Set<GerritPublishable> clients = eventListeners.get(changeEventWrapper.originator);
             if (clients != null) {
+              if (changeEventWrapper.originator == EventWrapper.Originator.FOR_REPLICATOR_EVENT) {
+                continue;
+              }
               for(GerritPublishable gp: clients) {
                 try {
                   gp.publishIncomingReplicatedEvents(changeEventWrapper);
@@ -637,11 +641,11 @@ public class Replicator implements Runnable {
           log.error("RE event has been lost. Could not rebuild obj using GSON",e);
         }
       } else {
-        log.error("RE event GSON string is empy!", new Exception("Internal error, event is empty: "+event));
+        log.error("RE event GSON string is empty!", new Exception("Internal error, event is empty: "+event));
       }
     }
   }
-  
+
   final static class IncomingEventsToReplicateFileFilter implements FileFilter {
     // These values are just to do a minimal filtering
     static final String FIRST_PART = "events-";
@@ -660,7 +664,7 @@ public class Replicator implements Runnable {
       return false;
     }
   }
-  
+
   /**
    * If in the Gerrit Configuration file the cache value for memoryLimit is 0 then
    * it means that no cache is configured and we are not going to replicate this kind of events.
@@ -672,18 +676,18 @@ public class Replicator implements Runnable {
      [cache "accounts_byemail"]
         memorylimit = 0
         disklimit = 0
-   * 
+   *
    * There is here a small probability of race condition due to the use of the static and the global
    * gerritConfig variable. But in the worst case, we can miss just one call (because once it's initialized
    * it's stable)
-   * 
+   *
    * @param cacheName
    * @return true is the cache is not disabled, i.e. the name does not show up in the gerrit config file with a value of 0 memoryLimit
    */
   final static boolean isCacheToBeEvicted(String cacheName) {
     return !(gerritConfig != null && gerritConfig.getLong("cache", cacheName, "memoryLimit", 4096) == 0);
   }
-  
+
   final static boolean isCacheToBeReloaded(String cacheName)  {
     return !cacheNamesNotToReload.contains(cacheName);
   }
@@ -696,7 +700,7 @@ public class Replicator implements Runnable {
       if (gitConfigLoc == null) {
         gitConfigLoc = System.getProperty("user.home") + "/.gitconfig";
       }
-      
+
       FileBasedConfig config = new FileBasedConfig(new File(gitConfigLoc), FS.DETECTED);
       try {
         config.load();
@@ -711,7 +715,7 @@ public class Replicator implements Runnable {
         log.warn("Could not find/read (1) " + applicationProperties);
         applicationProperties = new File(DEFAULT_MS_APPLICATION_PROPERTIES,"application.properties");
       }
-   
+
       if(!applicationProperties.exists() || !applicationProperties.canRead()) {
         log.warn("Could not find/read (2) " + applicationProperties);
         defaultBaseDir = DEFAULT_BASE_DIR+File.separator+REPLICATED_EVENTS_DIRECTORY_NAME;
@@ -737,9 +741,9 @@ public class Replicator implements Runnable {
                   DEFAULT_MAX_SECS_TO_WAIT_BEFORE_PROPOSING_EVENTS)));
           maxNumberOfEventsBeforeProposing = Integer.parseInt(
               cleanLforLong(props.getProperty(GERRIT_MAX_EVENTS_TO_APPEND_BEFORE_PROPOSING,DEFAULT_MAX_EVENTS_PER_FILE)));
-          
+
           log.info("Property {}={}",new Object[] {GERRIT_REPLICATED_EVENTS_BASEPATH,defaultBaseDir});
-          
+
           // Replicated CACHE properties
           try {
             String[] tempCacheNames= props.getProperty(GERRIT_CACHE_NAMES_NOT_TO_BE_RELOADED,"invalid_cache_name").split(",");
@@ -762,7 +766,7 @@ public class Replicator implements Runnable {
     }
     return result;
   }
-  
+
   private static String cleanLforLong(String property) {
     if (property != null && property.length() > 1 &&  (property.endsWith("L") || property.endsWith("l"))) {
       return property.substring(0,property.length()-1);
