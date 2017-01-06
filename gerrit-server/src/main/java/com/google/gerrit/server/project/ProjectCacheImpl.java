@@ -23,6 +23,7 @@ import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Sets;
 import com.google.gerrit.extensions.events.LifecycleListener;
 import com.google.gerrit.common.ReplicatedCacheManager;
+import com.google.gerrit.common.ReplicatedProjectManager;
 import com.google.gerrit.reviewdb.client.AccountGroup;
 import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.server.cache.CacheModule;
@@ -120,6 +121,7 @@ public class ProjectCacheImpl implements ProjectCache {
     ReplicatedCacheManager.watchCache(CACHE_NAME, this.byName);
     ReplicatedCacheManager.watchCache(CACHE_LIST, this.list); // it's never evicted in the code below
     ReplicatedCacheManager.watchObject(ReplicatedCacheManager.projectCache,this);
+    ReplicatedProjectManager.enableReplicatedProjectManager();
   }
 
   @Override

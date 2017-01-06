@@ -1,5 +1,6 @@
 package com.google.gerrit.common;
 
+
 import com.google.common.base.Supplier;
 import com.google.gerrit.reviewdb.client.Change;
 import com.google.gerrit.reviewdb.server.ReviewDb;
@@ -9,6 +10,7 @@ import com.google.gerrit.server.events.EventWrapper;
 import com.google.gerrit.server.events.SupplierDeserializer;
 import com.google.gerrit.server.events.SupplierSerializer;
 import com.google.gerrit.server.index.change.ChangeIndexer;
+import com.google.gerrit.server.query.change.ChangeData;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
@@ -17,6 +19,16 @@ import com.google.gwtorm.server.ResultSet;
 import com.google.gwtorm.server.SchemaFactory;
 import com.google.inject.Provider;
 import com.google.inject.util.Providers;
+
+import org.eclipse.jgit.lib.NullProgressMonitor;
+import org.eclipse.jgit.lib.ObjectInserter;
+import org.eclipse.jgit.lib.ProgressMonitor;
+import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
+import org.eclipse.jgit.transport.PackParser;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.File;
 import java.io.FileFilter;
 import java.io.FileInputStream;
@@ -41,34 +53,26 @@ import java.util.concurrent.Delayed;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.eclipse.jgit.lib.NullProgressMonitor;
-import org.eclipse.jgit.lib.ObjectInserter;
-import org.eclipse.jgit.lib.ProgressMonitor;
-import org.eclipse.jgit.lib.Repository;
-import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
-import org.eclipse.jgit.transport.PackParser;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * This class is to manage the replication of the change events happening in
  * Gerrit, from within one Gerrit to the other replicated Gerrit.
  * This is meant as a replacement for the Gerrit Plug-In we have been using until
- * Gerrit version 2.10.6, which was catching the change events from the outside and 
+ * Gerrit version 2.10.6, which was catching the change events from the outside and
  * then sending the proposals to GitMS.
- * When an ASYNC (or SYNC) change index event is called by Gerrit it is registered with this class and then 
+ * When an ASYNC (or SYNC) change index event is called by Gerrit it is registered with this class and then
  * it is replicated on the other nodes, where a REPL-SYNC change event is produced.
  * If it's not possible to index the change immediately because the data on the DB is not
  * up-to-date then the change index data is saved in a file for a future retry attempt.
- * 
+ *
  * A thread will constantly look for files of the retry kind and retry the index of the changes.
- * 
+ *
  * For some reason there can be some differences on the replicated gerrits if we keep indexing
  * the changes after the original ones on the original node. This can be overcome by indexing again
  * that original change on the original node after a while. This is accomplished using the localReindexQueue
  * which will keep record of the changes indexed on the local node and index them again after a while.
- * 
- * See also ChangeIndexer#indexAsync() 
+ *
+ * See also ChangeIndexer#indexAsync()
  *
  * @author antonio
  */
@@ -78,8 +82,8 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
   public static final String NODUPLICATES_REINDEX_THREAD_NAME = "ReIndexEventsNoDuplicatesThread";
   public static final String INCOMING_CHANGES_INDEX_THREAD_NAME = "IncomingChangesChangeIndexerThread";
   public static final Random RANDOM = new Random();
-  
-  
+
+
   private static final Logger log = LoggerFactory.getLogger(ReplicatedIndexEventManager.class);
   private static final Gson gson = new GsonBuilder()
       .registerTypeAdapter(Supplier.class, new SupplierSerializer())
@@ -111,7 +115,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
   private final Object indexEventsAreReady = new Object();
   private boolean gerritIndexerRunning = false;
   private Persister<IndexToReplicateComparable> persister;
-  
+
   public static synchronized ReplicatedIndexEventManager initIndexer(SchemaFactory<ReviewDb> schemaFactory, ChangeIndexer indexer) {
     if (instance == null || !instance.gerritIndexerRunning) {
       log.info("RC Initialising ReplicatedIndexEventManager...");
@@ -129,7 +133,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
       }
       Replicator.subscribeEvent(EventWrapper.Originator.INDEX_EVENT, instance);
       Replicator.subscribeEvent(EventWrapper.Originator.PACKFILE_EVENT, instance);
-        
+
       if (instance != null) {
         instance.setIndexEventDirectory();
         if (indexEventReaderAndPublisherThread == null) {
@@ -137,7 +141,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
           indexEventReaderAndPublisherThread.setName(INDEX_EVENTS_REPLICATION_THREAD_NAME);
           indexEventReaderAndPublisherThread.start();
         }
-        
+
         if (changeLimiterThread == null) {
           uniqueChangesQueue = new UniqueChangesQueue();
           changeLimiterThread = new Thread(uniqueChangesQueue);
@@ -146,7 +150,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
         } else {
           log.error("RC Thread {} is already running!",NODUPLICATES_REINDEX_THREAD_NAME);
         }
-        
+
         if (indexIncomingChangesThread == null) {
           indexIncomingChangesEvents = new IndexIncomingReplicatedEvents();
           indexIncomingChangesThread = new Thread(indexIncomingChangesEvents);
@@ -162,46 +166,46 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
   /**
    * Main method used by the gerrit ChangeIndexer to communicate that a new index event has happened
    * and must be replicated across the nodes.
-   * 
+   *
    * This will enqueue the the event for async replication
-   * 
+   *
    * @param indexNumber
    * @param projectName
-   * @param lastUpdatedOn 
+   * @param lastUpdatedOn
    */
   public static void queueReplicationIndexEvent(int indexNumber, String projectName, Timestamp lastUpdatedOn) {
     queueReplicationIndexEvent(indexNumber, projectName, lastUpdatedOn, false);
   }
-  
+
   /**
    * Queue a notification to be made to replica nodes regarding the deletion of an index. This must be done
    * independently of the delete() call in ChangeIndexer, as in that context, the Change is no longer
    * accessible, preventing lookup of the project name and the subsequent attempt to tie the change to
    * a specific DSM in the replicator.
-   * 
+   *
    * @param indexNumber
-   * @param projectName 
+   * @param projectName
    */
   public static void queueReplicationIndexDeletionEvent(int indexNumber, String projectName) {
     queueReplicationIndexEvent(indexNumber, projectName, new Timestamp(0), true);
   }
-  
+
   /**
    * Used by the gerrit ChangeIndexer to communicate that a new index event has happened
    * and must be replicated across the nodes with an additional boolean flag to indicate if the index
    * to be updated is being deleted.
-   * 
+   *
    * This will enqueue the the event for async replication
-   * 
+   *
    * @param indexNumber
    * @param projectName
-   * @param lastUpdatedOn 
+   * @param lastUpdatedOn
    */
   private static void queueReplicationIndexEvent(int indexNumber, String projectName, Timestamp lastUpdatedOn, boolean deleteIndex) {
     if (instance == null) {
       log.error("RC ReplicatedIndexEventManager instance is null!",new IllegalStateException("Should have been initialised at this point"));
     } else if (!instance.gerritIndexerRunning)  { // we only take the event if it's normal Gerrit functioning. If it's indexing we ignore them
-      for(int i =0; i < 100; i++) {  // let's try 100 times before giving up. 
+      for(int i =0; i < 100; i++) {  // let's try 100 times before giving up.
         try {
           IndexToReplicate indexToReplicate = new IndexToReplicate(indexNumber, projectName, lastUpdatedOn, deleteIndex);
           instance.unfilteredQueue.add(indexToReplicate);
@@ -220,7 +224,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
       }
     }
   }
-  
+
   private void setIndexEventDirectory() {
     if (replicatorInstance != null) {
       this.indexEventsDirectory = replicatorInstance.getIndexingEventsDirectory();
@@ -241,15 +245,19 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
       log.error("RC Replicator instance is null! Maybe it's not yet been initialized.");
     }
   }
-  
+
   private ReplicatedIndexEventManager(SchemaFactory<ReviewDb> schemaFactory, ChangeIndexer indexer) {
     this.schemaFactory = schemaFactory;
     this.indexer = indexer;
   }
-  
+
   private static synchronized void clearThread() {
     indexEventReaderAndPublisherThread = null;
     changeLimiterThread = null;
+  }
+
+  public static ReplicatedIndexEventManager getInstance(){
+    return instance;
   }
 
   @Override
@@ -283,14 +291,14 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
     finished = true;
     clearThread();
   }
-  
+
   /**
    * Takes an event from the queue and passes it to the replicator (in gerrit) to pass it
    * to the replicator in GitMS.
-   * 
+   *
    * @return the number of events which have been sent to the (gerrit) replicator.
-   * 
-   * @throws InterruptedException 
+   *
+   * @throws InterruptedException
    */
   private int pollAndWriteOutgoingEvents() throws InterruptedException {
     IndexToReplicate indexToReplicate;
@@ -301,14 +309,14 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
     }
     return removed;
   }
-  
+
   /**
    * Reads the events from the directory and calls the reindex function in gerrit
    * It also reindex locally the same changes it's been putting into the queue.
    * This is done to workaround a strange problem which sometimes happens: a difference
    * is seen between the original indexed change and the replicated ones. Reindexing the
    * original change will make all the nodes the same.
-   * 
+   *
    * @return the number of changes it successfully indexed
    */
   private int readAndRetryIndexingChanges() {
@@ -319,7 +327,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
     int numberOfSuccessfullyIndexedChanges = 0;
     log.debug("RC looking for index files...");
     File[] listFiles = indexEventsDirectory.listFiles(indexEventsToRetryFileFilter);
-    
+
     //  listFiles can be null if the directory has disappeared, if it's not readable or if too many files are open!
     if (listFiles == null) {
       log.error("RC Directory {} cannot have files listed! (too many files open?)",indexEventsDirectory,new IllegalStateException("Cannot read index directory"));
@@ -354,11 +362,11 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
     }
     return numberOfSuccessfullyIndexedChanges;
   }
-  
+
   /**
    * Looks at the queue of locally indexed changes and reindex them after the STANDARD_REINDEX_DELAY
    * This is an attempt to workaround the strange problems we've seen in gerrit
-   * 
+   *
    * @return  the number of successfully locally reindexed changes
    */
   private int reindexLocalData() {
@@ -366,7 +374,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
     int size = localReindexQueue.size();
     IndexToReplicateDelayed polled;
     Set<Integer> done = new HashSet<>();
-      
+
     while ((polled = localReindexQueue.poll()) != null) {
       //log.debug("RC reindexing local {}", polled.indexNumber);
       if (!done.contains(polled.indexNumber)) {
@@ -384,18 +392,18 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
     }
     return totalDone;
   }
-  
+
   /**
    * Called by the (gerrit) Replicator when it receives a replicated event of type INDEX_CHANGE
    * Puts the events in a queue which will be looked after by the IndexIncomingReplicatedEvents thread
-   * 
+   *
    * @param newEvent
-   * @return 
+   * @return
    */
   @Override
   public boolean publishIncomingReplicatedEvents(EventWrapper newEvent) {
     boolean success = false;
-    
+
     if (newEvent != null) {
       switch (newEvent.originator) {
         case INDEX_EVENT:
@@ -450,7 +458,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
       final ProgressMonitor resolving = NullProgressMonitor.INSTANCE;
 
       Repository repo;
-      
+
       try {
         // The repo must exist.
         builder.setGitDir(gitDir);
@@ -460,7 +468,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
         log.error("Error while initing git repo {}",gitDir,e);
         return false;
       }
-      
+
       // Need an ObjectInserter to unpack the packfile into the repo
       try(FileInputStream fileIn = new FileInputStream(packFilePath);
           ObjectInserter ins = repo.newObjectInserter()) {
@@ -530,26 +538,26 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
       }
       log.info("Thread for IndexIncomingChangesThread ended");
     }
-    
+
   }
 
   /**
    * This will reindex changes in gerrit. Since it receives a map of changes (changeId -> IndexToReplicate) it will
-   * try to understand if the index-to-replicate can be reindexed looking at the timestamp found for that ChangeId on 
+   * try to understand if the index-to-replicate can be reindexed looking at the timestamp found for that ChangeId on
    * the database.
    * If it finds that the timestamp on the db is older than the one received from the replicator, then it will wait till the
-   * db is updated. To compare the time we need to look at the Timezone of each modification since the sending gerrit can be 
+   * db is updated. To compare the time we need to look at the Timezone of each modification since the sending gerrit can be
    * on a different timezone and the timestamp on the database reads differently depending on the database timezone.
-   * 
-   * @param mapOfChanges 
+   *
+   * @param mapOfChanges
    */
   private void indexCollectionOfChanges(NavigableMap<Change.Id,IndexToReplicateComparable> mapOfChanges) {
     ReviewDb db = null;
     try {
-      Provider<ReviewDb> dbProvider = Providers.of(schemaFactory.open()); 
+      Provider<ReviewDb> dbProvider = Providers.of(schemaFactory.open());
 
       db = dbProvider.get();
-      
+
       for (IndexToReplicateComparable i : mapOfChanges.values()) {
         if (i.delete) {
           try {
@@ -559,12 +567,12 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
           }
         }
       }
-      
+
       log.debug("RC Going to index {} changes...",mapOfChanges.size());
-      
+
       // fetch changes from db
       ResultSet<Change> changesOnDb = db.changes().get(mapOfChanges.keySet());
-      
+
       int totalDone = 0;
       int thisNodeTimeZoneOffset = TimeZone.getDefault().getRawOffset() + TimeZone.getDefault().getDSTSavings();
       log.debug("thisNodeTimeZoneOffset={}",thisNodeTimeZoneOffset);
@@ -576,14 +584,14 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
           IndexToReplicateComparable indexToReplicate = mapOfChanges.get(changeOnDb.getId());
           int landedIndexTimeZoneOffset = indexToReplicate.timeZoneRawOffset;
           log.debug("landedIndexTimeZoneOffset={}",landedIndexTimeZoneOffset);
-          
-          boolean changeIndexedMoreThanOneHourAgo = 
-              (System.currentTimeMillis()-thisNodeTimeZoneOffset 
+
+          boolean changeIndexedMoreThanOneHourAgo =
+              (System.currentTimeMillis()-thisNodeTimeZoneOffset
               - (indexToReplicate.lastUpdatedOn.getTime()-landedIndexTimeZoneOffset)) > 3600*1000;
-          
+
           Timestamp normalisedChangeTimestamp = new Timestamp(changeOnDb.getLastUpdatedOn().getTime()-thisNodeTimeZoneOffset);
           Timestamp normalisedIndexToReplicate = new Timestamp(indexToReplicate.lastUpdatedOn.getTime()-landedIndexTimeZoneOffset);
-          
+
           log.debug("Comparing {} to {}. MoreThan is {}",normalisedChangeTimestamp,normalisedIndexToReplicate,changeIndexedMoreThanOneHourAgo);
           // reindex the change if it's more than an hour it's been in the queue, or if the timestamp on the database is newer than
           // the one in the change itself
@@ -615,13 +623,13 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
       }
     }
   }
-  
+
   /**
    * This will index the change calling the internal function of Gerrit, but only
    * if the data provided in the indexEvent has a timestamp compatible to be index (i.e. it
    * is younger that the data read from the current database)
-   * 
-   * @param indexEvent 
+   *
+   * @param indexEvent
    */
   private boolean indexChange(IndexToReplicate indexEvent, boolean forceIndexing) {
     ReviewDb db = null;
@@ -643,9 +651,9 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
 
   /**
    * Tries to index the changes in the list. Each successful index will be recorded in the IndexOfFile itself
-   * 
+   *
    * @param indexToFileList
-   * @return 
+   * @return
    */
   private int indexChanges(List<IndexToFile> indexToFileList) {
     ReviewDb db = null;
@@ -654,9 +662,9 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
       Provider<ReviewDb> dbProvider = Providers.of(schemaFactory.open());
 
       db = dbProvider.get();
-      
+
       Set<Integer> done = new HashSet<>() ;
-      
+
       for (IndexToFile indexToFile: indexToFileList) {
         Integer indexNumber = indexToFile.getIndexNumber();
         if (done.contains(indexNumber)) {
@@ -681,7 +689,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
     }
     return result;
   }
-  
+
   private boolean indexSingleChange(ReviewDb db, IndexToReplicate indexEvent, boolean enqueueIfUnsuccessful, boolean forceIndexing) throws OrmException {
     Change change = db.changes().get(new Change.Id(indexEvent.indexNumber));
 
@@ -689,9 +697,9 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
       log.info("RC Change {} not reindexed, not found -- deleted",indexEvent.indexNumber);
       return true;
     }
-  
+
     // Each change has a timestamp which is the time when it was last modified.
-    // If on the database we don't have an update-date >= timestamp, then we wait until the      
+    // If on the database we don't have an update-date >= timestamp, then we wait until the
     if (!forceIndexing && change.getLastUpdatedOn().before(indexEvent.lastUpdatedOn)) {
       // we need to wait until the change has been updated
       log.info("RC Change {} is still to be updated ****************** ",indexEvent.indexNumber);
@@ -710,17 +718,17 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
     }
     return false;
   }
-  
+
   /**
    * This will write the indexEvent to disk to be handled by the thread responsible of
    * retrying to index the change again when the data is up to date in the database
-   * 
-   * @param indexEvent 
+   *
+   * @param indexEvent
    */
   private void enqueue(IndexToReplicate indexEvent) {
     String name =  String.format("I-%s-%08d.json",indexEvent.indexNumber,counter.incrementAndGet());
-    
-    
+
+
     File newIndexFile = new File(indexEventsDirectory,name);
     if (!checkIndexDirectory()) {
       log.error("RC Cannot enqueue index events, no temp directory available");
@@ -742,7 +750,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
       }
     }
   }
-  
+
   boolean checkIndexDirectory() {
     if (!indexEventsDirectory.exists()) {
       if (!indexEventsDirectory.mkdirs()) {
@@ -754,7 +762,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
     }
     return true;
   }
-  
+
   static class IndexToFile {
     IndexToReplicate indexChangeRetrier;
     File file;
@@ -765,7 +773,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
       this.file = file;
       successFul = false;
     }
-    
+
     int getIndexNumber() {
       return indexChangeRetrier.indexNumber;
     }
@@ -886,29 +894,29 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
     public final boolean delete;
 
     public IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn) {
-      this(indexNumber, projectName, lastUpdatedOn, System.currentTimeMillis(), 
+      this(indexNumber, projectName, lastUpdatedOn, System.currentTimeMillis(),
               TimeZone.getDefault().getRawOffset() + TimeZone.getDefault().getDSTSavings(), false);
     }
-    
+
     public IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, boolean delete) {
-      this(indexNumber, projectName, lastUpdatedOn, System.currentTimeMillis(), 
+      this(indexNumber, projectName, lastUpdatedOn, System.currentTimeMillis(),
               TimeZone.getDefault().getRawOffset() + TimeZone.getDefault().getDSTSavings(), delete);
     }
 
     protected IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, long currentTime) {
-      this(indexNumber, projectName, lastUpdatedOn, currentTime, 
+      this(indexNumber, projectName, lastUpdatedOn, currentTime,
               TimeZone.getDefault().getRawOffset() + TimeZone.getDefault().getDSTSavings(), false);
     }
 
     private IndexToReplicate(IndexToReplicateDelayed delayed) {
-      this(delayed.indexNumber, delayed.projectName, delayed.lastUpdatedOn, 
+      this(delayed.indexNumber, delayed.projectName, delayed.lastUpdatedOn,
               delayed.currentTime, TimeZone.getDefault().getRawOffset() + TimeZone.getDefault().getDSTSavings(), false);
     }
 
     protected IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, long currentTime, int rawOffset) {
       this(indexNumber, projectName, lastUpdatedOn, currentTime, rawOffset, false);
     }
-    
+
     protected IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, long currentTime, int rawOffset, boolean delete) {
       this.indexNumber = indexNumber;
       this.projectName = projectName;
@@ -920,12 +928,12 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
 
     @Override
     public String toString() {
-      return "IndexToReplicate{" + "indexNumber=" + indexNumber + ", projectName=" 
-              + projectName + ", lastUpdatedOn=" + lastUpdatedOn + ", currentTime=" 
+      return "IndexToReplicate{" + "indexNumber=" + indexNumber + ", projectName="
+              + projectName + ", lastUpdatedOn=" + lastUpdatedOn + ", currentTime="
               + currentTime + ", timeZoneRawOffset=" + timeZoneRawOffset + ", delete="
               + delete + '}';
     }
-    
+
     @Override
     public int hashCode() {
       int hash = 3;
@@ -1019,8 +1027,8 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
     public boolean hasBeenPersisted() {
       return this.persistFile != null;
     }
-    
-  }  
+
+  }
   /**
    * Uses a TreeSet and a ConcurrentLinkedQueue to limit the number of duplicated changes to be sent for replication.
    * Only send list of changes to reindex every 30 seconds
@@ -1028,7 +1036,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
   public static class UniqueChangesQueue implements Runnable {
     private final ConcurrentLinkedQueue<IndexToReplicate> filteredQueue =   new ConcurrentLinkedQueue<>();
     private final Set<Integer> changeSet = new TreeSet<>(); // used to avoid duplicates
-    
+
     public boolean add(IndexToReplicate index) {
       synchronized(changeSet) {
         if (changeSet.add(index.indexNumber)) {
@@ -1043,7 +1051,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
     @SuppressWarnings("SleepWhileInLoop")
     public void run() {
       IndexToReplicate indexToReplicate;
-     
+
       log.info("RC filtered queue thread starting...");
       while (!instance.finished) {
         try {
@@ -1070,6 +1078,32 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
         }
       }
       log.info("RC filtered queue thread finished");
+    }
+  }
+
+  /**
+   * Replicate the changes that are to be deleted when we preserve a replicated repo
+   * Takes a list of int's
+   * @throws IOException
+   */
+  public void deleteChanges(int[] changes) throws IOException{
+    //iterate over the list of changes and delete each one
+    for(int i: changes) {
+      indexer.delete(new Change.Id(i));
+      log.debug("Deleted change " + i);
+    }
+  }
+
+  /**
+   * Replicate the changes that are to be deleted when we delete a replicated repo.
+   * Takes a list of ChangeData
+   * @throws IOException
+   */
+  public void deleteChanges(List<ChangeData> changes) throws IOException{
+    //iterate over the list of changes and delete each one
+    for (ChangeData cd: changes) {
+      indexer.delete(cd.getId());
+      log.debug(("Deleted change " + cd.getId().toString()));
     }
   }
 }
