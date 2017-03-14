@@ -55,6 +55,7 @@ public class DefaultCommandModule extends CommandModule {
     command(gerrit, LsUserRefs.class);
     command(gerrit, Query.class);
     command(gerrit, ShowCaches.class);
+    command(gerrit, ShowReplicatorStats.class);
     command(gerrit, ShowConnections.class);
     command(gerrit, ShowQueue.class);
     command(gerrit, StreamEvents.class);
@@ -85,6 +86,7 @@ public class DefaultCommandModule extends CommandModule {
     }
     command("suexec").to(SuExec.class);
     listener().to(ShowCaches.StartupListener.class);
+    listener().to(ShowReplicatorStats.StartupListener.class);
 
     command(gerrit, CreateAccountCommand.class);
     command(gerrit, CreateGroupCommand.class);

@@ -26,4 +26,14 @@ public class TopicChangedEvent extends ChangeEvent {
   public TopicChangedEvent(Change change) {
     super(TYPE, change);
   }
+
+  public TopicChangedEvent(TopicChangedEvent e, String type){
+    this(e, type, false);
+  }
+
+  public TopicChangedEvent(TopicChangedEvent e, String type, boolean replicated){
+    super(e, type, replicated);
+    this.changer = e.changer;
+    this.oldTopic = e.oldTopic;
+  }
 }

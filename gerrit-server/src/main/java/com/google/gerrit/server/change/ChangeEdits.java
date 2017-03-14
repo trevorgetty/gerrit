@@ -18,6 +18,7 @@ import com.google.common.base.Optional;
 import com.google.common.base.Strings;
 import com.google.common.collect.FluentIterable;
 import com.google.gerrit.common.Nullable;
+import com.google.gerrit.common.ReplicatedIndexEventManager;
 import com.google.gerrit.extensions.common.DiffWebLinkInfo;
 import com.google.gerrit.extensions.common.EditInfo;
 import com.google.gerrit.extensions.registration.DynamicMap;
@@ -65,6 +66,8 @@ import org.kohsuke.args4j.Option;
 
 import java.io.IOException;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Singleton
 public class ChangeEdits implements
@@ -78,6 +81,7 @@ public class ChangeEdits implements
   private final Provider<Detail> detail;
   private final ChangeEditUtil editUtil;
   private final Post post;
+  private static final Logger log = LoggerFactory.getLogger(ChangeEdits.class);
 
   @Inject
   ChangeEdits(DynamicMap<RestView<ChangeEditResource>> views,
@@ -407,7 +411,8 @@ public class ChangeEdits implements
             rsrc.getChangeEdit(),
             rsrc.getPath(),
             input.content);
-      } catch (InvalidChangeOperationException | IOException e) {
+      } catch(InvalidChangeOperationException | IOException e) {
+        log.error("While editing",e);
         throw new ResourceConflictException(e.getMessage());
       }
       return Response.none();

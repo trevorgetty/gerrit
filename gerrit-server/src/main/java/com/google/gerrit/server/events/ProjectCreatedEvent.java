@@ -24,6 +24,13 @@ public class ProjectCreatedEvent extends ProjectEvent {
   public ProjectCreatedEvent() {
     super(TYPE);
   }
+  
+  public ProjectCreatedEvent(ProjectCreatedEvent event, String type, boolean replicated) {
+    super(type);
+    this.projectName = event.projectName;
+    this.headName = event.headName;
+    this.replicated = replicated;
+  }
 
   @Override
   public Project.NameKey getProjectNameKey() {

@@ -20,13 +20,13 @@ import com.google.common.util.concurrent.CheckedFuture;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
+import com.google.gerrit.common.ReplicatedIndexEventManager;
 import com.google.gerrit.extensions.events.ChangeIndexedListener;
 import com.google.gerrit.extensions.registration.DynamicSet;
 import com.google.gerrit.reviewdb.client.Change;
 import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.reviewdb.server.ReviewDb;
 import com.google.gerrit.server.CurrentUser;
-import com.google.gerrit.server.index.Index;
 import com.google.gerrit.server.notedb.ChangeNotes;
 import com.google.gerrit.server.notedb.NotesMigration;
 import com.google.gerrit.server.query.change.ChangeData;
@@ -121,6 +121,8 @@ public class ChangeIndexer {
     this.index = index;
     this.indexes = null;
     this.indexedListener = indexedListener;
+    // Call to WANdisco gerrit event replicator init function
+    initIndexReplicator(schemaFactory);
   }
 
   @AssistedInject
@@ -141,6 +143,13 @@ public class ChangeIndexer {
     this.index = null;
     this.indexes = indexes;
     this.indexedListener = indexedListener;
+    // Call to WANdisco gerrit event replicator init function
+    initIndexReplicator(schemaFactory);
+  }
+  
+  // Call to WANdisco gerrit event replicator init function
+  private void initIndexReplicator(SchemaFactory<ReviewDb> schemaFactory) {
+    ReplicatedIndexEventManager.initIndexer(schemaFactory, this);
   }
 
   /**
@@ -151,8 +160,23 @@ public class ChangeIndexer {
    */
   public CheckedFuture<?, IOException> indexAsync(Project.NameKey project,
       Change.Id id) {
+    log.debug("RC Going ASYNC to index {}",id.get());
     return executor != null
         ? submit(new IndexTask(project, id))
+        : Futures.<Object, IOException> immediateCheckedFuture(null);
+  }
+
+  /**
+   * Start indexing a change.
+   *
+   * @param id change to index.
+   * @return future for the indexing task.
+   */
+  public CheckedFuture<?, IOException> indexAsyncNoRepl(Project.NameKey project,
+      Change.Id id) {
+    log.debug("RC Going ASYNC to index {} (NO REPLICATION)",id.get());
+    return executor != null
+        ? submit(new IndexTask(project, id, false))
         : Futures.<Object, IOException> immediateCheckedFuture(null);
   }
 
@@ -166,6 +190,7 @@ public class ChangeIndexer {
       Collection<Change.Id> ids) {
     List<ListenableFuture<?>> futures = new ArrayList<>(ids.size());
     for (Change.Id id : ids) {
+      log.debug("RC Going ASYNC to index (COLLECTION) {}",id.get());
       futures.add(indexAsync(project, id));
     }
     return allAsList(futures);
@@ -177,12 +202,35 @@ public class ChangeIndexer {
    * @param cd change to index.
    */
   public void index(ChangeData cd) throws IOException {
-    for (Index<?, ChangeData> i : getWriteIndexes()) {
+    log.debug("RC Going sync to index {}",cd.getId().get());
+    for (ChangeIndex i : getWriteIndexes()) {
       i.replace(cd);
     }
     fireChangeIndexedEvent(cd.getId().get());
+
+    try {
+      Change change = cd.change();
+      log.debug("RC Finished SYNC index {}",change.getId().get());
+      ReplicatedIndexEventManager.queueReplicationIndexEvent(change.getId().get(),change.getProject().get(),change.getLastUpdatedOn());
+    } catch (OrmException e) {
+      log.error("RC Could not sync'ly reindex change! EVENT LOST {}",cd,e);
+    }
   }
 
+  /**
+   * Synchronously index a change, but called by the replicator to avoid loops
+   *
+   * @param cd change to index.
+   */
+  public void indexRepl(ChangeData cd) throws IOException {
+    log.debug("RC REPL sync to index {}",cd.getId().get());
+    for (ChangeIndex i : getWriteIndexes()) {
+      i.replace(cd);
+    }
+  }
+
+  // TODO: grumpy: the fireChangeIndexEVent looks new. Does this interfere
+  // with the above call to the ReplicatedIndexEventManager?
   private void fireChangeIndexedEvent(int id) {
     for (ChangeIndexedListener listener : indexedListener) {
       listener.onChangeIndexed(id);
@@ -219,6 +267,18 @@ public class ChangeIndexer {
   }
 
   /**
+   * Synchronously index a change, but called by the replicator to avoid loops
+   *
+   * @param db review database.
+   * @param project the project to which the change belongs.
+   * @param changeId ID of the change to index.
+   */
+  public void indexRepl(ReviewDb db, Project.NameKey project, Change.Id changeId)
+      throws IOException, OrmException {
+    indexRepl(newChangeData(db, project, changeId));
+  }
+  
+  /**
    * Start deleting a change.
    *
    * @param id change to delete.
@@ -236,6 +296,7 @@ public class ChangeIndexer {
    * @param id change ID to delete.
    */
   public void delete(Change.Id id) throws IOException {
+    log.info("RC REPL DELETE index {}",id);
     new DeleteTask(id).call();
   }
 
@@ -253,10 +314,18 @@ public class ChangeIndexer {
   private class IndexTask implements Callable<Void> {
     private final Project.NameKey project;
     private final Change.Id id;
+    private final boolean replicate;
 
     private IndexTask(Project.NameKey project, Change.Id id) {
       this.project = project;
       this.id = id;
+      this.replicate = true;
+    }
+
+    private IndexTask(Project.NameKey project, Change.Id id, boolean replicate) {
+      this.project = project;
+      this.id = id;
+      this.replicate = replicate;
     }
 
     @Override
@@ -292,6 +361,11 @@ public class ChangeIndexer {
           ChangeData cd = newChangeData(
               newCtx.getReviewDbProvider().get(), project, id);
           index(cd);
+          log.debug("RC Finished ASYNC index (in class task) {}, replicate: {}",new Object[] {id.get(),replicate});
+          if (replicate) {
+            Change change = cd.change();
+            ReplicatedIndexEventManager.queueReplicationIndexEvent(change.getId().get(),change.getProject().get(),change.getLastUpdatedOn());
+          }
           return null;
         } finally  {
           context.setContext(oldCtx);

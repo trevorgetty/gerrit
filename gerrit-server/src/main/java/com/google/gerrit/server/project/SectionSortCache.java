@@ -17,6 +17,7 @@ package com.google.gerrit.server.project;
 import com.google.auto.value.AutoValue;
 import com.google.common.cache.Cache;
 import com.google.common.collect.ImmutableList;
+import com.google.gerrit.common.ReplicatedCacheManager;
 import com.google.gerrit.common.data.AccessSection;
 import com.google.gerrit.server.cache.CacheModule;
 import com.google.gerrit.server.util.MostSpecificComparator;
@@ -56,6 +57,11 @@ public class SectionSortCache {
   @Inject
   SectionSortCache(@Named(CACHE_NAME) Cache<EntryKey, EntryVal> cache) {
     this.cache = cache;
+    attachToReplication();
+  }
+
+  final void attachToReplication() {
+    ReplicatedCacheManager.watchCache(CACHE_NAME, this.cache);
   }
 
   void sort(String ref, List<AccessSection> sections) {
