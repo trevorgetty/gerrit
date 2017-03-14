@@ -24,4 +24,13 @@ public class PatchSetEvent extends ChangeEvent {
   protected PatchSetEvent(String type, Change change) {
     super(type, change);
   }
+
+  public PatchSetEvent(PatchSetEvent e, String type) {
+    this(e, type, false);
+  }
+
+  public PatchSetEvent(PatchSetEvent e, String type, boolean replicated) {
+    super(e, type, replicated);
+    this.patchSet = e.patchSet;
+  }
 }

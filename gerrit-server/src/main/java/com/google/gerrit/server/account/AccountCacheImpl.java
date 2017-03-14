@@ -19,6 +19,7 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableSet;
 import com.google.gerrit.common.TimeUtil;
+import com.google.gerrit.common.ReplicatedCacheManager;
 import com.google.gerrit.extensions.client.GeneralPreferencesInfo;
 import com.google.gerrit.reviewdb.client.Account;
 import com.google.gerrit.reviewdb.client.AccountExternalId;
@@ -93,8 +94,15 @@ public class AccountCacheImpl implements AccountCache {
     this.byId = byId;
     this.byName = byUsername;
     this.indexer = indexer;
+    
+    attachToReplication();
   }
 
+  final void attachToReplication() {
+    ReplicatedCacheManager.watchCache(BYID_NAME, this.byId);
+    ReplicatedCacheManager.watchCache(BYUSER_NAME, this.byName);
+  }
+  
   @Override
   public AccountState get(Account.Id accountId) {
     try {
@@ -134,6 +142,7 @@ public class AccountCacheImpl implements AccountCache {
     byId.invalidateAll();
     for (Account.Id accountId : byId.asMap().keySet()) {
       indexer.get().index(accountId);
+      ReplicatedCacheManager.replicateEvictionFromCache(BYID_NAME,accountId);
     }
   }
 
@@ -141,6 +150,7 @@ public class AccountCacheImpl implements AccountCache {
   public void evictByUsername(String username) {
     if (username != null) {
       byName.invalidate(username);
+      ReplicatedCacheManager.replicateEvictionFromCache(BYUSER_NAME,username);
     }
   }
 

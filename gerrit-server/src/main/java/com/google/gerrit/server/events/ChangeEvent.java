@@ -46,4 +46,15 @@ public abstract class ChangeEvent extends RefEvent {
   public Change.Key getChangeKey() {
     return changeKey;
   }
+
+  public ChangeEvent(ChangeEvent e, String type) {
+    this(e, type, false);
+  }
+
+  public ChangeEvent(ChangeEvent e, String type, boolean replicated) {
+    super(type);
+    this.change = e.change;
+    this.eventCreatedOn = e.eventCreatedOn;
+    this.replicated = replicated;
+  }
 }

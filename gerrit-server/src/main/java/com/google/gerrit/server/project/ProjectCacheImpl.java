@@ -22,6 +22,7 @@ import com.google.common.collect.FluentIterable;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Sets;
 import com.google.gerrit.extensions.events.LifecycleListener;
+import com.google.gerrit.common.ReplicatedCacheManager;
 import com.google.gerrit.reviewdb.client.AccountGroup;
 import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.server.cache.CacheModule;
@@ -111,6 +112,14 @@ public class ProjectCacheImpl implements ProjectCache {
     this.list = list;
     this.listLock = new ReentrantLock(true /* fair */);
     this.clock = clock;
+
+    attachToReplication();
+  }
+
+  final void attachToReplication() {
+    ReplicatedCacheManager.watchCache(CACHE_NAME, this.byName);
+    ReplicatedCacheManager.watchCache(CACHE_LIST, this.list); // it's never evicted in the code below
+    ReplicatedCacheManager.watchObject(ReplicatedCacheManager.projectCache,this);
   }
 
   @Override
@@ -154,6 +163,7 @@ public class ProjectCacheImpl implements ProjectCache {
       if (state != null && state.needsRefresh(clock.read())) {
         byName.invalidate(projectName.get());
         state = byName.get(projectName.get());
+        ReplicatedCacheManager.replicateEvictionFromCache(CACHE_NAME,projectName.get());
       }
       return state;
     } catch (ExecutionException e) {
@@ -170,6 +180,7 @@ public class ProjectCacheImpl implements ProjectCache {
   public void evict(final Project p) {
     if (p != null) {
       byName.invalidate(p.getNameKey().get());
+      ReplicatedCacheManager.replicateEvictionFromCache(CACHE_NAME,p.getNameKey().get());
     }
   }
 
@@ -178,6 +189,7 @@ public class ProjectCacheImpl implements ProjectCache {
   public void evict(final Project.NameKey p) {
     if (p != null) {
       byName.invalidate(p.get());
+      ReplicatedCacheManager.replicateEvictionFromCache(CACHE_NAME,p.get());
     }
   }
 
@@ -203,8 +215,22 @@ public class ProjectCacheImpl implements ProjectCache {
       SortedSet<Project.NameKey> n = Sets.newTreeSet(list.get(ListKey.ALL));
       n.add(newProjectName);
       list.put(ListKey.ALL, Collections.unmodifiableSortedSet(n));
+      ReplicatedCacheManager.replicateMethodCallFromCache(ReplicatedCacheManager.projectCache, "onReplicatedCreateProject", newProjectName);
     } catch (ExecutionException e) {
       log.warn("Cannot list avaliable projects", e);
+    } finally {
+      listLock.unlock();
+    }
+  }
+  
+  public void onReplicatedCreateProject(Project.NameKey newProjectName) {
+    listLock.lock();
+    try {
+      SortedSet<Project.NameKey> n = Sets.newTreeSet(list.get(ListKey.ALL));
+      n.add(newProjectName);
+      list.put(ListKey.ALL, Collections.unmodifiableSortedSet(n));
+    } catch (ExecutionException e) {
+      log.warn("Could not replicate project creation cache update");
     } finally {
       listLock.unlock();
     }
