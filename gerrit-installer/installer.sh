@@ -62,6 +62,12 @@ function sanitize_path() {
   echo "$path"
 }
 
+## Removes trailing /'s from path
+function remove_trailing_slashes_from_path() {
+  local trimmed=$(echo "$1" | sed 's:/*$::')
+  echo "$trimmed"
+}
+
 #Attempts to find the gerrit base path using the specified GERRIT_ROOT
 function get_gerrit_base_path() {
     export GIT_CONFIG="${1}/etc/gerrit.config"
@@ -793,6 +799,9 @@ function get_config_from_user() {
     exit 1
   fi
 
+  # Remove any trailing slashes
+  GERRIT_ROOT=$(remove_trailing_slashes_from_path "$GERRIT_ROOT")
+
   set_property "gerrit.root" "$GERRIT_ROOT"
   if ps aux|grep GerritCodeReview|grep $GERRIT_ROOT |grep -v " grep " > /dev/null 2>&1; then
     info ""
@@ -825,6 +834,9 @@ function get_config_from_user() {
     info " Gerrit Repository Directory: $GERRIT_REPO_HOME"
   fi
 
+  # Remove any trailing slashes
+  GERRIT_REPO_HOME=$(remove_trailing_slashes_from_path "$GERRIT_REPO_HOME")
+  
   set_property "gerrit.repo.home" "$GERRIT_REPO_HOME"
 
 
