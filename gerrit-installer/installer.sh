@@ -56,16 +56,10 @@ function urlencode() {
   echo $encoded
 }
 
-## Removes double //'s from path
+## Removes double and trailing //'s from path
 function sanitize_path() {
-  local path=$(echo "$1" | tr -s /)
+  local path=$(echo "$1" | tr -s / | sed 's:/*$::')
   echo "$path"
-}
-
-## Removes trailing /'s from path
-function remove_trailing_slashes_from_path() {
-  local trimmed=$(echo "$1" | sed 's:/*$::')
-  echo "$trimmed"
 }
 
 #Attempts to find the gerrit base path using the specified GERRIT_ROOT
@@ -94,7 +88,7 @@ function prereqs() {
     info "     - Gerrit MS: $version"
   done
   info " * Have backed up your existing Gerrit database"
-  info " * Have a version of GitMS (1.7 or higher) installed and running"
+  info " * Have a version of GitMS (1.9.1 or higher) installed and running"
   info " * Have a replication group created in GitMS containing all Gerrit nodes"
   info " * Have a valid GitMS admin username/password"
   info " * Stop the Gerrit service on this node"
@@ -265,10 +259,11 @@ function get_directory() {
   while true
   do
     INPUT_DIR=$(get_string "$1")
+    INPUT_DIR=$(sanitize_path "$INPUT_DIR")
 
     ## If the directory does not exist and create_directory is true, offer to create it
     if [[ ! -d "$INPUT_DIR" && ! -e "$INPUT_DIR" && "$create_directory" == "true" ]]; then
-      local create_dir=$(get_boolean "This directory does not exist, do you want to create it?" "true")
+      local create_dir=$(get_boolean "The directory [ "$INPUT_DIR" ] does not exist, do you want to create it?" "true")
 
       if [ "$create_dir" == "true" ]; then
         mkdir -p "$INPUT_DIR"
@@ -431,7 +426,9 @@ function get_gerrit_replication_group_id() {
 ## Check a Gerrit root for a valid gerrit install
 function check_gerrit_root() {
   local gerrit_root="$1"
+
   ## Make sure that GERRIT_ROOT/etc/gerrit.config exists
+ 
   local gerrit_config="$(sanitize_path "${gerrit_root}/etc/gerrit.config")"
 
   if [ ! -e "$gerrit_config" ]; then
@@ -732,6 +729,7 @@ function get_config_from_user() {
         info ""
       fi
     done
+    
     GITMS_ROOT="$INPUT"
 
     info ""
@@ -799,10 +797,8 @@ function get_config_from_user() {
     exit 1
   fi
 
-  # Remove any trailing slashes
-  GERRIT_ROOT=$(remove_trailing_slashes_from_path "$GERRIT_ROOT")
-
   set_property "gerrit.root" "$GERRIT_ROOT"
+  
   if ps aux|grep GerritCodeReview|grep $GERRIT_ROOT |grep -v " grep " > /dev/null 2>&1; then
     info ""
     info " \033[1mWARNING:\033[0m Looks like Gerrit is currently running"
@@ -833,9 +829,6 @@ function get_config_from_user() {
   else
     info " Gerrit Repository Directory: $GERRIT_REPO_HOME"
   fi
-
-  # Remove any trailing slashes
-  GERRIT_REPO_HOME=$(remove_trailing_slashes_from_path "$GERRIT_REPO_HOME")
   
   set_property "gerrit.repo.home" "$GERRIT_REPO_HOME"
 
@@ -939,7 +932,7 @@ function get_config_from_user() {
     info ""
 
     #provide a default
-    DELETED_REPO_DEFAULT_DIRECTORY="$GERRIT_REPO_HOME/archiveOfDeletedGitRepositories"
+    DELETED_REPO_DEFAULT_DIRECTORY=$(sanitize_path "$GERRIT_REPO_HOME/archiveOfDeletedGitRepositories")
     while true
     do
       read -e -p " Location for deleted repositories to be moved to : $DELETED_REPO_DEFAULT_DIRECTORY " INPUT
@@ -949,10 +942,8 @@ function get_config_from_user() {
         INPUT=$DELETED_REPO_DEFAULT_DIRECTORY
         create_directory "$INPUT"
         break
-      fi
-
-      #If the input is not empty check if the directory already exists, if not offer to create it
-      if [ ! -z "$INPUT" ]; then
+      else
+      	INPUT=$(sanitize_path "$INPUT")
         create_directory "$INPUT"
       fi
     done
@@ -994,7 +985,7 @@ function create_directory {
   INPUT_DIR="$1"
 
   if [[ ! -d "$INPUT_DIR" && ! -e "$INPUT_DIR" ]]; then
-    local create_dir=$(get_boolean "This directory does not exist, do you want to create it?" "true")
+    local create_dir=$(get_boolean "The directory [ $INPUT_DIR ] does not exist, do you want to create it?" "true")
 
     if [ "$create_dir" == "true" ]; then
       mkdir -p "$INPUT_DIR"
@@ -1097,6 +1088,8 @@ function create_backup() {
   timestamped_backup+=".tar.gz"
 
   local gerrit_base_path=$(get_gerrit_base_path "$GERRIT_ROOT")
+  local gerritBackup=$(sanitize_path "${BACKUP_ROOT}/gerrit-backup-${timestamped_backup}")
+  local tmpFile=$(mktemp --tmpdir="$SCRATCH")
 
   if [[ $gerrit_base_path = /* ]]; then
     gerrit_base_path=${gerrit_base_path#$GERRIT_ROOT/}
@@ -1105,12 +1098,19 @@ function create_backup() {
   rsync -aq --exclude="$gerrit_base_path" "$GERRIT_ROOT/" "${SCRATCH}/backup/gerrit" > /dev/null 2>&1
   cp "$APPLICATION_PROPERTIES" "${SCRATCH}/backup"
 
-  pushd ./ > /dev/null 2>&1
-    cd "$SCRATCH"
-    tar -zcpf "${BACKUP_ROOT}/gerrit-backup-${timestamped_backup}" "backup" > /dev/null 2>&1
-  popd > /dev/null 2>&1
-
-  info " Backup saved to: \033[1m$(sanitize_path "${BACKUP_ROOT}/gerrit-backup-${timestamped_backup}")\033[0m"
+  CMD='tar -zcpf "$gerritBackup" -C "$SCRATCH" "backup"'
+  if eval $CMD > /dev/null 2> "${tmpFile}"; then
+    : # exited ok
+  else
+    exval=$?
+    echo "ERROR: backup command ('$CMD') failed: $exval" 1>&2
+    echo "ERROR: backup STDERR was:" 1>&2
+    cat "${tmpFile}" 1>&2
+    echo "ERROR: end of STDERR." 1>&2
+    exit 2
+  fi
+  
+  info " Backup saved to: \033[1m${gerritBackup}\033[0m"
 
   info ""
   next_screen " Press [Enter] to Continue"
@@ -1188,6 +1188,7 @@ function write_new_config() {
     info "   be verified to be correct for this node."
   else
     local gerrit_base_path=$(get_gerrit_base_path "$GERRIT_ROOT")
+    local syncRepoCmdPath=$(sanitize_path "${SCRIPT_INSTALL_DIR}/sync_repo.sh")
 
     if [ ! "$REPLICATED_UPGRADE" == "true" ]; then
       info " * rsync $GERRIT_ROOT to all of your GerritMS nodes"
@@ -1199,7 +1200,7 @@ function write_new_config() {
       info "\t- change the hostname of canonicalURL to the hostname for that node"
       info "\t- ensure that database details are correct"
 
-      info " * Run $(sanitize_path "$SCRIPT_INSTALL_DIR/sync_repo.sh") on one node to add any existing"
+      info " * Run ${syncRepoCmdPath} on one node to add any existing"
       info "   Gerrit repositories to GitMS. Note that even if this is a new install of"
       info "   Gerrit with no user added repositories, running sync_repo.sh is still"
       info "   required to ensure that All-Projects and All-Users are properly replicated."
@@ -1404,8 +1405,8 @@ create_scratch_dir
 NON_INTERACTIVE=0
 WD_GERRIT_VERSION=$(get_gerrit_version "release.war")
 NEW_GERRIT_VERSION=$(echo $WD_GERRIT_VERSION | cut -f1 -d '-')
-GERRIT_RELEASE_NOTES="https://gerrit-documentation.storage.googleapis.com/ReleaseNotes/ReleaseNotes-2.12.html"
-GERRITMS_INSTALL_DOC="http://docs.wandisco.com/git/gerrit/1.7/gerrit_install.html"
+GERRIT_RELEASE_NOTES="https://gerrit-documentation.storage.googleapis.com/ReleaseNotes/ReleaseNotes-2.13.html"
+GERRITMS_INSTALL_DOC="http://docs.wandisco.com/git/gerrit/1.9/gerrit_install.html"
 
 ## Versions of Gerrit that we allow the user to upgrade from. Generally a user is not allowed to skip a major
 ## version, but can skip minor versions. This is not a hard and fast rule however, as the reality of when an
