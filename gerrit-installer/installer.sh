@@ -223,7 +223,7 @@ function fetch_config_from_application_properties() {
   GITMS_REST_PORT=$(fetch_property "jetty.http.port")
   GITMS_SSL_REST_PORT=$(fetch_property "jetty.https.port")
   GERRIT_REPLICATED_EVENTS_SEND=$(fetch_property "gerrit.replicated.events.enabled.send")
-  GERRIT_REPLICATED_EVENTS_RECEIVE=$(fetch_property "gerrit.replicated.events.enabled.receive")
+  GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL=$(fetch_property "gerrit.replicated.events.enabled.receive.original")
   GERRIT_REPLICATED_EVENTS_RECEIVE_DISTINCT=$(fetch_property "gerrit.replicated.events.enabled.receive.distinct")
   GERRIT_REPLICATED_EVENTS_LOCAL_REPUBLISH_DISTINCT=$(fetch_property "gerrit.replicated.events.enabled.local.republish.distinct")
   GERRIT_REPLICATED_EVENTS_DISTINCT_PREFIX=$(fetch_property "gerrit.replicated.events.distinct.prefix")
@@ -851,13 +851,13 @@ function get_config_from_user() {
   set_property "gerrit.replicated.events.enabled.send" "$GERRIT_REPLICATED_EVENTS_SEND"
 
 
-  if [ -z "$GERRIT_REPLICATED_EVENTS_RECEIVE" ]; then
-    GERRIT_REPLICATED_EVENTS_RECEIVE=$(get_boolean "Will this node receive Replicated Events from other Gerrit nodes?" "true")
+  if [ -z "$GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL" ]; then
+    GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL=$(get_boolean "Will this node receive Replicated Events from other Gerrit nodes?" "true")
   else
-    info " Gerrit Send Replicated Events: $GERRIT_REPLICATED_EVENTS_RECEIVE"
+    info " Gerrit Send Replicated Events: $GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL"
   fi
 
-  set_property "gerrit.replicated.events.enabled.receive" "$GERRIT_REPLICATED_EVENTS_RECEIVE"
+  set_property "gerrit.replicated.events.enabled.receive.original" "$GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL"
 
   if [ -z "$GERRIT_REPLICATED_EVENTS_RECEIVE_DISTINCT" ]; then
     GERRIT_REPLICATED_EVENTS_RECEIVE_DISTINCT="false"
@@ -1263,7 +1263,7 @@ function check_for_non_interactive_mode() {
     local tmp_deleted_repo_directory=$(fetch_property "deleted.repo.directory")
     local tmp_gerrit_events_path=$(fetch_property "gerrit.events.basepath")
     local tmp_gerrit_replicated_events_send=$(fetch_property "gerrit.replicated.events.enabled.send")
-    local tmp_gerrit_replicated_events_receive=$(fetch_property "gerrit.replicated.events.enabled.receive")
+    local tmp_gerrit_replicated_events_receive_original=$(fetch_property "gerrit.replicated.events.enabled.receive.original")
     local tmp_gerrit_replicated_events_receive_distinct=$(fetch_property "gerrit.replicated.events.enabled.receive.distinct")
     local tmp_gerrit_replicated_events_local_republish_distinct=$(fetch_property "gerrit.replicated.events.enabled.local.republish.distinct")
     local tmp_gerrit_replicated_events_distinct_prefix=$(fetch_property "gerrit.replicated.events.distinct.prefix")
@@ -1295,8 +1295,8 @@ function check_for_non_interactive_mode() {
       GERRIT_REPLICATED_EVENTS_SEND="$tmp_gerrit_replicated_events_send"
     fi
 
-    if [ ! -z "$tmp_gerrit_replicated_events_receive" ]; then
-      GERRIT_REPLICATED_EVENTS_RECEIVE="$tmp_gerrit_replicated_events_receive"
+    if [ ! -z "$tmp_gerrit_replicated_events_receive_original" ]; then
+      GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL="$tmp_gerrit_replicated_events_receive_original"
     fi
 
     if [ ! -z "$tmp_gerrit_replicated_events_receive_distinct" ]; then
@@ -1322,7 +1322,7 @@ function check_for_non_interactive_mode() {
     ## Check that all variables are now set to something
     if [[ ! -z "$GERRIT_ROOT"
       && ! -z "$GERRIT_RPGROUP_ID" && ! -z "$GERRIT_REPO_HOME" && ! -z "$GERRIT_EVENTS_PATH" && ! -z "$DELETED_REPO_DIRECTORY"
-      && ! -z "$GERRIT_REPLICATED_EVENTS_SEND" && ! -z "$GERRIT_REPLICATED_EVENTS_RECEIVE"
+      && ! -z "$GERRIT_REPLICATED_EVENTS_SEND" && ! -z "$GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL"
       && ! -z "$GERRIT_REPLICATED_EVENTS_RECEIVE_DISTINCT" && ! -z "$GERRIT_REPLICATED_EVENTS_LOCAL_REPUBLISH_DISTINCT"
       && ! -z "$GERRIT_REPLICATED_EVENTS_DISTINCT_PREFIX" && ! -z "$GERRIT_REPLICATED_CACHE_ENABLED"
       && ! -z "$GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD" ]]; then
@@ -1429,7 +1429,7 @@ if [ "$NON_INTERACTIVE" == "1" ]; then
   echo "DELETED_REPO_DIRECTORY: $DELETED_REPO_DIRECTORY"
   echo "GERRIT_EVENTS_PATH: $GERRIT_EVENTS_PATH"
   echo "GERRIT_REPLICATED_EVENTS_SEND: $GERRIT_REPLICATED_EVENTS_SEND"
-  echo "GERRIT_REPLICATED_EVENTS_RECEIVE: $GERRIT_REPLICATED_EVENTS_RECEIVE"
+  echo "GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL: $GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL"
   echo "GERRIT_REPLICATED_EVENTS_RECEIVE_DISTINCT: $GERRIT_REPLICATED_EVENTS_RECEIVE_DISTINCT"
   echo "GERRIT_REPLICATED_EVENTS_LOCAL_REPUBLISH_DISTINCT: $GERRIT_REPLICATED_EVENTS_LOCAL_REPUBLISH_DISTINCT"
   echo "GERRIT_REPLICATED_EVENTS_DISTINCT_PREFIX: $GERRIT_REPLICATED_EVENTS_DISTINCT_PREFIX"
