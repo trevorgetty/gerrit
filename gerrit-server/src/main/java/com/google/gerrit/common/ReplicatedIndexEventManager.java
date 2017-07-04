@@ -38,6 +38,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.NavigableMap;
@@ -574,7 +575,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
       ResultSet<Change> changesOnDb = db.changes().get(mapOfChanges.keySet());
 
       int totalDone = 0;
-      int thisNodeTimeZoneOffset = TimeZone.getDefault().getRawOffset() + TimeZone.getDefault().getDSTSavings();
+      int thisNodeTimeZoneOffset = IndexToReplicate.getRawOffset(System.currentTimeMillis());
       log.debug("thisNodeTimeZoneOffset={}",thisNodeTimeZoneOffset);
       // compare changes from db with the changes landed from the index change replication
       for (Change changeOnDb: changesOnDb) {
@@ -894,23 +895,19 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
     public final boolean delete;
 
     public IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn) {
-      this(indexNumber, projectName, lastUpdatedOn, System.currentTimeMillis(),
-              TimeZone.getDefault().getRawOffset() + TimeZone.getDefault().getDSTSavings(), false);
+      this(indexNumber, projectName, lastUpdatedOn, System.currentTimeMillis(), getRawOffset(System.currentTimeMillis()), false);
     }
 
     public IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, boolean delete) {
-      this(indexNumber, projectName, lastUpdatedOn, System.currentTimeMillis(),
-              TimeZone.getDefault().getRawOffset() + TimeZone.getDefault().getDSTSavings(), delete);
+      this(indexNumber, projectName, lastUpdatedOn, System.currentTimeMillis(), getRawOffset(System.currentTimeMillis()), delete);
     }
 
     protected IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, long currentTime) {
-      this(indexNumber, projectName, lastUpdatedOn, currentTime,
-              TimeZone.getDefault().getRawOffset() + TimeZone.getDefault().getDSTSavings(), false);
+      this(indexNumber, projectName, lastUpdatedOn, currentTime, getRawOffset(currentTime), false);
     }
 
     private IndexToReplicate(IndexToReplicateDelayed delayed) {
-      this(delayed.indexNumber, delayed.projectName, delayed.lastUpdatedOn,
-              delayed.currentTime, TimeZone.getDefault().getRawOffset() + TimeZone.getDefault().getDSTSavings(), false);
+      this(delayed.indexNumber, delayed.projectName, delayed.lastUpdatedOn, delayed.currentTime, getRawOffset(delayed.currentTime), false);
     }
 
     protected IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, long currentTime, int rawOffset) {
@@ -924,6 +921,16 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
       this.currentTime = currentTime;
       this.timeZoneRawOffset = rawOffset;
       this.delete = delete;
+    }
+
+    protected static int getRawOffset(final long currentTime) {
+      TimeZone tzDefault = TimeZone.getDefault();
+
+      if (tzDefault.inDaylightTime(new Date(currentTime))) {
+        return TimeZone.getDefault().getRawOffset() + TimeZone.getDefault().getDSTSavings();
+      }
+
+      return TimeZone.getDefault().getRawOffset();
     }
 
     @Override
