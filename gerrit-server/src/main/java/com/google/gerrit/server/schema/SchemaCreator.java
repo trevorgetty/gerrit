@@ -15,6 +15,7 @@
 package com.google.gerrit.server.schema;
 
 import com.google.gerrit.common.data.GroupReference;
+import com.google.gerrit.extensions.restapi.PreconditionFailedException;
 import com.google.gerrit.reviewdb.client.AccountGroup;
 import com.google.gerrit.reviewdb.client.AccountGroupName;
 import com.google.gerrit.reviewdb.client.CurrentSchemaVersion;
@@ -72,7 +73,7 @@ public class SchemaCreator {
   }
 
   public void create(final ReviewDb db) throws OrmException, IOException,
-      ConfigInvalidException {
+      ConfigInvalidException, PreconditionFailedException {
     final JdbcSchema jdbc = (JdbcSchema) db;
     try (JdbcExecutor e = new JdbcExecutor(jdbc)) {
       jdbc.updateSchema(e);

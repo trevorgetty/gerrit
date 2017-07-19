@@ -24,8 +24,10 @@ import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.server.config.RepositoryConfig;
 import com.google.gerrit.server.config.SitePaths;
 import com.google.gerrit.testutil.TempFileUtil;
+import com.google.gerrit.extensions.restapi.PreconditionFailedException;
 import com.google.gwtorm.client.KeyUtil;
 import com.google.gwtorm.server.StandardKeyEncoder;
+
 
 import org.eclipse.jgit.errors.RepositoryNotFoundException;
 import org.eclipse.jgit.lib.Config;
@@ -76,7 +78,7 @@ public class MultiBaseLocalDiskRepositoryManagerTest {
 
   @Test
   public void testDefaultRepositoryLocation()
-      throws RepositoryCaseMismatchException, RepositoryNotFoundException {
+      throws RepositoryCaseMismatchException, RepositoryNotFoundException, PreconditionFailedException{
     Project.NameKey someProjectKey = new Project.NameKey("someProject");
     Repository repo = repoManager.createRepository(someProjectKey);
     assertThat(repo.getDirectory()).isNotNull();
@@ -102,7 +104,7 @@ public class MultiBaseLocalDiskRepositoryManagerTest {
   }
 
   @Test
-  public void testAlternateRepositoryLocation() throws IOException {
+  public void testAlternateRepositoryLocation() throws IOException, PreconditionFailedException{
     Path alternateBasePath = TempFileUtil.createTempDirectory().toPath();
     Project.NameKey someProjectKey = new Project.NameKey("someProject");
     reset(configMock);
@@ -135,7 +137,7 @@ public class MultiBaseLocalDiskRepositoryManagerTest {
   }
 
   @Test
-  public void testListReturnRepoFromProperLocation() throws IOException {
+  public void testListReturnRepoFromProperLocation() throws IOException, PreconditionFailedException {
     Project.NameKey basePathProject = new Project.NameKey("basePathProject");
     Project.NameKey altPathProject = new Project.NameKey("altPathProject");
     Project.NameKey misplacedProject1 =

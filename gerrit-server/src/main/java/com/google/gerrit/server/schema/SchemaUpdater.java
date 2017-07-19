@@ -14,6 +14,7 @@
 
 package com.google.gerrit.server.schema;
 
+import com.google.gerrit.extensions.restapi.PreconditionFailedException;
 import com.google.gerrit.reviewdb.client.CurrentSchemaVersion;
 import com.google.gerrit.reviewdb.client.SystemConfig;
 import com.google.gerrit.reviewdb.server.ReviewDb;
@@ -103,7 +104,7 @@ public class SchemaUpdater {
       if (version == null) {
         try {
           creator.create(db);
-        } catch (IOException | ConfigInvalidException e) {
+        } catch (IOException | ConfigInvalidException | PreconditionFailedException e) {
           throw new OrmException("Cannot initialize schema", e);
         }
 

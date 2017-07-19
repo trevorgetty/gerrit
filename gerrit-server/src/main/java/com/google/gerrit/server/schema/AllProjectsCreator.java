@@ -33,6 +33,7 @@ import com.google.gerrit.common.data.Permission;
 import com.google.gerrit.common.data.PermissionRule;
 import com.google.gerrit.common.data.PermissionRule.Action;
 import com.google.gerrit.extensions.client.InheritableBoolean;
+import com.google.gerrit.extensions.restapi.PreconditionFailedException;
 import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.reviewdb.client.RefNames;
 import com.google.gerrit.server.GerritPersonIdent;
@@ -95,7 +96,7 @@ public class AllProjectsCreator {
     return this;
   }
 
-  public void create() throws IOException, ConfigInvalidException {
+  public void create() throws IOException, ConfigInvalidException, PreconditionFailedException {
     try (Repository git = mgr.openRepository(allProjectsName)) {
       initAllProjects(git);
     } catch (RepositoryNotFoundException notFound) {
