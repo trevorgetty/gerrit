@@ -22,6 +22,7 @@ import com.google.gerrit.common.data.AccessSection;
 import com.google.gerrit.common.data.GroupReference;
 import com.google.gerrit.common.data.LabelType;
 import com.google.gerrit.common.data.Permission;
+import com.google.gerrit.extensions.restapi.PreconditionFailedException;
 import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.reviewdb.client.RefNames;
 import com.google.gerrit.server.GerritPersonIdent;
@@ -72,7 +73,7 @@ public class AllUsersCreator {
     } catch (RepositoryNotFoundException notFound) {
       try (Repository git = mgr.createRepository(allUsersName)) {
         initAllUsers(git);
-      } catch (RepositoryNotFoundException err) {
+      } catch (RepositoryNotFoundException | PreconditionFailedException err) {
         String name = allUsersName.get();
         throw new IOException("Cannot create repository " + name, err);
       }

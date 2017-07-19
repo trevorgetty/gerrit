@@ -22,6 +22,7 @@ import com.google.gerrit.reviewdb.client.SystemConfig;
 import com.google.gerrit.reviewdb.server.ReviewDb;
 import com.google.gerrit.server.schema.SchemaCreator;
 import com.google.gerrit.server.schema.SchemaVersion;
+import com.google.gerrit.extensions.restapi.PreconditionFailedException;
 import com.google.gwtorm.jdbc.Database;
 import com.google.gwtorm.jdbc.SimpleDataSource;
 import com.google.gwtorm.server.OrmException;
@@ -113,7 +114,7 @@ public class InMemoryDatabase implements SchemaFactory<ReviewDb> {
       created = true;
       try (ReviewDb c = open()) {
         schemaCreator.create(c);
-      } catch (IOException | ConfigInvalidException e) {
+      } catch (IOException | ConfigInvalidException | PreconditionFailedException e) {
         throw new OrmException("Cannot create in-memory database", e);
       }
     }

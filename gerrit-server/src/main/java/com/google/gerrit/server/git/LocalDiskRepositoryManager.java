@@ -15,6 +15,7 @@
 package com.google.gerrit.server.git;
 
 import com.google.gerrit.extensions.events.LifecycleListener;
+import com.google.gerrit.extensions.restapi.PreconditionFailedException;
 import com.google.gerrit.lifecycle.LifecycleModule;
 import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.reviewdb.client.RefNames;
@@ -23,6 +24,7 @@ import com.google.gerrit.server.config.SitePaths;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 
+import org.eclipse.jgit.errors.RepositoryAlreadyExistsException;
 import org.eclipse.jgit.errors.RepositoryNotFoundException;
 import org.eclipse.jgit.internal.storage.file.LockFile;
 import org.eclipse.jgit.lib.Config;
@@ -207,7 +209,7 @@ public class LocalDiskRepositoryManager implements GitRepositoryManager,
 
   @Override
   public Repository createRepository(Project.NameKey name)
-      throws RepositoryNotFoundException, RepositoryCaseMismatchException {
+      throws RepositoryNotFoundException, RepositoryCaseMismatchException, PreconditionFailedException {
     Path path = getBasePath(name);
     if (isUnreasonableName(name)) {
       throw new RepositoryNotFoundException("Invalid name: " + name);
@@ -236,6 +238,8 @@ public class LocalDiskRepositoryManager implements GitRepositoryManager,
     try {
       db = RepositoryCache.open(loc, false);
       db.create(true /* bare */);
+    } catch (RepositoryAlreadyExistsException e2) {
+      throw new PreconditionFailedException(e2.getMessage());
     } catch (IOException e1) {
       throw new RepositoryNotFoundException(e1.getMessage(), e1);
     }

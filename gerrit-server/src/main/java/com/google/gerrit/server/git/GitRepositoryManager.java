@@ -14,6 +14,7 @@
 
 package com.google.gerrit.server.git;
 
+import com.google.gerrit.extensions.restapi.PreconditionFailedException;
 import com.google.gerrit.reviewdb.client.Project;
 import com.google.inject.Singleton;
 
@@ -54,10 +55,11 @@ public interface GitRepositoryManager {
    *         repository name, but only in case of a character within the name.
    * @throws RepositoryNotFoundException the name is invalid.
    * @throws IOException the repository cannot be created.
+   * @throws PreconditionFailedException
    */
   Repository createRepository(Project.NameKey name)
       throws RepositoryCaseMismatchException, RepositoryNotFoundException,
-      IOException;
+      IOException, PreconditionFailedException;
 
   /** @return set of all known projects, sorted by natural NameKey order. */
   SortedSet<Project.NameKey> list();

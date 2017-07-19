@@ -33,6 +33,7 @@ import com.google.gerrit.extensions.common.ProjectInfo;
 import com.google.gerrit.extensions.events.NewProjectCreatedListener;
 import com.google.gerrit.extensions.registration.DynamicSet;
 import com.google.gerrit.extensions.restapi.BadRequestException;
+import com.google.gerrit.extensions.restapi.PreconditionFailedException;
 import com.google.gerrit.extensions.restapi.ResourceConflictException;
 import com.google.gerrit.extensions.restapi.ResourceNotFoundException;
 import com.google.gerrit.extensions.restapi.Response;
@@ -150,7 +151,7 @@ public class CreateProject implements RestModifyView<TopLevelResource, ProjectIn
   public Response<ProjectInfo> apply(TopLevelResource resource,
       ProjectInput input) throws BadRequestException,
       UnprocessableEntityException, ResourceConflictException,
-      ResourceNotFoundException, IOException, ConfigInvalidException {
+      ResourceNotFoundException, IOException, ConfigInvalidException, PreconditionFailedException {
     if (input == null) {
       input = new ProjectInput();
     }
@@ -230,7 +231,7 @@ public class CreateProject implements RestModifyView<TopLevelResource, ProjectIn
 
   private Project createProject(CreateProjectArgs args)
       throws BadRequestException, ResourceConflictException, IOException,
-      ConfigInvalidException {
+      ConfigInvalidException, PreconditionFailedException {
     final Project.NameKey nameKey = args.getProject();
     try {
       final String head =
@@ -266,6 +267,10 @@ public class CreateProject implements RestModifyView<TopLevelResource, ProjectIn
           + " different case.");
     } catch (RepositoryNotFoundException badName) {
       throw new BadRequestException("invalid project name: " + nameKey);
+    } catch (PreconditionFailedException e) {
+      String msg = "Resource with the name: " + nameKey + ", already exists on one or more nodes.";
+      log.error(msg, e);
+      throw new PreconditionFailedException(msg);
     } catch (ConfigInvalidException e) {
       String msg = "Cannot create " + nameKey;
       log.error(msg, e);
