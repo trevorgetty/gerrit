@@ -101,9 +101,34 @@ function prereqs() {
       info "Installation aborted by user"
       exit 0
     fi
+
     FIRST_NODE=$(get_boolean "Is this the first node GerritMS will be installed to?" "true")
   fi
 
+}
+
+function check_environment_variables_that_affect_curl() {
+    if [ -n "$HTTP_PROXY" ] || [ -n "$HTTPS_PROXY" ] || [ -n "$FTP_PROXY" ] || [ -n "$ALL_PROXY" ] || [ -n "$NO_PROXY" ]; then
+      info ""
+      info " The following environment variables are set and will affect the use of 'curl': "
+      info ""
+      [ -n "$HTTP_PROXY" ] && echo " * HTTP_PROXY=$HTTP_PROXY"
+      [ -n "$HTTPS_PROXY" ] && echo " * HTTPS_PROXY=$HTTPS_PROXY"
+      [ -n "$FTP_PROXY" ] && echo " * FTP_PROXY=$FTP_PROXY"
+      [ -n "$ALL_PROXY" ] && echo " * ALL_PROXY=$ALL_PROXY"
+      [ -n "$NO_PROXY" ] && echo " * NO_PROXY=$NO_PROXY"
+      info ""
+
+      if [ -z "$CURL_ENVVARS_APPROVED" ]; then
+        CURL_ENVVARS_APPROVED=$(get_boolean "Do you want to continue with the installation?" "true")
+      fi
+      if [ "$CURL_ENVVARS_APPROVED" == "false" ]; then
+        info "Installation aborted by user"
+        exit 0
+      fi
+
+    info ""
+    fi
 }
 
 function check_user() {
@@ -1245,7 +1270,7 @@ function cleanup() {
 ## and GERRIT_ROOT exist
 function check_for_non_interactive_mode() {
   ## These properties will not be set in applicaton.properties
-  if [[ ! -z "$GITMS_ROOT" && ! -z "$BACKUP_DIR" && ! -z "$SCRIPT_INSTALL_DIR" && ! -z "$FIRST_NODE" ]]; then
+  if [[ ! -z "$GITMS_ROOT" && ! -z "$BACKUP_DIR" && ! -z "$SCRIPT_INSTALL_DIR" && ! -z "$FIRST_NODE" && ! -z "$CURL_ENVVARS_APPROVED" ]]; then
 
     APPLICATION_PROPERTIES="$GITMS_ROOT"
     APPLICATION_PROPERTIES+="/replicator/properties/application.properties"
@@ -1351,6 +1376,12 @@ function check_for_non_interactive_mode() {
           exit 1
         fi
       fi
+      
+      ## CURL_ENVVARS_APPROVED must be either true or false
+      if [ ! "$CURL_ENVVARS_APPROVED" == "true" ] && [ ! "$CURL_ENVVARS_APPROVED" == "false" ]; then
+        info "ERROR: Non-interactive installation aborted, the CURL_ENVVARS_APPROVED must be either \"true\" or \"false\". Currently is \"$CURL_ENVVARS_APPROVED\""
+        exit 1
+      fi
 
       NON_INTERACTIVE=1
     fi
@@ -1441,9 +1472,11 @@ if [ "$NON_INTERACTIVE" == "1" ]; then
   echo "UPDATE_REPO_CONFIG: $UPDATE_REPO_CONFIG"
   echo "RUN_GERRIT_INIT: $RUN_GERRIT_INIT"
   echo "REMOVE_PLUGIN: $REMOVE_PLUGIN"
+  echo "CURL_ENVVARS_APPROVED: $CURL_ENVVARS_APPROVED"
 fi
 
 prereqs
+check_environment_variables_that_affect_curl
 check_user
 get_config_from_user
 create_backup
