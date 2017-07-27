@@ -12,6 +12,7 @@ import com.google.gerrit.server.events.EventWrapper;
 import com.google.gerrit.server.events.SupplierDeserializer;
 import com.google.gerrit.server.events.SupplierSerializer;
 import com.google.gson.GsonBuilder;
+
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileFilter;
@@ -35,6 +36,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.zip.GZIPInputStream;
+
 import org.eclipse.jgit.errors.ConfigInvalidException;
 import org.eclipse.jgit.lib.Config;
 import org.eclipse.jgit.storage.file.FileBasedConfig;
@@ -472,7 +474,7 @@ public class Replicator implements Runnable {
   private void setFileReadyIfFull(boolean projectIsDifferent) {
     long diff = System.currentTimeMillis() - lastTimeCreated;
 
-    if (projectIsDifferent || diff > maxSecsToWaitBeforeProposingEvents*1000 || lastWrittenMessages >= maxNumberOfEventsBeforeProposing) {
+    if (projectIsDifferent || diff > maxSecsToWaitBeforeProposingEvents || lastWrittenMessages >= maxNumberOfEventsBeforeProposing) {
       if (lastWrittenMessages == 0) {
         log.debug("RE No events to send. Waiting...");
         lastTimeCreated = System.currentTimeMillis();
@@ -737,7 +739,7 @@ public class Replicator implements Runnable {
           }
           incomingEventsAreGZipped = Boolean.parseBoolean(props.getProperty(GERRIT_REPLICATED_EVENTS_INCOMING_ARE_GZIPPED,"false"));
           maxSecsToWaitBeforeProposingEvents = Long.parseLong(
-              cleanLforLong(props.getProperty(GERRIT_MAX_SECS_TO_WAIT_BEFORE_PROPOSING_EVENTS,
+              cleanLforLongAndConvertToMilliseconds(props.getProperty(GERRIT_MAX_SECS_TO_WAIT_BEFORE_PROPOSING_EVENTS,
                   DEFAULT_MAX_SECS_TO_WAIT_BEFORE_PROPOSING_EVENTS)));
           maxNumberOfEventsBeforeProposing = Integer.parseInt(
               cleanLforLong(props.getProperty(GERRIT_MAX_EVENTS_TO_APPEND_BEFORE_PROPOSING,DEFAULT_MAX_EVENTS_PER_FILE)));
@@ -771,6 +773,31 @@ public class Replicator implements Runnable {
     if (property != null && property.length() > 1 &&  (property.endsWith("L") || property.endsWith("l"))) {
       return property.substring(0,property.length()-1);
     }
+    return property;
+  }
+
+ /**
+  *  Using milliseconds so that the user can specify sub second
+  *  periods
+  *
+  * @param property the string value taken from the properties file
+  * @return the string value in milliseconds
+  */
+  public static String cleanLforLongAndConvertToMilliseconds(String property) {
+    if (property != null && property.length() > 1 &&  (property.endsWith("L") || property.endsWith("l"))) {
+      property = property.substring(0,property.length()-1);
+    }
+
+    // Convert to milliseconds
+    if (property.contains(".")){
+      double x = Double.parseDouble(property)*1000;
+      int y = (int) x;
+      property = Integer.toString(y);
+    } else {
+      int x = Integer.parseInt(property)*1000;
+      property = Integer.toString(x);
+    }
+
     return property;
   }
 }
