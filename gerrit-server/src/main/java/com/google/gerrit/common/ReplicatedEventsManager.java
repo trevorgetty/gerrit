@@ -95,7 +95,7 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
       .create();
   private EventBroker changeHookRunner = null;
   private final SchemaFactory<ReviewDb> schemaFactory;
-  
+
   private boolean finished = false;
 
   // Maximum number of events that may be queued up
@@ -155,7 +155,7 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
     log.info("RE ReplicatedEvents instance added");
     logMe("ReplicatedEvents instance added",null);
   }
-  
+
   private ReplicatedEventsManager() {
     schemaFactory = null;
   }
@@ -259,12 +259,13 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
 
   /**
    * poll for the events published by gerrit and send to the other nodes through files
-   * read by the replicator
+   * read by the replicator. Using milliseconds so that the user can specify sub second
+   * periods
    */
   private boolean pollAndWriteOutgoingEvents() throws InterruptedException {
     boolean eventGot = false;
     Event newEvent;
-    newEvent = queue.poll(maxSecsToWaitForEventOnQueue, TimeUnit.SECONDS);
+    newEvent = queue.poll(maxSecsToWaitForEventOnQueue, TimeUnit.MILLISECONDS);
     if (newEvent != null && !newEvent.replicated) {
       replicatorInstance.queueEventForReplication(new EventWrapper(newEvent,getChangeEventInfo(newEvent),distinctEventPrefix));
       eventGot = true;
@@ -399,18 +400,18 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
   /**
    * Creates a new ChangeEvent based on an original ChangeEvent, but with a new type which is
    * derived from the original type, with a new prefix.
-   * 
+   *
    * @param changeEvent
    * @param prefix
    * @return
-   * @throws ClassNotFoundException 
+   * @throws ClassNotFoundException
    */
   @SuppressWarnings("UseSpecificCatch")
   private Event makeDistinct(Event changeEvent, String prefix) throws ClassNotFoundException {
-    
+
     Event result = null;
     Class<? extends Event> actualClass = changeEvent.getClass();
-    
+
     try {
       Constructor<? extends Event> constructor = actualClass.getConstructor(actualClass, String.class, boolean.class);
       result = constructor.newInstance(changeEvent,prefix+changeEvent.getType(),true);
@@ -510,8 +511,8 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
           receiveReplicatedEventsEnabled = replicatedEventsReceive || replicatedEventsReplicateOriginalEvents || replicatedEventsReplicateDistinctEvents;
           replicatedEventsEnabled = receiveReplicatedEventsEnabled || replicatedEventsSend;
           if (replicatedEventsEnabled) {
-            maxSecsToWaitForEventOnQueue = Long.parseLong(
-                cleanLforLong(props.getProperty(GERRIT_MAX_SECS_TO_WAIT_FOR_EVENT_ON_QUEUE,DEFAULT_MAX_SECS_TO_WAIT_FOR_EVENT_ON_QUEUE)));
+            maxSecsToWaitForEventOnQueue = Long.parseLong(Replicator.cleanLforLongAndConvertToMilliseconds(props.getProperty(
+                GERRIT_MAX_SECS_TO_WAIT_FOR_EVENT_ON_QUEUE,DEFAULT_MAX_SECS_TO_WAIT_FOR_EVENT_ON_QUEUE)));
             log.info("RE Replicated events are enabled, send: {}, receive: {}", new Object[]{replicatedEventsSend,receiveReplicatedEventsEnabled});
           } else {
             log.info("RE Replicated events are disabled"); // This could not apppear in the log... cause the log could not yet be ready
@@ -519,7 +520,7 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
 
           localRepublishEnabled = Boolean.parseBoolean(props.getProperty(GERRIT_REPLICATED_EVENTS_LOCAL_REPUBLISH_DISTINCT,"false"));
           distinctEventPrefix = props.getProperty(GERRIT_REPLICATED_EVENTS_DISTINCT_PREFIX, DEFAULT_DISTINCT_PREFIX);
-          
+
           log.info("RE Replicated events: receive={}, original={}, distinct={}, send={} ",
               new Object[]{replicatedEventsReceive,replicatedEventsReplicateOriginalEvents,replicatedEventsReplicateDistinctEvents, replicatedEventsSend});
           log.info("RE Replicate local events, prefix={}, republish={} ", new Object[]{distinctEventPrefix,localRepublishEnabled});
@@ -533,13 +534,6 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
       log.error("RE While loading the .gitconfig file",ee);
     }
     return result;
-  }
-
-  private static String cleanLforLong(String property) {
-    if (property != null && property.length() > 1 &&  (property.endsWith("L") || property.endsWith("l"))) {
-      return property.substring(0,property.length()-1);
-    }
-    return property;
   }
 
   @Override

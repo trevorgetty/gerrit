@@ -1437,7 +1437,7 @@ NON_INTERACTIVE=0
 WD_GERRIT_VERSION=$(get_gerrit_version "release.war")
 NEW_GERRIT_VERSION=$(echo $WD_GERRIT_VERSION | cut -f1 -d '-')
 GERRIT_RELEASE_NOTES="https://gerrit-documentation.storage.googleapis.com/ReleaseNotes/ReleaseNotes-2.13.html"
-GERRITMS_INSTALL_DOC="http://docs.wandisco.com/git/gerrit/1.9/gerrit_install.html"
+GERRITMS_INSTALL_DOC="http://docs.wandisco.com/git/gerrit/1.9/#doc_gerritinstall"
 
 ## Versions of Gerrit that we allow the user to upgrade from. Generally a user is not allowed to skip a major
 ## version, but can skip minor versions. This is not a hard and fast rule however, as the reality of when an
