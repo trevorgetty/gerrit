@@ -1,4 +1,6 @@
-#!/bin/bash
+#!/bin/bash --noprofile
+set -o pipefail
+set -e
 
 function urlencode() {
   local raw=$1
@@ -22,7 +24,12 @@ function die() {
   exit 1
 }
 
-## Reats input until the user specifies a string which is not empty
+## Removes double and trailing //'s from path
+function sanitize_path() {
+  echo "$1" | sed -e 's://*:/:g' -e 's:/$::'
+}
+
+## Reads input until the user specifies a string which is not empty
 ## $1: The string to display
 function get_string() {
 
@@ -38,6 +45,11 @@ function get_string() {
 }
 
 function find_gitms() {
+  ## Make sure $HOME has been set
+  if [[ -z "$home" ]]; then
+    typeset -x HOME=$(echo ~)
+  fi
+
   GIT_CONFIG="$HOME/.gitconfig"
   export GIT_CONFIG
   APPLICATION_PROPERTIES=$(git config core.gitmsconfig)
@@ -51,7 +63,8 @@ function find_gitms() {
     return
   fi
 
-  GITMS_ROOT=${APPLICATION_PROPERTIES/"/replicator/properties/application.properties"/""}
+  GITMS_ROOT=$(sanitize_path "$APPLICATION_PROPERTIES")
+  GITMS_ROOT=${GITMS_ROOT%/replicator/properties/application.properties}
 }
 
 function get_application_properties() {
@@ -88,21 +101,42 @@ function get_application_properties() {
       fi
     done
     GITMS_ROOT="$INPUT"
-  else
-    echo "Using GitMS Root: $GITMS_ROOT"
   fi
+  echo "Using GitMS Root: $GITMS_ROOT"
 }
 
-function fetch_property() {
-  cat "$APPLICATION_PROPERTIES" | grep -o "^$1.*" | cut -f2- -d'='
-}
 
 function read_application_properties() {
-  SSL_ENABLED=$(fetch_property "ssl.enabled")
-  REST_PORT=$(fetch_property "jetty.http.port")
-  SSL_REST_PORT=$(fetch_property "jetty.https.port")
-  GITMS_RPGROUP_ID=$(fetch_property "gerrit.rpgroupid")
-  GERRIT_ROOT=$(fetch_property "gerrit.root")
+  if ! SSL_ENABLED=$(fetch_property "$APPLICATION_PROPERTIES" "ssl.enabled"); then
+    if [[ "$SSL_ENABLED" == "$fp_novaluefound" || "$SSL_ENABLED" == "$fp_badvalue" ]]; then
+      unset SSL_ENABLED
+      exit 2
+    fi
+  fi
+  if ! REST_PORT=$(fetch_property "$APPLICATION_PROPERTIES" "jetty.http.port"); then
+    if [[ "$REST_PORT" == "$fp_novaluefound" || "$REST_PORT" == "$fp_badvalue" ]]; then
+      unset REST_PORT
+      exit 2
+    fi
+  fi
+  if ! SSL_REST_PORT=$(fetch_property "$APPLICATION_PROPERTIES" "jetty.https.port"); then
+    if [[ "$SSL_REST_PORT" == "$fp_novaluefound" || "$SSL_REST_PORT" == "$fp_badvalue" ]]; then
+      unset SSL_REST_PORT
+      exit 2
+    fi
+  fi
+  if ! GITMS_RPGROUP_ID=$(fetch_property "$APPLICATION_PROPERTIES" "gerrit.rpgroupid"); then
+    if [[ "$GITMS_RPGROUP_ID" == "$fp_novaluefound" || "$GITMS_RPGROUP_ID" == "$fp_badvalue" ]]; then
+      unset GITMS_RPGROUP_ID
+      exit 2
+    fi
+  fi
+  if ! GERRIT_ROOT=$(fetch_property "$APPLICATION_PROPERTIES" "gerrit.root"); then
+    if [[ "$GERRIT_ROOT" == "$fp_novaluefound" || "$GERRIT_ROOT" == "$fp_badvalue" ]]; then
+      unset GERRIT_ROOT
+      exit 2
+    fi
+  fi
 }
 
 function get_gitms_credentials() {
@@ -144,9 +178,8 @@ function add_repo() {
     exit 1;
   fi
 
-  repoName=${repoName##$GERRIT_GIT_BASE}
-  repoName=$(echo $repoName | sed -e 's/^[/]*//')
-
+  repoName=${repoName#$GERRIT_GIT_BASE}
+  repoName=$(sanitize_path $repoName | sed -e 's:^/*::')
 
   local encodedRepoPath=$(urlencode "$repoPath")
 
@@ -196,6 +229,85 @@ function scan_repos() {
     add_repo "$repoPath"
   done
   return 0
+}
+
+# Special return value
+fp_novaluefound="NoVaLuE"
+fp_badvalue="BaDvAlUe"
+function fetch_property() {
+  # File and Property to check are passed as arguments to function
+  file=$1
+  property=$2
+  illegalKeyChars="[$\?\`*+%:<>]"
+  illegalValChars="[$\?\`*%<>]"
+
+  # Check if file does not exist
+  if [[ ! -e "$file" ]]; then
+   echo "Error: \"$file\" does not exist." 1>&2
+   echo "$fp_badvalue"
+   exit 2
+  fi
+
+  # Check the value passed in is actually a file
+  if [[ ! -f "$file" ]]; then
+    echo "Error: File \"$file\" does not exist, aborting" 1>&2
+    echo "$fp_badvalue"
+    exit 2
+  fi
+
+  # Check the file is readable
+  if [[ ! -r "$file" ]]; then
+    echo "Error: cannot read file \"$file\", aborting" 1>&2
+    echo "$fp_badvalue"
+    exit 2
+  fi
+
+  while IFS='=' read -r key value
+  do
+    # Ignore lines Starting with a comment #
+    [[ $key = \#* || -z "$key" ]] && continue
+    key=$(echo $key)
+    value=$(echo $value)
+
+    if [[ $key != $property ]]; then
+      continue;
+    else
+      # Check for key or value having a space in property / value
+      if echo "$key" | grep -q ' ' || echo "$value" | grep -q ' '; then
+        echo "Error: space found in property Key or Value (\"$key\"=\"$value\")" 1>&2
+        echo "$fp_badvalue"
+        exit 1
+      fi
+
+      # Check for property key or value being empty
+      if [[ -z "$key" ]] || [[ -z "$value" ]]; then
+        echo "Error: Missing property Key / Value, (\"$key\"=\"$value\")" 1>&2
+        echo "$fp_badvalue"
+        exit 1
+      fi
+
+      # Check for key having any illegal character(s) in it
+      if echo "$key" |  grep -q ${illegalKeyChars}; then
+        echo "Error: Illegal character(s) ${illegalKeyChars} in property Key, (\"$key\"=\"$value\")" 1>&2
+        echo "$fp_badvalue"
+        exit 1
+      fi
+
+      # Check for value having any illegal characters(s) in it
+      if echo "$value" | grep -q ${illegalValChars}; then
+        echo "Error: Illegal character(s) ${illegalValChars} in property Value, (\"$key\"=\"$value\")" 1>&2
+        echo "$fp_badvalue"
+        exit 1
+      fi
+
+      echo "$value"
+      exit 0
+    fi
+  done < "$file"
+
+  echo "Error: could not find property \"$property\" in file \"$file\"" 1>&2
+  echo "$fp_novaluefound"
+  exit 1
 }
 
 function print_help {
