@@ -31,6 +31,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.gerrit.common.Nullable;
+import com.google.gerrit.common.ReplicatedIndexEventManager;
 import com.google.gerrit.extensions.restapi.ResourceConflictException;
 import com.google.gerrit.extensions.restapi.ResourceNotFoundException;
 import com.google.gerrit.extensions.restapi.RestApiException;
@@ -952,6 +953,14 @@ public class BatchUpdate implements AutoCloseable {
             db.changes().update(cs);
           }
           db.commit();
+
+          if (deleted){
+            String change = id.toString();
+            int changeId = Integer.parseInt(change);
+            String projectName = project.toString();
+            ReplicatedIndexEventManager.queueReplicationIndexDeletionEvent(changeId, projectName);
+          }
+
         } finally {
           db.rollback();
         }
