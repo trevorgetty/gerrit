@@ -1046,7 +1046,10 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
 
     public boolean add(IndexToReplicate index) {
       synchronized(changeSet) {
-        if (changeSet.add(index.indexNumber)) {
+        // Added the OR block below as part of GER-530. The index for the 'draft change to delete' was not
+        // being added to the queue because a different event with the same index number already existed.
+        // We need to make sure our delete event always gets added so that the replication can happen.
+        if (changeSet.add(index.indexNumber) || index.delete) {
           filteredQueue.add(index);
           return true;
         }
