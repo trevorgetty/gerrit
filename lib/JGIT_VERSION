@@ -3,6 +3,6 @@ include_defs('//lib/maven.defs')
 REPO = MAVEN_CENTRAL # Leave here even if set to MAVEN_CENTRAL.
 VERS = '4.5.2.201704071617-r'
 REPO_WD = 'http://artifacts.wandisco.com/artifactory/libs-release-local'
-VERS_WD = '4.5.2.201704071617-r_WDv2'
+VERS_WD = '4.5.2.201704071617-r_WDv3'
 DOC_VERS = VERS # Set to VERS unless using a snapshot
 JGIT_DOC_URL="http://download.eclipse.org/jgit/site/" + DOC_VERS + "/apidocs"
