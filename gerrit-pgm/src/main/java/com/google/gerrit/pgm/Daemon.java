@@ -228,6 +228,7 @@ public class Daemon extends SiteProgram {
       });
 
       log.info("Gerrit Code Review " + myVersion() + " ready");
+      LifecycleManager.started();
       if (runId != null) {
         try {
           Files.write(runFile, (runId + "\n").getBytes(UTF_8));
@@ -311,6 +312,7 @@ public class Daemon extends SiteProgram {
     }
 
     manager.start();
+
   }
 
   @VisibleForTesting
