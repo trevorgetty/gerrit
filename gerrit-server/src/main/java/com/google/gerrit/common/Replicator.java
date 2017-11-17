@@ -4,6 +4,7 @@ import com.google.common.base.Supplier;
 import com.google.common.collect.HashMultiset;
 import com.google.common.collect.ImmutableMultiset;
 import com.google.common.collect.Multiset;
+import com.google.gerrit.lifecycle.LifecycleManager;
 import com.google.gerrit.server.events.Event;
 import com.google.gerrit.server.events.EventDeserializer;
 import com.google.gson.Gson;
@@ -268,8 +269,14 @@ public class Replicator implements Runnable {
   @Override
   @SuppressWarnings("SleepWhileInLoop")
   public void run() {
-    log.info("RE ReplicateEvents thread is starting...");
-    logMe("ReplicateEvents thread is starting...",null);
+
+    log.info("Waiting for all threads to start...");
+    logMe("Waiting for all threads to start...", null);
+
+    LifecycleManager.await();
+
+    log.info("RE ReplicateEvents thread is started.");
+    logMe("RE ReplicateEvents thread is started.", null);
 
     // we need to make this thread never fail, otherwise we'll lose events.
     while (!finished) {
