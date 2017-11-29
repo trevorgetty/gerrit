@@ -1443,7 +1443,7 @@ GERRITMS_INSTALL_DOC="http://docs.wandisco.com/gerrit/1.9/#doc_gerritinstall"
 ## version, but can skip minor versions. This is not a hard and fast rule however, as the reality of when an
 ## upgrade can be safely skipped is down to Gerrit upgrade behaviour. This should have all the release versions
 ## of the previous major version number, and any release versions of the current major version number.
-PREVIOUS_ALLOWED_RP_GERRIT_VERSIONS=("v2.11.7-RP-1.7.1.4" "v2.11.9-RP-1.7.2.1")
+PREVIOUS_ALLOWED_RP_GERRIT_VERSIONS=("v2.11.7-RP-1.7.1.4" "v2.11.9-RP-1.7.2.1" "v2.11.9-RP-1.7.2.2")
 REPLICATED_UPGRADE="false"
 SPINNER=("|" "/" "-" "\\")
 
