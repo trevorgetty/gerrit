@@ -104,12 +104,14 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
   private final LinkedBlockingQueue<Event> queue =   new LinkedBlockingQueue<>(MAX_EVENTS);
   private final Object replicationLock = new Object();
   private static Replicator replicatorInstance = null;
+  private static Config cfg;
 
   public static synchronized ReplicatedEventsManager hookOnListeners(EventBroker changeHookRunner, SchemaFactory<ReviewDb> schemaFactory, Config config) {
 
     log.info("RE ReplicatedEvents hook called...");
 
     Replicator.setGerritConfig(config==null? new Config():config);
+    cfg = config;
 
     if (internalLogEnabled) {
       internalLogFile = new File(new File(DAFAULT_BASE_DIR),"replEvents.log"); // used for debug
@@ -147,6 +149,14 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
       instance = null;
     }
     return instance;
+  }
+
+  public synchronized void setGerritConfig(Config config) {
+    cfg = config;
+  }
+
+  public static synchronized Config getGerritConfig() {
+    return cfg;
   }
 
   private ReplicatedEventsManager(EventBroker changeHookRunner, final SchemaFactory<ReviewDb> schemaFactory) {
@@ -278,7 +288,7 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
    * aimed at receiving the event to be published
    *
    * @param newEvent
-   * @return
+   * @return result
    */
   @Override
   public boolean publishIncomingReplicatedEvents(EventWrapper newEvent) {
@@ -319,7 +329,7 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
    * Publishes the event calling the postEvent function in ChangeHookRunner
    *
    * @param newEvent
-   * @return
+   * @return result
    */
   private boolean publishIncomingReplicatedEvents(Event newEvent) {
     ChangeEventInfo changeEventInfo = getChangeEventInfo(newEvent);
@@ -403,7 +413,7 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
    *
    * @param changeEvent
    * @param prefix
-   * @return
+   * @return result
    * @throws ClassNotFoundException
    */
   @SuppressWarnings("UseSpecificCatch")
