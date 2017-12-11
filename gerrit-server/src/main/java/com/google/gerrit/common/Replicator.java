@@ -25,7 +25,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintWriter;
-import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -397,7 +396,7 @@ public class Replicator implements Runnable {
    * poll for the events published by gerrit and send to the other nodes through files
    * read by the replicator
    */
-  private boolean pollAndWriteOutgoingEvents() throws InterruptedException {
+  private boolean pollAndWriteOutgoingEvents() {
     boolean eventGot = false;
     EventWrapper newEvent;
     while ((newEvent = queue.poll()) != null) {
@@ -455,7 +454,7 @@ public class Replicator implements Runnable {
     return result;
   }
 
-  private void createOrCheckCurrentEventsFile() throws FileNotFoundException, UnsupportedEncodingException {
+  private void createOrCheckCurrentEventsFile() throws FileNotFoundException {
     if (lastWriter == null) {
       if (!outgoingReplEventsDirectory.exists()) {
         boolean mkdirs = outgoingReplEventsDirectory.mkdirs();
@@ -463,9 +462,10 @@ public class Replicator implements Runnable {
           FileNotFoundException cannotCreateDir = new FileNotFoundException("Cannot create directory");
           log.error("RE Could not create replicated events directory!", cannotCreateDir);
           throw cannotCreateDir;
-        } else {
-          log.info("RE Created directory {} for replicated events",outgoingReplEventsDirectory.getAbsolutePath());
         }
+
+        log.info("RE Created directory {} for replicated events",outgoingReplEventsDirectory.getAbsolutePath());
+
       }
       if (outgoingReplEventsDirectory.exists() && outgoingReplEventsDirectory.isDirectory()) {
         lastWriterFile = new File(outgoingReplEventsDirectory,CURRENT_EVENTS_FILE);
@@ -550,9 +550,9 @@ public class Replicator implements Runnable {
       if (!incomingReplEventsDirectory.mkdirs()) {
         log.error("RE {} path cannot be created! Replicated events will not work!",incomingReplEventsDirectory.getAbsolutePath());
         return result;
-      } else {
-        log.info("RE {} created.",incomingReplEventsDirectory.getAbsolutePath());
       }
+
+      log.info("RE {} created.",incomingReplEventsDirectory.getAbsolutePath());
     }
     try {
       File[] listFiles = incomingReplEventsDirectory.listFiles(incomingEventsToReplicateFileFilter);
