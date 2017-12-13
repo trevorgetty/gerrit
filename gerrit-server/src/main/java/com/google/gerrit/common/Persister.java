@@ -1,6 +1,8 @@
 package com.google.gerrit.common;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
+
 import java.io.File;
 import java.io.FileFilter;
 import java.io.FileInputStream;
@@ -16,24 +18,24 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Utility to make an object be persisted on the filesystem
- * 
+ *
  * Ok, so this class must have these characteristics
  * - easily configure the path to where persist the values
  * - easily mark the object as persisted
  * - easily reload the objects from the path and return an array
  * - easily delete the persisted file when needed
- * 
+ *
  * The overall idea is that you can:
  * - save some object in a directory,
  * - assign to that object the filename which this persister has saved the file in
- * - load in a list all the objects that are in a directory 
+ * - load in a list all the objects that are in a directory
  * - remove the file after you don't need that anymore
  *
  * @author antonio
  * @param <T> the type of the object you want to persist
  */
 public class Persister<T extends Persistable> {
-  
+
   private static final Logger log = LoggerFactory.getLogger(Persister.class);
   private final PersisterFileFilter fileFilter = new PersisterFileFilter();
   private static final Gson gson = new Gson();
@@ -45,7 +47,7 @@ public class Persister<T extends Persistable> {
 
   public Persister(File baseDir) throws IOException {
     this.baseDir = baseDir;
-    
+
     if (baseDir.exists() && !baseDir.isDirectory()) {
       throw new IOException("baseDir is not a directory: "+baseDir);
     } else if (!baseDir.exists()) {
@@ -55,22 +57,50 @@ public class Persister<T extends Persistable> {
       }
     }
   }
-  
+
   public <T extends Persistable> List<T> getObjectsFromPath(Class<T> clazz) {
     File[] listFiles = baseDir.listFiles(fileFilter);
     List<T> result = new ArrayList<>();
-    
+
     if (listFiles != null) {
       for (File file : listFiles) {
         try (InputStreamReader fileToRead = new InputStreamReader(new FileInputStream(file),StandardCharsets.UTF_8)) {
           T fromJson = gson.fromJson(fileToRead,clazz);
+         if (fromJson == null) {
+           log.warn("Json file {} only contained an EOF", file);
+           continue;
+         }
+
           fromJson.setPersistFile(file);
           result.add(fromJson);
         } catch (IOException e) {
           log.error("PR Could not decode json file {}", file, e);
+          moveFileToFailed(baseDir, file);
+        } catch (JsonSyntaxException je) {
+          log.error("PR Could not decode json file {}", file, je);
+          moveFileToFailed(baseDir, file);
         }
       }
     }
+    return result;
+  }
+
+  public static boolean moveFileToFailed(final File directory, final File file) {
+    boolean result = false;
+    File failedDir = new File(directory,"failed");
+    if (!failedDir.exists()) {
+      boolean mkdirs = failedDir.mkdirs();
+      if (!mkdirs) {
+        log.error("Could not create directory for failed directory: " + failedDir.getAbsolutePath());
+      }
+    }
+
+    result = file.renameTo(new File(failedDir,file.getName()));
+
+    if (!result) {
+        log.error("Could not move file in failed directory: " + file);
+      }
+
     return result;
   }
 
@@ -81,7 +111,7 @@ public class Persister<T extends Persistable> {
     }
     return false;
   }
-  
+
   public boolean deleteFileFor(Persistable p) {
     File persistFile = p.getPersistFile();
     if (persistFile == null) {
@@ -89,7 +119,7 @@ public class Persister<T extends Persistable> {
     }
     return persistFile.delete();
   }
-  
+
   public void persistIfNotAlready(T obj) throws IOException {
     if (!obj.hasBeenPersisted()) {
       persist(obj);
@@ -98,7 +128,7 @@ public class Persister<T extends Persistable> {
 
   public void persist(T obj) throws IOException {
     final String msg = gson.toJson(obj)+'\n';
-   
+
     File tempFile = File.createTempFile(FIRST_PART, TMP_PART, baseDir);
     try (FileOutputStream writer = new FileOutputStream(tempFile,true)) {
       writer.write(msg.getBytes(StandardCharsets.UTF_8));

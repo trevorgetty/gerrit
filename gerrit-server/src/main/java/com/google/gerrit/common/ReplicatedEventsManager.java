@@ -32,6 +32,7 @@ import com.google.gerrit.server.events.SupplierSerializer;
 import com.google.gerrit.server.events.TopicChangedEvent;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonSyntaxException;
 import com.google.gwtorm.server.OrmException;
 import com.google.gwtorm.server.SchemaFactory;
 
@@ -297,6 +298,12 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
       try {
         Class<?> eventClass = Class.forName(newEvent.className);
         Event originalEvent = (Event) gson.fromJson(newEvent.event, eventClass);
+
+        if (originalEvent == null) {
+          log.error("fromJson method returned null for {}", newEvent.toString());
+          return false;
+        }
+
         log.debug("RE Original event: {}",originalEvent.toString());
         originalEvent.replicated = true;
 
@@ -317,10 +324,14 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
       } catch(ClassNotFoundException e) {
         log.error("RE event has been lost. Could not find {} for event {}",newEvent.className, newEvent, e);
         result = false;
+      } catch (JsonSyntaxException je) {
+        log.error("PR Could not decode json event {}", newEvent.toString(), je);
+        return result;
       } catch(RuntimeException e) {
         log.error("RE event has been lost. Could not rebuild event for {}", newEvent, e);
         result = false;
       }
+
     }
     return result;
   }
