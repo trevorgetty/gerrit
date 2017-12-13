@@ -7,6 +7,7 @@ import com.google.gerrit.reviewdb.client.Change;
 import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.server.events.EventWrapper;
 import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -92,7 +93,20 @@ public class ReplicatedProjectManager implements Replicator.GerritPublishable {
    * @param eventClass
    */
   private void deleteProject(boolean result, EventWrapper newEvent, Class<?> eventClass) {
-    ProjectInfoWrapper originalEvent = (ProjectInfoWrapper) gson.fromJson(newEvent.event, eventClass);
+    ProjectInfoWrapper originalEvent = null;
+
+    try {
+      originalEvent = (ProjectInfoWrapper) gson.fromJson(newEvent.event, eventClass);
+    } catch (JsonSyntaxException je) {
+      log.error("DeleteProject, Could not decode json event {}", newEvent.toString(), je);
+      return;
+    }
+
+    if (originalEvent == null) {
+      log.error("DeleteProject, fromJson method returned null for {}", newEvent.toString());
+      return;
+    }
+
     log.info("RE Original event: {}",originalEvent.toString());
     originalEvent.replicated = true; // not needed, but makes it clear
     result = applyActionsForDeletingProject(originalEvent);
@@ -117,7 +131,20 @@ public class ReplicatedProjectManager implements Replicator.GerritPublishable {
    * @param eventClass
    */
   private void deleteProjectChanges(EventWrapper newEvent, Class<?> eventClass) {
-    DeleteProjectChangeEvent originalEvent = (DeleteProjectChangeEvent) gson.fromJson(newEvent.event, eventClass);
+    DeleteProjectChangeEvent originalEvent = null;
+
+    try {
+      originalEvent = (DeleteProjectChangeEvent) gson.fromJson(newEvent.event, eventClass);
+    } catch (JsonSyntaxException je) {
+      log.error("DeleteProject, Could not decode json event {}", newEvent.toString(), je);
+      return;
+    }
+
+    if (originalEvent == null) {
+      log.error("DeleteProject, fromJson method returned null for {}", newEvent.toString());
+      return;
+    }
+
     log.info("RE Original event: {}",originalEvent.toString());
     originalEvent.replicated = true; // not needed, but makes it clear
     applyActionsForDeletingProjectChanges(originalEvent);

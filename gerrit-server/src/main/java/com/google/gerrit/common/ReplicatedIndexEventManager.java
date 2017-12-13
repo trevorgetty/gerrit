@@ -347,9 +347,18 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
       for (File file : listFiles) {
         try (InputStreamReader fileToRead = new InputStreamReader(new FileInputStream(file),StandardCharsets.UTF_8)) {
           IndexToReplicate index = gson.fromJson(fileToRead, IndexToReplicate.class);
+          if (index == null) {
+            log.error("fromJson method returned null for file {}", fileToRead);
+            continue;
+          }
+
           indexList.add(new IndexToFile(index, file));
+        } catch (JsonSyntaxException je) {
+          log.error("RC Could not decode json file {}", file, je);
+          Persister.moveFileToFailed(indexEventsDirectory, file);
         } catch (IOException e) {
           log.error("RC Could not decode json file {}", file, e);
+          Persister.moveFileToFailed(indexEventsDirectory, file);
         }
       }
       // Try indexing the change and record each successful try into the IndexToFile instance itself
@@ -433,7 +442,21 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
     boolean success = false;
     try {
       Class<?> eventClass = Class.forName(newEvent.className);
-      IndexToReplicateComparable originalEvent = new IndexToReplicateComparable((IndexToReplicate) gson.fromJson(newEvent.event, eventClass));
+      IndexToReplicateComparable originalEvent = null;
+
+      try {
+        IndexToReplicate index = (IndexToReplicate) gson.fromJson(newEvent.event, eventClass);
+
+        if (index == null) {
+          log.error("fromJson method returned null for {}", newEvent.toString());
+          return success;
+        }
+
+        originalEvent = new IndexToReplicateComparable(index);
+      } catch (JsonSyntaxException je) {
+        log.error("PR Could not decode json event {}", newEvent.toString(), je);
+        return success;
+      }
       log.debug("RC Received this event from replication: {}",originalEvent);
       // add the data to index the change
       incomingChangeEventsToIndex.add(originalEvent);

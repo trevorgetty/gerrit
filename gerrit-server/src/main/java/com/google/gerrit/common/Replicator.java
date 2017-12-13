@@ -580,7 +580,14 @@ public class Replicator implements Runnable {
               }
             }
 
-            publishEvents(bos.toByteArray());
+            int failedEvents = publishEvents(bos.toByteArray());
+
+            // if some events failed copy the file to the failed directory
+            if (failedEvents > 0) {
+              log.error("RE There was {} failed events in this file {}",failedEvents, file.getAbsolutePath());
+              Persister.moveFileToFailed(incomingReplEventsDirectory, file);
+            }
+
             result = true;
 
             boolean deleted = file.delete();
@@ -617,17 +624,26 @@ public class Replicator implements Runnable {
    * this event over and over again
    * @param eventsBytes
    */
-  private void publishEvents(byte[] eventsBytes) {
+  private int publishEvents(byte[] eventsBytes) {
     log.debug("RE Trying to publish original events...");
 
     String[] events = new String(eventsBytes,StandardCharsets.UTF_8).split("\n");
     totalPublishedForeignEventsBytes += eventsBytes.length;
     totalPublishedForeignEventsProsals++;
+    int failedEvents = 0;
+
     for (String event: events) {
       totalPublishedForeignEvents++;
       if (event.length() > 2) {
         try {
           EventWrapper changeEventWrapper = gson.fromJson(event, EventWrapper.class);
+
+          if (changeEventWrapper == null) {
+            log.error("RE fromJson method returned null for {}", event.toString());
+            failedEvents++;
+            continue;
+          }
+
           totalPublishedForeignGoodEventsBytes += eventsBytes.length;
           totalPublishedForeignGoodEvents++;
           synchronized(eventListeners) {
@@ -639,20 +655,28 @@ public class Replicator implements Runnable {
               }
               for(GerritPublishable gp: clients) {
                 try {
-                  gp.publishIncomingReplicatedEvents(changeEventWrapper);
+                  boolean result = gp.publishIncomingReplicatedEvents(changeEventWrapper);
+
+                  if (result == false) {
+                    failedEvents++;
+                  }
                 } catch (Exception e) {
-                  log.error("While publishing events",e);
+                  log.error("RE While publishing events",e);
+                  failedEvents++;
                 }
               }
             }
           }
         } catch(JsonSyntaxException e) {
           log.error("RE event has been lost. Could not rebuild obj using GSON",e);
+          failedEvents++;
         }
       } else {
         log.error("RE event GSON string is empty!", new Exception("Internal error, event is empty: "+event));
       }
     }
+
+    return failedEvents;
   }
 
   final static class IncomingEventsToReplicateFileFilter implements FileFilter {

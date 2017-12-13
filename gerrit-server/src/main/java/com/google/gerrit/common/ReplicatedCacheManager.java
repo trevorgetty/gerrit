@@ -8,6 +8,8 @@ import com.google.common.collect.Multiset;
 import com.google.gerrit.server.events.EventWrapper;
 import com.google.gerrit.server.project.ProjectCache;
 import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
+
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.HashMap;
@@ -23,11 +25,11 @@ import org.slf4j.LoggerFactory;
  * a cache eviction is performed, this eviction is replicated on the other nodes.
  * On the other nodes a reload can be issued too. This can be useful for
  * the web application loading data from the caches.
- * 
- * 
+ *
+ *
  * Gerrit cache is:
  * <code>
-  
+
     [gerrit@dger04 gitms-gerrit-longtests]$ ssh -p 29418 admin@dger03.qava.wandisco.com gerrit show-caches
       Gerrit Code Review        2.10.2-31-g361cb34        now    10:04:59   EDT
                                                        uptime   13 days 22 hrs
@@ -79,26 +81,26 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
   private static final Map<String,CacheWrapper> caches = new HashMap<>();
   private static final Map<String,Object> cacheObjects = new HashMap<>();
   private static ReplicatedCacheManager instance = null;
-  
+
   public static String projectCache = "ProjectCacheImpl";
-  
+
   // Used for statistics
   private static final Multiset<String> evictionsPerformed = ConcurrentHashMultiset.create();
   private static final Multiset<String> evictionsSent      = ConcurrentHashMultiset.create();
   private static final Multiset<String> reloadsPerformed   = ConcurrentHashMultiset.create();
 
   private ReplicatedCacheManager() {
-    
+
   }
-  
+
   public static ImmutableMultiset<String> getEvictionsPerformed() {
     return ImmutableMultiset.copyOf(evictionsPerformed);
   }
-  
+
   public static ImmutableMultiset<String> getEvictionsSent() {
     return ImmutableMultiset.copyOf(evictionsSent);
   }
-  
+
   public static ImmutableMultiset<String> getReloadsPerformed() {
     return ImmutableMultiset.copyOf(reloadsPerformed);
   }
@@ -109,7 +111,7 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
     CacheWrapper(Object theCache) {
       this.cache = theCache;
     }
-    
+
     private boolean evict(Object key) {
       boolean done = false;
       if (cache instanceof Cache) {
@@ -169,12 +171,12 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
       Replicator.subscribeEvent(EventWrapper.Originator.CACHE_EVENT, instance);
     }
     return instance;
-  } 
+  }
 
   public static void watchObject(String cacheName,ProjectCache projectCache) {
     cacheObjects.put(cacheName, projectCache);
   }
-  
+
   public static void replicateEvictionFromCache(String cacheName, Object key) {
     CacheKeyWrapper cacheKeyWrapper = new CacheKeyWrapper(cacheName, key);
     log.debug("CACHE About to call replicated cache event: {},{}",new Object[] {cacheName,key});
@@ -216,7 +218,7 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
       reloadsPerformed.add(cacheName);
     }
   }
-  
+
   private static boolean applyMethodCallOnCache(String cacheName,Object key,String methodName) {
     boolean result = false;
     Object obj = cacheObjects.get(cacheName);
@@ -240,7 +242,20 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
     if (newEvent != null && newEvent.originator ==  EventWrapper.Originator.CACHE_EVENT) {
       try {
         Class<?> eventClass = Class.forName(newEvent.className);
-        CacheKeyWrapper originalEvent = (CacheKeyWrapper) gson.fromJson(newEvent.event, eventClass);
+        CacheKeyWrapper originalEvent = null;
+
+        try {
+          originalEvent = (CacheKeyWrapper) gson.fromJson(newEvent.event, eventClass);
+        } catch (JsonSyntaxException je) {
+          log.error("PR Could not decode json event {}", newEvent.toString(), je);
+          return result;
+        }
+
+        if (originalEvent == null) {
+          log.error("fromJson method returned null for {}", newEvent.toString());
+          return result;
+        }
+
         originalEvent.rebuildOriginal();
         log.debug("RE Original event: {}",originalEvent.toString());
         originalEvent.replicated = true; // not needed, but makes it clear
