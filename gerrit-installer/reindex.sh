@@ -131,7 +131,11 @@ fi
 
 
 bold "Reindexing change $CHANGEID"
-URL="${GERRIT_URL}a/changes/${CHANGEID}/index"
+# Remove all trailing slashes from the end of the gerrit url and handle it in the URL constuuction below
+case $GERRIT_URL in
+  *[!/]*/) GERRIT_URL=${GERRIT_URL%"${GERRIT_URL##*[!/]}"};;
+esac
+URL="${GERRIT_URL}/a/changes/${CHANGEID}/index"
 
 return_code=$(curl --digest -X POST -u "$USERNAME":"$PASSWORD" -s -o /dev/null -w "%{http_code}" "$URL")
 
