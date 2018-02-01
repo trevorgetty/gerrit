@@ -2,7 +2,6 @@ package com.google.gerrit.common;
 
 
 import com.google.common.base.Supplier;
-import com.google.gerrit.common.ReplicatedEventsManager;
 import com.google.gerrit.reviewdb.client.Change;
 import com.google.gerrit.reviewdb.server.ReviewDb;
 import com.google.gerrit.server.events.Event;
@@ -81,10 +80,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritPublishable {
   public static final String INDEX_EVENTS_REPLICATION_THREAD_NAME = "IndexEventsReplicationThread";
-  public static final String INDEX_EVENTS_REINDEX_THREAD_NAME = "ReIndexEventsThread";
   public static final String NODUPLICATES_REINDEX_THREAD_NAME = "ReIndexEventsNoDuplicatesThread";
   public static final String INCOMING_CHANGES_INDEX_THREAD_NAME = "IncomingChangesChangeIndexerThread";
-  public static final Random RANDOM = new Random();
 
 
   private static final Logger log = LoggerFactory.getLogger(ReplicatedIndexEventManager.class);
@@ -195,7 +192,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
    * @param projectName
    */
   public static void queueReplicationIndexDeletionEvent(int indexNumber, String projectName) {
-    queueReplicationIndexEvent(indexNumber, projectName, new Timestamp(0), true);
+    queueReplicationIndexEvent(indexNumber, projectName, new Timestamp(System.currentTimeMillis()), true);
   }
 
   /**
@@ -283,7 +280,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
             break;
           }
           if (sentEvents == 0 && workedChanges <= 0) {
-            Thread.sleep(1000); // if we are not doing anything, then we should not clog the CPU
+            Thread.sleep(replicatorInstance.maxSecsToWaitOnPollAndRead); // if we are not doing anything, then we should not clog the CPU
           }
         }
       } catch (InterruptedException e) {
@@ -617,18 +614,18 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
           IndexToReplicateComparable indexToReplicate = mapOfChanges.get(changeOnDb.getId());
           int landedIndexTimeZoneOffset = indexToReplicate.timeZoneRawOffset;
           log.debug("landedIndexTimeZoneOffset={}",landedIndexTimeZoneOffset);
+          log.debug("indexToReplicate.lastUpdatedOn.getTime() = {}", indexToReplicate.lastUpdatedOn.getTime());
 
-          boolean changeIndexedMoreThanOneHourAgo =
-              (System.currentTimeMillis()-thisNodeTimeZoneOffset
-              - (indexToReplicate.lastUpdatedOn.getTime()-landedIndexTimeZoneOffset)) > 3600*1000;
+          boolean changeIndexedMoreThanXMinutesAgo = changeIndexedLastTime(thisNodeTimeZoneOffset, indexToReplicate, landedIndexTimeZoneOffset);
+          log.debug("changeOnDb.getLastUpdatedOn().getTime() = {}", changeOnDb.getLastUpdatedOn().getTime());
 
           Timestamp normalisedChangeTimestamp = new Timestamp(changeOnDb.getLastUpdatedOn().getTime()-thisNodeTimeZoneOffset);
           Timestamp normalisedIndexToReplicate = new Timestamp(indexToReplicate.lastUpdatedOn.getTime()-landedIndexTimeZoneOffset);
 
-          log.debug("Comparing {} to {}. MoreThan is {}",normalisedChangeTimestamp,normalisedIndexToReplicate,changeIndexedMoreThanOneHourAgo);
+          log.debug("Comparing {} to {}. MoreThan is {}",normalisedChangeTimestamp,normalisedIndexToReplicate,changeIndexedMoreThanXMinutesAgo);
           // reindex the change if it's more than an hour it's been in the queue, or if the timestamp on the database is newer than
           // the one in the change itself
-          if (normalisedChangeTimestamp.before(normalisedIndexToReplicate) && !changeIndexedMoreThanOneHourAgo) {
+          if (normalisedChangeTimestamp.before(normalisedIndexToReplicate) && !changeIndexedMoreThanXMinutesAgo) {
             instance.incomingChangeEventsToIndex.add(indexToReplicate);
             log.info("Change {} pushed back in the queue [db={}, index={}]",indexToReplicate.indexNumber,changeOnDb.getLastUpdatedOn(),indexToReplicate.lastUpdatedOn);
           } else {
@@ -637,7 +634,8 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
               log.debug("RC Change {} INDEXED!",changeOnDb.getChangeId());
               totalDone++;
               persister.deleteFileFor(indexToReplicate);
-              mapOfChanges.remove(changeOnDb.getChangeId());
+              log.debug("changeOnDb.getId() = {} removed from mapOfChanges", changeOnDb.getId());
+              mapOfChanges.remove(changeOnDb.getId());
             } catch(Exception e) { // could be org.eclipse.jgit.errors.MissingObjectException
               log.warn(String.format("Got '%s' while trying to reindex change. Requeuing",e.getMessage()),e);
               instance.incomingChangeEventsToIndex.add(indexToReplicate);
@@ -661,6 +659,22 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
         db.close();
       }
     }
+  }
+
+  /**
+   * Calculates the time when the change was last indexed and works
+   * out whether it has been over the amount of minutes specified by the
+   * value provided in the configurable (gerrit.minutes.since.last.index.check.period)
+   * @param thisNodeTimeZoneOffset
+   * @param indexToReplicate
+   * @param landedIndexTimeZoneOffset
+   * @return
+   */
+  public boolean changeIndexedLastTime(long thisNodeTimeZoneOffset,
+                                         IndexToReplicate indexToReplicate, long landedIndexTimeZoneOffset ){
+    return (System.currentTimeMillis()-thisNodeTimeZoneOffset
+        - (indexToReplicate.lastUpdatedOn.getTime()-landedIndexTimeZoneOffset)) >
+        replicatorInstance.getMinutesSinceChangeLastIndexedCheckPeriod();
   }
 
   /**
@@ -1154,7 +1168,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
           // The collection (queue) of changes is effective only if many of them are collected for uiniqueness.
           // So it's worth waiting in the loop to make them build up in the queue, to avoid sending duplicates around
           // If we send them right away we don't know if we are sending around duplicates.
-          Thread.sleep(20*1000);
+          Thread.sleep(replicatorInstance.getReplicatedIndexUniqueChangesQueueWaitTime());
         } catch (InterruptedException ex) {
           break;
         } catch(Exception e) {
