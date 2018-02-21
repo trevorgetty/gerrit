@@ -127,7 +127,7 @@ public class Replicator implements Runnable {
 
   private FileOutputStream lastWriter = null;
   private String lastProjectName = null;
-  private int writtenMessagesCount = 0;
+  private int writtenMessageCount = 0;
   private File lastWriterFile = null;
   private long lastWriteTime;
   private boolean finished = false;
@@ -293,11 +293,7 @@ public class Replicator implements Runnable {
 
     log.info("RE ReplicateEvents thread is started.");
     logMe("RE ReplicateEvents thread is started.", null);
-    try {
-      createOutgoingEventsDir();
-    } catch (FileNotFoundException e) {
-      e.printStackTrace();
-    }
+
     // we need to make this thread never fail, otherwise we'll lose events.
     while (!finished) {
       try {
@@ -423,26 +419,12 @@ public class Replicator implements Runnable {
     EventWrapper newEvent;
     while ((newEvent = queue.poll()) != null) {
       try {
-        if(lastWriteTime != 0 && writtenMessagesCount >= 1 && waitBeforeProposingExpired()) {
-          //sync events (if any) that have been written to file so far
-          setFileReady();
-          eventGot = false;
-        } else {
-          //append the event to the current file
           eventGot = appendToFile(newEvent);
-        }
       } catch (IOException e) {
         log.error("RE Cannot create buffer file for events queueing!",e);
       }
     }
-    // Events have been appended to file so prepare
-    // the file to be picked up by the replicator
     setFileReady();
-
-    //If we have processed the events in the queue and set the file ready to be sent then
-    //this value can be reset
-    writtenMessagesCount=0;
-
     return eventGot;
   }
 
@@ -465,8 +447,8 @@ public class Replicator implements Runnable {
     if (lastWriter != null) {
       if (lastProjectName != null && !lastProjectName.equals(originalEvent.projectName)) {
         //If the project is different, set a new current-events.json file and set the file ready
-        setCurrentEventsFile();
         setFileReady();
+        setCurrentEventsFile();
       }
       //If the project is the same, write the file
       final String msg = gson.toJson(originalEvent)+'\n';
@@ -478,14 +460,11 @@ public class Replicator implements Runnable {
       Stats.totalPublishedLocalGoodEvents++;
       Stats.totalPublishedLocalEventsByType.add(originalEvent.originator);
 
-      //Guard against writing more events to file than maxNumberOfEventsBeforeProposing allows
       writeEventsToFile(originalEvent, bytes);
       result = true;
-      if(writtenMessagesCount >= maxNumberOfEventsBeforeProposing) {
-        //if the writtenMessagesCount exceeds the maximum, set the file ready.
-        //result will be false at this point
+
+      if(waitBeforeProposingExpired() || exceedsMaxEventsBeforeProposing())
         setFileReady();
-      }
 
     } else {
       throw new IOException("Internal error, null writer when attempting to append to file");
@@ -504,20 +483,28 @@ public class Replicator implements Runnable {
   }
 
   /**
+   * If the number of writtenMessageCount exceeds max (default is 30)
+   * then return true
+   * @return
+   */
+  public boolean exceedsMaxEventsBeforeProposing(){
+    return writtenMessageCount >= maxNumberOfEventsBeforeProposing;
+  }
+
+  /**
    * Set the file ready by syncing with the filesystem and renaming
    */
   private void setFileReady() {
-
-    //Nothing to do in this method when there are no events in the file
-    if(writtenMessagesCount == 0){
+    if(writtenMessageCount == 0){
       log.debug("RE No events to send. Waiting...");
       return;
     }
 
+    log.debug("RE Closing file and renaming to be picked up");
     try {
       lastWriter.close();
     } catch (IOException ex) {
-      log.warn("RE unable to close the file to send", ex);
+      log.warn("RE unable to close the file to send",ex);
     }
 
     if (syncFiles) {
@@ -541,7 +528,7 @@ public class Replicator implements Runnable {
     if(lastWriter != null) {
       lastWriter.write(bytes);
       lastWriteTime = System.currentTimeMillis();
-      writtenMessagesCount++;
+      writtenMessageCount++;
       //Set projectName upon writing the file
       lastProjectName = originalEvent.projectName;
     }
@@ -553,11 +540,16 @@ public class Replicator implements Runnable {
    * @throws FileNotFoundException
    */
   private void setCurrentEventsFile() throws FileNotFoundException {
-    if (outgoingReplEventsDirectory.exists() && outgoingReplEventsDirectory.isDirectory()) {
-      lastWriterFile = new File(outgoingReplEventsDirectory,CURRENT_EVENTS_FILE);
-      lastWriter = new FileOutputStream(lastWriterFile,true);
-    } else {
-      throw new FileNotFoundException("Outgoing replicated events directory not found");
+    if(lastWriter == null) {
+      createOutgoingEventsDir();
+      if (outgoingReplEventsDirectory.exists() && outgoingReplEventsDirectory.isDirectory()) {
+        lastWriterFile = new File(outgoingReplEventsDirectory, CURRENT_EVENTS_FILE);
+        lastWriter = new FileOutputStream(lastWriterFile, true);
+        lastProjectName = null;
+        writtenMessageCount = 0;
+      } else {
+        throw new FileNotFoundException("Outgoing replicated events directory not found");
+      }
     }
   }
 
@@ -578,7 +570,7 @@ public class Replicator implements Runnable {
 
   /**
    * Rename the current-events.json file to a unique filename
-   * Resetting the lastWriter and count of the writtenMessagesCount
+   * Resetting the lastWriter and count of the writtenMessageCount
    */
   private void renameAndReset(){
     File newFile = getNewFile();
@@ -593,7 +585,7 @@ public class Replicator implements Runnable {
     lastWriter = null;
     lastWriterFile = null;
     lastWriteTime = 0;
-    writtenMessagesCount = 0;
+    writtenMessageCount = 0;
     lastProjectName = null;
     Stats.totalPublishedLocalEventsProsals++;
   }
