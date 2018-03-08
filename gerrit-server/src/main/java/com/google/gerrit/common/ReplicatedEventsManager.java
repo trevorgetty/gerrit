@@ -214,6 +214,7 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
     }
   };
 
+
   private void offer(final Event event) {
     synchronized (replicationLock) {
       if (!queue.offer(event)) {
@@ -277,6 +278,7 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
     Event newEvent;
     newEvent = queue.poll(maxSecsToWaitForEventOnQueue, TimeUnit.MILLISECONDS);
     if (newEvent != null && !newEvent.replicated) {
+      newEvent.setNodeIdentity(replicatorInstance.getThisNodeIdentity());
       replicatorInstance.queueEventForReplication(new EventWrapper(newEvent,getChangeEventInfo(newEvent),distinctEventPrefix));
       eventGot = true;
     }
@@ -305,6 +307,7 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
 
         log.debug("RE Original event: {}",originalEvent.toString());
         originalEvent.replicated = true;
+        originalEvent.setNodeIdentity(replicatorInstance.getThisNodeIdentity());
 
         if (replicatedEventsReplicateOriginalEvents) {
           if(!publishIncomingReplicatedEvents(originalEvent)) {
@@ -435,6 +438,7 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
     try {
       Constructor<? extends Event> constructor = actualClass.getConstructor(actualClass, String.class, boolean.class);
       result = constructor.newInstance(changeEvent,prefix+changeEvent.getType(),true);
+      result.setNodeIdentity(replicatorInstance.getThisNodeIdentity());
     } catch (RuntimeException | NoSuchMethodException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
       ClassNotFoundException c = new ClassNotFoundException("Error while creating distinct event",e);
       log.error("RE Could not rebuild distinct event",c);

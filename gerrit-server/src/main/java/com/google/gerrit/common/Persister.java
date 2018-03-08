@@ -45,6 +45,9 @@ public class Persister<T extends Persistable> {
   public static final String LAST_PART = ".json";
   public static final String TMP_PART = ".tmp";
 
+  public static final String PERSIST_FILE="persisted-%s-%s-%02d.json";
+  public static String persistEventsFileName="";
+
   public Persister(File baseDir) throws IOException {
     this.baseDir = baseDir;
 
@@ -133,7 +136,11 @@ public class Persister<T extends Persistable> {
     try (FileOutputStream writer = new FileOutputStream(tempFile,true)) {
       writer.write(msg.getBytes(StandardCharsets.UTF_8));
     }
-    File persistFile = new File(baseDir,tempFile.getName().replaceAll(TMP_PART, LAST_PART));
+
+    String [] jsonData = Replicator.ParseEventJson.jsonEventParse(msg);
+    persistEventsFileName = String.format(PERSIST_FILE, jsonData[0], jsonData[1], 0);
+    File persistFile = new File(baseDir, persistEventsFileName);
+
     boolean done = tempFile.renameTo(persistFile);
     if (done) {
       obj.setPersistFile(persistFile);

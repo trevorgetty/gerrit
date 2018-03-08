@@ -14,6 +14,16 @@ java_library(
   visibility = ['PUBLIC'],
 )
 
+java_library(
+  name = 'common',
+  srcs = SRCS,
+  resources = RESOURCES,
+  deps = [
+    '//lib/log:json-smart',
+  ],
+  visibility = ['PUBLIC'],
+)
+
 # TODO(sop) break up gerrit-server java_library(), its too big
 java_library(
   name = 'server',
@@ -48,6 +58,7 @@ java_library(
     '//lib:protobuf',
     '//lib:tukaani-xz',
     '//lib:velocity',
+    "//lib/log:json-smart",
     '//lib/antlr:java_runtime',
     '//lib/auto:auto-value',
     '//lib/commons:codec',

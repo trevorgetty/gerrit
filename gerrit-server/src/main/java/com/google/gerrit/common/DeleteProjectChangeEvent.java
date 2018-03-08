@@ -17,15 +17,19 @@ import java.util.List;
     public boolean preserve;
     public int changes[];
     public String taskUuid;
+    public long eventTimestamp;
+    public String nodeIdentity;
     public transient boolean replicated = false;
 
     public DeleteProjectChangeEvent() {
     }
 
-    public DeleteProjectChangeEvent(Project project, boolean preserve, List<Change.Id> changesToBeDeleted, String taskUuid) {
+    public DeleteProjectChangeEvent(Project project, boolean preserve, List<Change.Id> changesToBeDeleted, String taskUuid, String nodeIdentity) {
       this.project = project;
       this.preserve = preserve;
       this.taskUuid = taskUuid;
+      this.eventTimestamp = System.currentTimeMillis();
+      this.nodeIdentity = nodeIdentity;
       changes = new int[changesToBeDeleted.size()];
       int index = 0;
       for (Iterator<Id> iterator = changesToBeDeleted.iterator(); iterator.hasNext();) {
@@ -33,11 +37,20 @@ import java.util.List;
       }
     }
 
-    @Override
-    public String toString() {
-      return "DeleteProjectChangeEvent [project=" + project + ", preserve="
-          + preserve + ", changes=" + Arrays.toString(changes) + ", taskUuid="
-          + taskUuid + "]";
+    public void setNodeIdentity(String nodeIdentity) {
+      this.nodeIdentity = nodeIdentity;
     }
 
-}
+    @Override
+    public String toString() {
+      return "DeleteProjectChangeEvent{" +
+          "project=" + project +
+          ", preserve=" + preserve +
+          ", changes=" + Arrays.toString(changes) +
+          ", taskUuid='" + taskUuid + '\'' +
+          ", eventTimestamp=" + eventTimestamp +
+          ", nodeIdentity='" + nodeIdentity + '\'' +
+          ", replicated=" + replicated +
+          '}';
+    }
+  }

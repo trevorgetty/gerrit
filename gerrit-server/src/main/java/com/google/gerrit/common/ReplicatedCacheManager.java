@@ -178,7 +178,7 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
   }
 
   public static void replicateEvictionFromCache(String cacheName, Object key) {
-    CacheKeyWrapper cacheKeyWrapper = new CacheKeyWrapper(cacheName, key);
+    CacheKeyWrapper cacheKeyWrapper = new CacheKeyWrapper(cacheName, key, Replicator.getInstance().getThisNodeIdentity());
     log.debug("CACHE About to call replicated cache event: {},{}",new Object[] {cacheName,key});
     Replicator.getInstance().queueEventForReplication(new EventWrapper(cacheKeyWrapper));
     evictionsSent.add(cacheName);
@@ -259,6 +259,8 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
         originalEvent.rebuildOriginal();
         log.debug("RE Original event: {}",originalEvent.toString());
         originalEvent.replicated = true; // not needed, but makes it clear
+        originalEvent.setNodeIdentity(Replicator.getInstance().getThisNodeIdentity());
+
         if (originalEvent instanceof CacheObjectCallWrapper) {
           CacheObjectCallWrapper originalObj = (CacheObjectCallWrapper) originalEvent;
           result = applyMethodCallOnCache(originalObj.cacheName,originalObj.key,originalObj.methodName);

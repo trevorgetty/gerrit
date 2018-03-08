@@ -41,13 +41,14 @@ public class ReplicatedProjectManager implements Replicator.GerritPublishable {
   }
 
   public static void replicateProjectDeletion(String projectName, boolean preserve, String taskUuid) {
-    ProjectInfoWrapper projectInfoWrapper = new ProjectInfoWrapper(projectName, preserve, taskUuid);
+    ProjectInfoWrapper projectInfoWrapper = new ProjectInfoWrapper(projectName, preserve, taskUuid, Replicator.getInstance().getThisNodeIdentity());
     log.info("PROJECT About to call replicated project deletion event: {},{},{}",new Object[] {projectName, preserve, taskUuid});
     Replicator.getInstance().queueEventForReplication(new EventWrapper(projectInfoWrapper));
   }
 
   public static void replicateProjectChangeDeletion(Project project, boolean preserve, List<Change.Id> changesToBeDeleted, String taskUuid) {
-    DeleteProjectChangeEvent deleteProjectChangeEvent = new DeleteProjectChangeEvent(project, preserve, changesToBeDeleted, taskUuid);
+    DeleteProjectChangeEvent deleteProjectChangeEvent =
+        new DeleteProjectChangeEvent(project, preserve, changesToBeDeleted, taskUuid, Replicator.getInstance().getThisNodeIdentity());
     log.info("PROJECT About to call replicated project change deletion event: {},{},{}",new Object[] {project.getName(), preserve, changesToBeDeleted, taskUuid});
     Replicator.getInstance().queueEventForReplication(new EventWrapper(deleteProjectChangeEvent));
   }
@@ -109,6 +110,7 @@ public class ReplicatedProjectManager implements Replicator.GerritPublishable {
 
     log.info("RE Original event: {}",originalEvent.toString());
     originalEvent.replicated = true; // not needed, but makes it clear
+    originalEvent.setNodeIdentity(Replicator.getInstance().getThisNodeIdentity());
     result = applyActionsForDeletingProject(originalEvent);
     if (result && !originalEvent.preserve) {
       // If the request was to remove the repository from the disk, then we do that only after all the nodes have replied
@@ -147,6 +149,7 @@ public class ReplicatedProjectManager implements Replicator.GerritPublishable {
 
     log.info("RE Original event: {}",originalEvent.toString());
     originalEvent.replicated = true; // not needed, but makes it clear
+    originalEvent.setNodeIdentity(Replicator.getInstance().getThisNodeIdentity());
     applyActionsForDeletingProjectChanges(originalEvent);
   }
 

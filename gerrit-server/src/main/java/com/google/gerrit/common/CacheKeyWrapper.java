@@ -13,20 +13,35 @@ public class CacheKeyWrapper {
   public Object key;
   public String keyClassName;
   public String keyValue;
+  public long eventTimestamp;
+  public String nodeIdentity;
   public transient boolean replicated = false;
   protected static final Gson gson = new Gson();
 
-  public CacheKeyWrapper(String cacheName, Object key) {
+  public CacheKeyWrapper(String cacheName, Object key, String nodeIdentity) {
     this.cacheName = cacheName;
     this.key = key;
     this.keyClassName = key.getClass().getName();
     this.keyValue = gson.toJson(key);
+    this.eventTimestamp = System.currentTimeMillis();
+    this.nodeIdentity = nodeIdentity;
   }
 
   @Override
   public String toString() {
-    return "CacheKeyWrapper{" + "cacheName=" + cacheName + ", key=" + key + ", keyClassName=" + keyClassName + ", keyValue="
-        + keyValue + ", replicated=" + replicated + '}';
+    return "CacheKeyWrapper{" +
+        "cacheName='" + cacheName + '\'' +
+        ", key=" + key +
+        ", keyClassName='" + keyClassName + '\'' +
+        ", keyValue='" + keyValue + '\'' +
+        ", eventTimestamp=" + eventTimestamp +
+        ", nodeIdentity='" + nodeIdentity + '\'' +
+        ", replicated=" + replicated +
+        '}';
+  }
+
+  public void setNodeIdentity(String nodeIdentity) {
+    this.nodeIdentity = nodeIdentity;
   }
 
   void rebuildOriginal() throws ClassNotFoundException {

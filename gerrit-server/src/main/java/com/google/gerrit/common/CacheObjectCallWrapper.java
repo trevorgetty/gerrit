@@ -10,7 +10,7 @@ public class CacheObjectCallWrapper extends CacheKeyWrapper {
   public String methodName;
 
   public CacheObjectCallWrapper(String cacheName, String method, Object key) {
-    super(cacheName,key);
+    super(cacheName,key, Replicator.getInstance().getThisNodeIdentity());
     this.methodName = method;
   }
 

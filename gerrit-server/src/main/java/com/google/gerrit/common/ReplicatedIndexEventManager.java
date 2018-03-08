@@ -543,7 +543,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
       while (!instance.finished) {
         try {
           synchronized(instance.indexEventsAreReady) {
-            instance.indexEventsAreReady.wait(60*1000); // events can be re-queued, so it is worth rechecking every now and then
+            instance.indexEventsAreReady.wait(replicatorInstance.getMaxWaitForIndexEvents()); // events can be re-queued, so it is worth rechecking every now and then
           }
           NavigableMap<Change.Id,IndexToReplicateComparable> mapOfChanges = new TreeMap<>();
           IndexToReplicateComparable index;
@@ -981,6 +981,8 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
     public static final long STANDARD_REINDEX_DELAY = 30*1000; // 30 seconds
     public final int timeZoneRawOffset;
     public final boolean delete;
+    public long eventTimestamp;
+    public String nodeIdentity;
 
     public IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn) {
       this(indexNumber, projectName, lastUpdatedOn, System.currentTimeMillis(), getRawOffset(System.currentTimeMillis()), false);
@@ -1009,6 +1011,8 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
       this.currentTime = currentTime;
       this.timeZoneRawOffset = rawOffset;
       this.delete = delete;
+      this.eventTimestamp = System.currentTimeMillis();
+      this.nodeIdentity = replicatorInstance.getThisNodeIdentity();
     }
 
     protected static int getRawOffset(final long currentTime) {
@@ -1023,10 +1027,16 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
 
     @Override
     public String toString() {
-      return "IndexToReplicate{" + "indexNumber=" + indexNumber + ", projectName="
-              + projectName + ", lastUpdatedOn=" + lastUpdatedOn + ", currentTime="
-              + currentTime + ", timeZoneRawOffset=" + timeZoneRawOffset + ", delete="
-              + delete + '}';
+      return "IndexToReplicate{" +
+          "indexNumber=" + indexNumber +
+          ", projectName='" + projectName + '\'' +
+          ", lastUpdatedOn=" + lastUpdatedOn +
+          ", currentTime=" + currentTime +
+          ", timeZoneRawOffset=" + timeZoneRawOffset +
+          ", delete=" + delete +
+          ", eventTimestamp=" + eventTimestamp +
+          ", nodeIdentity='" + nodeIdentity + '\'' +
+          '}';
     }
 
     @Override

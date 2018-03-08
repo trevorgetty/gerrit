@@ -38,6 +38,10 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
 
+import net.minidev.json.JSONObject;
+import net.minidev.json.parser.JSONParser;
+import net.minidev.json.parser.ParseException;
+
 import org.eclipse.jgit.errors.ConfigInvalidException;
 import org.eclipse.jgit.lib.Config;
 import org.eclipse.jgit.storage.file.FileBasedConfig;
@@ -69,7 +73,7 @@ public class Replicator implements Runnable {
   public static final String GERRIT_MAX_SECS_TO_WAIT_ON_POLL_AND_READ = "gerrit.max.secs.to.wait.on.poll.and.read";
   public static final String GERRIT_REPLICATED_INDEX_UNIQUE_CHANGES_QUEUE_WAIT_TIME = "gerrit.replicated.index.unique.changes.queue.wait.time";
   public static final String GERRIT_MINUTES_SINCE_CHANGE_LAST_INDEXED_CHECK_PERIOD = "gerrit.minutes.since.change.last.indexed.check.period";
-
+  public static final String GERRIT_MAX_MS_WAIT_FOR_INDEX_EVENTS = "gerrit.max.ms.wait.for.index.events";
   public static final String ENC = "UTF-8"; // From BaseCommand
 
   // as shown by statistics this means less than 2K gzipped proposals
@@ -80,12 +84,14 @@ public class Replicator implements Runnable {
   public static final String DEFAULT_MAX_SECS_TO_WAIT_ON_POLL_AND_READ = "1";
   public static final String DEFAULT_REPLICATED_INDEX_UNIQUE_CHANGES_QUEUE_WAIT_TIME = "20";
   public static final String DEFAULT_MINUTES_SINCE_CHANGE_LAST_INDEXED_CHECK_PERIOD = "60";
+  public static final String DEFAULT_MAX_MS_WAIT_FOR_INDEX_EVENTS = "60";
 
   public static final String CURRENT_EVENTS_FILE = "current-events.json";
-  public static final String TIME_PH = "%TIME%";
-  public static final String NEXT_EVENTS_FILE = "events-"+TIME_PH+"-new.json";
+  public static final String NEXT_EVENTS_FILE = "events-%s-%s-%02d.json";
+  public static String eventsFileName = "";
+
   public static final String GERRIT_REPLICATION_THREAD_NAME = "ReplicatorStreamReplication";
-  public static final String DEFAULT_MS_APPLICATION_PROPERTIES="/opt/wandisco/git-multisite/replicator/properties/";
+  public static final String DEFAULT_MS_APPLICATION_PROPERTIES = "/opt/wandisco/git-multisite/replicator/properties/";
   public static final String REPLICATED_EVENTS_DIRECTORY_NAME = "replicated_events";
   public static final String DEFAULT_BASE_DIR = System.getProperty("java.io.tmpdir");
   public static final String OUTGOING_DIR = "outgoing";
@@ -100,6 +106,7 @@ public class Replicator implements Runnable {
   private static File incomingPersistedReplEventsDirectory = null;
   private static File indexingEventsDirectory = null;
 
+  private static String thisNodeIdentity = null;
   // as shown by statistics this means less than 2K gzipped proposals
   private static int maxNumberOfEventsBeforeProposing;
 
@@ -108,13 +115,14 @@ public class Replicator implements Runnable {
   public static long maxSecsToWaitOnPollAndRead;
   public static long replicatedIndexUniqueChangesQueueWaitTime;
   public static long minutesSinceChangeLastIndexedCheckPeriod;
+  public static long maxWaitForIndexEvents;
 
   private static final ArrayList<String> cacheNamesNotToReload = new ArrayList<>();
   private static final IncomingEventsToReplicateFileFilter incomingEventsToReplicateFileFilter = new IncomingEventsToReplicateFileFilter();
   private static boolean incomingEventsAreGZipped = false; // on the landing node the text maybe already unzipped by the replicator
   private static Thread eventReaderAndPublisherThread = null;
   private static File internalLogFile = null; // used for debug
-  private static boolean syncFiles=false;
+  private static boolean syncFiles = false;
   private static String defaultBaseDir;
   private static volatile Replicator instance = null;
   private static final Gson gson = new GsonBuilder()
@@ -133,7 +141,7 @@ public class Replicator implements Runnable {
   private boolean finished = false;
 
   //Statistics used by ShowReplicatorStats
-  public static class Stats{
+  public static class Stats {
     private static long totalPublishedForeignEventsProsals = 0;
     private static long totalPublishedForeignEvents = 0;
     private static long totalPublishedForeignGoodEvents = 0;
@@ -157,7 +165,7 @@ public class Replicator implements Runnable {
 
 
   public interface GerritPublishable {
-     boolean publishIncomingReplicatedEvents(EventWrapper newEvent);
+      boolean publishIncomingReplicatedEvents(EventWrapper newEvent);
   }
 
   private final static Map<EventWrapper.Originator,Set<GerritPublishable>> eventListeners = new HashMap<>();
@@ -178,14 +186,14 @@ public class Replicator implements Runnable {
       internalLogFile = new File(new File(DEFAULT_BASE_DIR),"replEvents.log"); // used for debug
     }
     if (instance == null) {
-      synchronized(gson) {
+      synchronized (gson) {
         if (instance == null) {
           boolean configOk = readConfiguration();
           log.info("RE Configuration read: ok? {}",configOk);
           replicatedEventsBaseDirectory = new File(defaultBaseDir);
           outgoingReplEventsDirectory = new File(replicatedEventsBaseDirectory,OUTGOING_DIR);
           incomingReplEventsDirectory = new File(replicatedEventsBaseDirectory,INCOMING_DIR);
-          indexingEventsDirectory =     new File(replicatedEventsBaseDirectory,INDEXING_DIR);
+          indexingEventsDirectory = new File(replicatedEventsBaseDirectory,INDEXING_DIR);
           incomingPersistedReplEventsDirectory = new File(replicatedEventsBaseDirectory,INCOMING_PERSISTED_DIR);
 
           if (eventReaderAndPublisherThread == null) {
@@ -196,7 +204,7 @@ public class Replicator implements Runnable {
             eventReaderAndPublisherThread.start();
           } else {
             log.error("RE Thread {} is already running!",GERRIT_REPLICATION_THREAD_NAME);
-            logMe("Thread "+GERRIT_REPLICATION_THREAD_NAME+" is already running!",null);
+            logMe("Thread " + GERRIT_REPLICATION_THREAD_NAME + " is already running!",null);
           }
         }
       }
@@ -216,8 +224,8 @@ public class Replicator implements Runnable {
     eventReaderAndPublisherThread = null;
   }
 
-  public static void subscribeEvent(EventWrapper.Originator eventType,GerritPublishable toCall) {
-    synchronized(eventListeners) {
+  public static void subscribeEvent(EventWrapper.Originator eventType, GerritPublishable toCall) {
+    synchronized (eventListeners) {
       Set<GerritPublishable> set = eventListeners.get(eventType);
       if (set == null) {
         set = new HashSet<>();
@@ -228,8 +236,8 @@ public class Replicator implements Runnable {
     }
   }
 
-  public static void unsubscribeEvent(EventWrapper.Originator eventType,GerritPublishable toCall) {
-    synchronized(eventListeners) {
+  public static void unsubscribeEvent(EventWrapper.Originator eventType, GerritPublishable toCall) {
+    synchronized (eventListeners) {
       Set<GerritPublishable> set = eventListeners.get(eventType);
       if (set != null) {
         set.remove(toCall);
@@ -250,6 +258,7 @@ public class Replicator implements Runnable {
    * This functions is just to log something when the Gerrit logger is not yet available
    * and you need to know if it's working. To be used for debugging purposes.
    * Gerrit will not log anything until the log system will be initialized.
+   *
    * @param msg
    * @param t
    */
@@ -258,7 +267,7 @@ public class Replicator implements Runnable {
       return;
     }
     if (!outgoingReplEventsDirectory.exists() && !outgoingReplEventsDirectory.mkdirs()) {
-      System.err.println("Cannot create directory for internal logging: "+outgoingReplEventsDirectory);
+      System.err.println("Cannot create directory for internal logging: " + outgoingReplEventsDirectory);
     }
     try (PrintWriter p = new PrintWriter(new FileWriter(internalLogFile, true))) {
       p.println(new Date().toString());
@@ -277,7 +286,6 @@ public class Replicator implements Runnable {
    * When enough (customizable) time has passed or when enough (customizable)
    * events have been saved to a file, this will be renamed with a pattern
    * that will be taken care of by the GitMS replicator, and then deleted.
-   *
    * After this or while this happens, the thread will also look for files
    * coming from the replicator, which need to be read and published as they
    * are incoming events.
@@ -308,18 +316,18 @@ public class Replicator implements Runnable {
           }
         }
       } catch (InterruptedException e) {
-        log.info("RE Exiting",e);
+        log.info("RE Exiting", e);
         finished = true;
-      } catch(RuntimeException e) {
-        log.error("RE Unexpected exception",e);
-        logMe("Unexpected exception",e);
-      } catch(Exception e) {
-        log.error("RE Unexpected exception",e);
-        logMe("Unexpected exception",e);
+      } catch (RuntimeException e) {
+        log.error("RE Unexpected exception", e);
+        logMe("Unexpected exception", e);
+      } catch (Exception e) {
+        log.error("RE Unexpected exception", e);
+        logMe("Unexpected exception", e);
       }
     }
     log.error("RE Thread finished");
-    logMe("Thread finished",null);
+    logMe("Thread finished", null);
     clearThread();
     finished = true;
   }
@@ -419,9 +427,9 @@ public class Replicator implements Runnable {
     EventWrapper newEvent;
     while ((newEvent = queue.poll()) != null) {
       try {
-          eventGot = appendToFile(newEvent);
+        eventGot = appendToFile(newEvent);
       } catch (IOException e) {
-        log.error("RE Cannot create buffer file for events queueing!",e);
+        log.error("RE Cannot create buffer file for events queueing!", e);
       }
     }
     setFileReady();
@@ -451,10 +459,10 @@ public class Replicator implements Runnable {
         setCurrentEventsFile();
       }
       //If the project is the same, write the file
-      final String msg = gson.toJson(originalEvent)+'\n';
+      final String msg = gson.toJson(originalEvent) + '\n';
       byte[] bytes = msg.getBytes(ENC);
 
-      log.debug("RE Last json to be sent: {}",msg);
+      log.debug("RE Last json to be sent: {}", msg);
       Stats.totalPublishedLocalEventsBytes += bytes.length;
       Stats.totalPublishedLocalGoodEventsBytes += bytes.length;
       Stats.totalPublishedLocalGoodEvents++;
@@ -463,7 +471,7 @@ public class Replicator implements Runnable {
       writeEventsToFile(originalEvent, bytes);
       result = true;
 
-      if(waitBeforeProposingExpired() || exceedsMaxEventsBeforeProposing())
+      if (waitBeforeProposingExpired() || exceedsMaxEventsBeforeProposing())
         setFileReady();
 
     } else {
@@ -475,9 +483,10 @@ public class Replicator implements Runnable {
   /**
    * The time of the last write to the current-events.json. If the time since the last write
    * is greater than maxSecsToWaitBeforeProposingEvents then return true
+   *
    * @return
    */
-  public boolean waitBeforeProposingExpired(){
+  public boolean waitBeforeProposingExpired() {
     long periodOfNoWrites = System.currentTimeMillis() - lastWriteTime;
     return (periodOfNoWrites >= maxSecsToWaitBeforeProposingEvents);
   }
@@ -485,9 +494,10 @@ public class Replicator implements Runnable {
   /**
    * If the number of writtenMessageCount exceeds max (default is 30)
    * then return true
+   *
    * @return
    */
-  public boolean exceedsMaxEventsBeforeProposing(){
+  public boolean exceedsMaxEventsBeforeProposing() {
     return writtenMessageCount >= maxNumberOfEventsBeforeProposing;
   }
 
@@ -495,7 +505,7 @@ public class Replicator implements Runnable {
    * Set the file ready by syncing with the filesystem and renaming
    */
   private void setFileReady() {
-    if(writtenMessageCount == 0){
+    if (writtenMessageCount == 0) {
       log.debug("RE No events to send. Waiting...");
       return;
     }
@@ -504,7 +514,7 @@ public class Replicator implements Runnable {
     try {
       lastWriter.close();
     } catch (IOException ex) {
-      log.warn("RE unable to close the file to send",ex);
+      log.warn("RE unable to close the file to send", ex);
     }
 
     if (syncFiles) {
@@ -520,20 +530,56 @@ public class Replicator implements Runnable {
   /**
    * write the current-events.json file, increase the written messages count and the lastWrite time
    * lastWriteTime only set here as it is the only method doing the writing.
+   *
    * @param originalEvent
    * @param bytes
    * @throws IOException
    */
-  private void writeEventsToFile(final EventWrapper originalEvent, byte [] bytes) throws IOException {
-    if(lastWriter != null) {
+  private void writeEventsToFile(final EventWrapper originalEvent, byte[] bytes) throws IOException {
+    if (lastWriter != null) {
       lastWriter.write(bytes);
       lastWriteTime = System.currentTimeMillis();
       writtenMessageCount++;
       //Set projectName upon writing the file
       lastProjectName = originalEvent.projectName;
+      setEventsFileName(originalEvent);
     }
   }
 
+  /**
+   * Inner class dedicated to parsing json for an event timestamp
+   * and nodeIdentity which will be used for labelling the events file.
+   */
+  static class ParseEventJson {
+    private static final JSONParser parser = new JSONParser();
+    public static String[] jsonEventParse(String eventJson) {
+      String[] jsonData = new String[2];
+      try {
+        JSONObject jsonObject = (JSONObject) parser.parse(eventJson);
+        jsonData[0] = jsonObject.get("eventTimestamp").toString();
+        jsonData[1] = jsonObject.get("nodeIdentity").toString();
+      } catch (ParseException ex) {
+        log.error("Could not parse JSON correctly", ex);
+      }
+      return jsonData;
+    }
+  }
+
+  /**
+   * Parse the timestamp and nodeIdentity from which the event originated
+   * and label the events file them.
+   * @param originalEvent
+   */
+  private void setEventsFileName(final EventWrapper originalEvent){
+    String [] jsonData = ParseEventJson.jsonEventParse(originalEvent.event);
+    if(jsonData[0] != null && jsonData[0].matches("[0-9]+")){
+      eventsFileName = String.format(NEXT_EVENTS_FILE, jsonData[0], jsonData[1], 0);
+    } else {
+      eventsFileName = String.format(NEXT_EVENTS_FILE, System.currentTimeMillis(), getThisNodeIdentity(), 0);
+      log.error("RE Could not parse JSON from events file correctly, " +
+          "events file will be labeled with current system time and this NodeIdentity {}", eventsFileName);
+    }
+  }
 
   /**
    * Based on the project name, if the project is different, create/append a new file
@@ -590,29 +636,34 @@ public class Replicator implements Runnable {
     Stats.totalPublishedLocalEventsProsals++;
   }
 
+  /**
+   * Return a unique events filename that takes the format
+   * events-<milliseconds-since-epoch-timestamp>-<node.identity>-<non-zero-if-not-unique-bit>.json
+   * @return
+   */
+  private File getNewFile(){
 
+    File uniqueFile = new File(outgoingReplEventsDirectory, eventsFileName);
 
-  private File getNewFile()  {
-    String currTime = ""+System.currentTimeMillis();
-    File newFile = new File(outgoingReplEventsDirectory,NEXT_EVENTS_FILE.replaceFirst(TIME_PH, currTime));
-    int i=1;
-    while (newFile.exists() && i < 1000) {
-      newFile = new File(outgoingReplEventsDirectory,NEXT_EVENTS_FILE.replaceFirst(TIME_PH, currTime+"-"+String.format("%03d", i++)));
-    }
-    if (newFile.exists()) {
-      log.error("RE File {} already exists in the directory, please clear the way!",newFile.getAbsolutePath());
-      // Try to rename offending file...
-      boolean renamed = newFile.renameTo(new File(newFile.getParentFile(),"renamed-"+System.currentTimeMillis()));
-      if (!renamed) {
-        log.error("RE Could not rename offending file");
-        currTime+="0";
+    if(!eventsFileName.isEmpty()) {
+      String[] jsonData = eventsFileName.split("-");
+      //If for some reason the file is not set correctly, log an error
+      if(!jsonData[1].matches("[0-9]+")) {
+        log.error("RE, Event filename does not contain a timestamp.");
       }
-      newFile = new File(outgoingReplEventsDirectory,NEXT_EVENTS_FILE.replaceFirst(TIME_PH, currTime));
-      if (newFile.exists() && !newFile.delete()) {
-        log.error("RE incredibly could not delete that existing file {}",newFile.getAbsolutePath());
+      File outgoingEventFile = new File(eventsFileName);
+      //In the unlikely event the file already exists in the dir, increment the 0 bit at the end of the filename.
+      int nonUniqueIdentifier = 0;
+      while (outgoingEventFile.exists()) {
+        log.info("RE, Event file with name {} already exists, incrementing the nonUniqueIdentifier",
+            outgoingEventFile.getAbsolutePath());
+        uniqueFile = new File(outgoingReplEventsDirectory, String.format(NEXT_EVENTS_FILE,
+            jsonData[1], thisNodeIdentity, nonUniqueIdentifier++));
       }
+    } else{
+      log.error("RE Something has gone wrong, Events file name was not set correctly");
     }
-    return newFile;
+    return uniqueFile;
   }
 
   /**
@@ -692,6 +743,10 @@ public class Replicator implements Runnable {
         dest.write(buf, 0, read);
       }
     }
+  }
+
+  public String getThisNodeIdentity(){
+    return thisNodeIdentity;
   }
 
   /**
@@ -848,9 +903,17 @@ public class Replicator implements Runnable {
 
           incomingEventsAreGZipped = Boolean.parseBoolean(props.getProperty(GERRIT_REPLICATED_EVENTS_INCOMING_ARE_GZIPPED,"false"));
 
+          //Getting the node identity that will be used to determine the originating node for each instance.
+          thisNodeIdentity = props.getProperty("node.id");
+
           //Configurable for the maximum amount of events allowed in the outgoing events file before proposing.
           maxNumberOfEventsBeforeProposing = Integer.parseInt(
               cleanLforLong(props.getProperty(GERRIT_MAX_EVENTS_TO_APPEND_BEFORE_PROPOSING,DEFAULT_MAX_EVENTS_PER_FILE)));
+
+          //Configurable for the maximum amount of seconds to wait before proposing events in the outgoing events file.
+          maxWaitForIndexEvents = Long.parseLong(
+              cleanLforLongAndConvertToMilliseconds(props.getProperty(GERRIT_MAX_MS_WAIT_FOR_INDEX_EVENTS,
+                  DEFAULT_MAX_MS_WAIT_FOR_INDEX_EVENTS)));
 
           //Configurable for the maximum amount of seconds to wait before proposing events in the outgoing events file.
           maxSecsToWaitBeforeProposingEvents = Long.parseLong(
@@ -904,6 +967,10 @@ public class Replicator implements Runnable {
    */
   public long getReplicatedIndexUniqueChangesQueueWaitTime(){
     return replicatedIndexUniqueChangesQueueWaitTime;
+  }
+
+  public static long getMaxWaitForIndexEvents() {
+    return maxWaitForIndexEvents;
   }
 
   public static long getMinutesSinceChangeLastIndexedCheckPeriod() {

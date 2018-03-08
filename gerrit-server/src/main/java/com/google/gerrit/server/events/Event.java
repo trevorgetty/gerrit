@@ -19,6 +19,8 @@ import com.google.gerrit.common.TimeUtil;
 public abstract class Event {
   public final String type;
   public long eventCreatedOn = TimeUtil.nowMs() / 1000L;
+  public long eventTimestamp = System.currentTimeMillis();
+  public String nodeIdentity;
 
   /**
    * WANdisco replication for Gerrit with GitMS
@@ -30,6 +32,11 @@ public abstract class Event {
   
   protected Event(String type) {
     this.type = type;
+    this.eventTimestamp = System.currentTimeMillis();
+  }
+
+  public void setNodeIdentity(String nodeIdentity) {
+    this.nodeIdentity = nodeIdentity;
   }
 
   public String getType() {
