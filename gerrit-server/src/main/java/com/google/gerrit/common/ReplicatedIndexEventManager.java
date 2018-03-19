@@ -542,31 +542,41 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
       log.info("Thread for IndexIncomingChangesThread is starting...");
       while (!instance.finished) {
         try {
+          //If a notifyAll is received from the replicator thread then
+          //we will exit the synchronized block.
           synchronized(instance.indexEventsAreReady) {
-            instance.indexEventsAreReady.wait(replicatorInstance.getMaxWaitForIndexEvents()); // events can be re-queued, so it is worth rechecking every now and then
+            instance.indexEventsAreReady.wait(60*1000);
           }
-          NavigableMap<Change.Id,IndexToReplicateComparable> mapOfChanges = new TreeMap<>();
-          IndexToReplicateComparable index;
-          // make the list of changes a set of unique changes based only on the change number
-          while ((index = instance.incomingChangeEventsToIndex.poll()) != null) {
-            IndexToReplicateComparable old = mapOfChanges.put(new Change.Id(index.indexNumber), index);
-            if (old != null) {
-              // if there are many instances for the same changeid, then delete the old ones from persistence
-              instance.persister.deleteFileIfPresentFor(old);
-              log.info("Deleted persisted file for {}",old);
-            }
+          processIndexChangeCollection();
+          // GER-638 : Taking the lock again to hold off the notifyAll in the replicator thread
+          // until we are back in a waiting state. There is potential to lose events if we do not do this.
+          synchronized(instance.indexEventsAreReady) {
+            processIndexChangeCollection();
           }
-          if (mapOfChanges.size() > 0) {
-            instance.indexCollectionOfChanges(mapOfChanges);
-          }
-
-          instance.reindexLocalData();
         } catch(Exception e) {
           log.error("RC Incoming indexing event",e);
         }
 
       }
       log.info("Thread for IndexIncomingChangesThread ended");
+    }
+
+    private void processIndexChangeCollection() {
+      NavigableMap<Change.Id,IndexToReplicateComparable> mapOfChanges = new TreeMap<>();
+      IndexToReplicateComparable index;
+      // make the list of changes a set of unique changes based only on the change number
+      while ((index = instance.incomingChangeEventsToIndex.poll()) != null) {
+        IndexToReplicateComparable old = mapOfChanges.put(new Change.Id(index.indexNumber), index);
+        if (old != null) {
+          // if there are many instances for the same changeid, then delete the old ones from persistence
+          instance.persister.deleteFileIfPresentFor(old);
+          log.info("Deleted persisted file for {}",old);
+        }
+      }
+      if (mapOfChanges.size() > 0) {
+        instance.indexCollectionOfChanges(mapOfChanges);
+      }
+      instance.reindexLocalData();
     }
 
   }
@@ -1175,7 +1185,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
           if (eventsGot > 0) {
             log.debug(String.format("RC Sent %d elements from the queue",eventsGot));
           }
-          // The collection (queue) of changes is effective only if many of them are collected for uiniqueness.
+          // The collection (queue) of changes is effective only if many of them are collected for uniqueness.
           // So it's worth waiting in the loop to make them build up in the queue, to avoid sending duplicates around
           // If we send them right away we don't know if we are sending around duplicates.
           Thread.sleep(replicatorInstance.getReplicatedIndexUniqueChangesQueueWaitTime());

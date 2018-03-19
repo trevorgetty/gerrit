@@ -73,7 +73,6 @@ public class Replicator implements Runnable {
   public static final String GERRIT_MAX_SECS_TO_WAIT_ON_POLL_AND_READ = "gerrit.max.secs.to.wait.on.poll.and.read";
   public static final String GERRIT_REPLICATED_INDEX_UNIQUE_CHANGES_QUEUE_WAIT_TIME = "gerrit.replicated.index.unique.changes.queue.wait.time";
   public static final String GERRIT_MINUTES_SINCE_CHANGE_LAST_INDEXED_CHECK_PERIOD = "gerrit.minutes.since.change.last.indexed.check.period";
-  public static final String GERRIT_MAX_MS_WAIT_FOR_INDEX_EVENTS = "gerrit.max.ms.wait.for.index.events";
   public static final String ENC = "UTF-8"; // From BaseCommand
 
   // as shown by statistics this means less than 2K gzipped proposals
@@ -84,7 +83,6 @@ public class Replicator implements Runnable {
   public static final String DEFAULT_MAX_SECS_TO_WAIT_ON_POLL_AND_READ = "1";
   public static final String DEFAULT_REPLICATED_INDEX_UNIQUE_CHANGES_QUEUE_WAIT_TIME = "20";
   public static final String DEFAULT_MINUTES_SINCE_CHANGE_LAST_INDEXED_CHECK_PERIOD = "60";
-  public static final String DEFAULT_MAX_MS_WAIT_FOR_INDEX_EVENTS = "60";
 
   public static final String CURRENT_EVENTS_FILE = "current-events.json";
   public static final String NEXT_EVENTS_FILE = "events-%s-%s-%02d.json";
@@ -115,7 +113,6 @@ public class Replicator implements Runnable {
   public static long maxSecsToWaitOnPollAndRead;
   public static long replicatedIndexUniqueChangesQueueWaitTime;
   public static long minutesSinceChangeLastIndexedCheckPeriod;
-  public static long maxWaitForIndexEvents;
 
   private static final ArrayList<String> cacheNamesNotToReload = new ArrayList<>();
   private static final IncomingEventsToReplicateFileFilter incomingEventsToReplicateFileFilter = new IncomingEventsToReplicateFileFilter();
@@ -911,11 +908,6 @@ public class Replicator implements Runnable {
               cleanLforLong(props.getProperty(GERRIT_MAX_EVENTS_TO_APPEND_BEFORE_PROPOSING,DEFAULT_MAX_EVENTS_PER_FILE)));
 
           //Configurable for the maximum amount of seconds to wait before proposing events in the outgoing events file.
-          maxWaitForIndexEvents = Long.parseLong(
-              cleanLforLongAndConvertToMilliseconds(props.getProperty(GERRIT_MAX_MS_WAIT_FOR_INDEX_EVENTS,
-                  DEFAULT_MAX_MS_WAIT_FOR_INDEX_EVENTS)));
-
-          //Configurable for the maximum amount of seconds to wait before proposing events in the outgoing events file.
           maxSecsToWaitBeforeProposingEvents = Long.parseLong(
               cleanLforLongAndConvertToMilliseconds(props.getProperty(GERRIT_MAX_MS_TO_WAIT_BEFORE_PROPOSING_EVENTS,
                   DEFAULT_MAX_SECS_TO_WAIT_BEFORE_PROPOSING_EVENTS)));
@@ -969,10 +961,10 @@ public class Replicator implements Runnable {
     return replicatedIndexUniqueChangesQueueWaitTime;
   }
 
-  public static long getMaxWaitForIndexEvents() {
-    return maxWaitForIndexEvents;
-  }
-
+  /**
+   * Returns the number of minutes since the change was last indexed
+   * @return
+   */
   public static long getMinutesSinceChangeLastIndexedCheckPeriod() {
     return minutesSinceChangeLastIndexedCheckPeriod;
   }
