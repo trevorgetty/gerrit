@@ -18,6 +18,11 @@
 	url = https://gerrit.googlesource.com/plugins/hooks
 	branch = .
 
+[submodule "plugins/replication"]
+        path = plugins/replication
+	url = https://gerrit.googlesource.com/plugins/replication
+        branch = .
+
 [submodule "plugins/reviewnotes"]
 	path = plugins/reviewnotes
 	url = https://gerrit.googlesource.com/plugins/reviewnotes
