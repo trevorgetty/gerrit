@@ -105,6 +105,7 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
   private final Object replicationLock = new Object();
   private static Replicator replicatorInstance = null;
   private static Config cfg;
+  private static final String nonReplicatedEventMessage = "Error while creating distinct event, this is likely a non replicated event, skipping.";
 
   public static synchronized ReplicatedEventsManager hookOnListeners(EventBroker changeHookRunner, SchemaFactory<ReviewDb> schemaFactory, Config config) {
 
@@ -206,8 +207,18 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
         if (localRepublishEnabled) {
           try {
             publishIncomingReplicatedEvents(makeDistinct(event, distinctEventPrefix));
-          } catch(ClassNotFoundException e) {
-            log.error("RE local republished event has been lost.",e);
+          } // Just log info level with no stack trace so we don't spam the logs for
+            // the following catch blocks
+            catch (NoSuchMethodException e) {
+            log.info(e.getClass().getName()  + " : " + e.getMessage() + " : " + nonReplicatedEventMessage);
+          } catch (IllegalAccessException e) {
+            log.info(e.getClass().getName()  + " : " + e.getMessage() + " : " + nonReplicatedEventMessage);
+          } catch (InstantiationException e) {
+            log.info(e.getClass().getName()  + " : " + e.getMessage() + " : " + nonReplicatedEventMessage);
+          } catch (InvocationTargetException e) {
+            log.info(e.getClass().getName()  + " : " + e.getMessage() + " : " + nonReplicatedEventMessage);
+          } catch (RuntimeException e) {
+            log.info(e.getClass().getName()  + " : " + e.getMessage() + " : " + nonReplicatedEventMessage);
           }
         }
       }
@@ -323,14 +334,28 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
           }
         }
 
-      } catch(ClassNotFoundException e) {
-        log.error("RE event has been lost. Could not find {} for event {}",newEvent.className, newEvent, e);
-        result = false;
       } catch (JsonSyntaxException je) {
         log.error("PR Could not decode json event {}", newEvent.toString(), je);
         return result;
-      } catch(RuntimeException e) {
-        log.error("RE event has been lost. Could not rebuild event for {}", newEvent, e);
+      } // Just log info level with no stack trace so we don't spam the logs for
+        // the following catch blocks
+        catch (ClassNotFoundException e) {
+        log.info(e.getClass().getName()  + " : " + e.getMessage() + " : " + nonReplicatedEventMessage);
+        result = false;
+      } catch (NoSuchMethodException e) {
+        log.info(e.getClass().getName()  + " : " + e.getMessage() + " : " + nonReplicatedEventMessage);
+        result = false;
+      } catch (IllegalAccessException e) {
+        log.info(e.getClass().getName()  + " : " + e.getMessage() + " : " + nonReplicatedEventMessage);
+        result = false;
+      } catch (InstantiationException e) {
+        log.info(e.getClass().getName()  + " : " + e.getMessage() + " : " + nonReplicatedEventMessage);
+        result = false;
+      } catch (InvocationTargetException e) {
+        log.info(e.getClass().getName()  + " : " + e.getMessage() + " : " + nonReplicatedEventMessage);
+        result = false;
+      } catch (RuntimeException e) {
+        log.info(e.getClass().getName()  + " : " + e.getMessage() + " : " + nonReplicatedEventMessage);
         result = false;
       }
 
@@ -427,10 +452,10 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
    * @param changeEvent
    * @param prefix
    * @return result
-   * @throws ClassNotFoundException
+   * @throws NoSuchMethodException, InstantiationException, InvocationTargetException, RuntimeException, IllegalAccessException
    */
-  @SuppressWarnings("UseSpecificCatch")
-  private Event makeDistinct(Event changeEvent, String prefix) throws ClassNotFoundException {
+  private Event makeDistinct(Event changeEvent, String prefix) throws NoSuchMethodException, InstantiationException,
+    InvocationTargetException, RuntimeException, IllegalAccessException {
 
     Event result = null;
     Class<? extends Event> actualClass = changeEvent.getClass();
@@ -439,11 +464,28 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
       Constructor<? extends Event> constructor = actualClass.getConstructor(actualClass, String.class, boolean.class);
       result = constructor.newInstance(changeEvent,prefix+changeEvent.getType(),true);
       result.setNodeIdentity(replicatorInstance.getThisNodeIdentity());
-    } catch (RuntimeException | NoSuchMethodException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
-      ClassNotFoundException c = new ClassNotFoundException("Error while creating distinct event",e);
-      log.error("RE Could not rebuild distinct event",c);
-      throw c;
+    } catch (NoSuchMethodException e) {
+      // this is likely a non replicated event
+      log.debug(nonReplicatedEventMessage, e);
+      throw e;
+    } catch (IllegalAccessException e) {
+      // this is likely a non replicated event
+      log.debug(nonReplicatedEventMessage, e);
+      throw e;
+    } catch (InstantiationException e) {
+      // this is likely a non replicated event
+      log.debug(nonReplicatedEventMessage, e);
+      throw e;
+    } catch (InvocationTargetException e) {
+      // this is likely a non replicated event
+      log.debug(nonReplicatedEventMessage, e);
+      throw e;
+    } catch (RuntimeException e) {
+      // this is likely a non replicated event
+      log.debug(nonReplicatedEventMessage, e);
+      throw e;
     }
+
     return result;
   }
 
