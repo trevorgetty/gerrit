@@ -6,6 +6,7 @@ import com.google.gerrit.common.DeleteProjectChangeEvent;
 import com.google.gerrit.common.ProjectInfoWrapper;
 import com.google.gerrit.common.ReplicatedEventsManager;
 import com.google.gerrit.common.ReplicatedIndexEventManager;
+import com.google.gerrit.common.ReplicatorMessageEvent;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
@@ -36,6 +37,7 @@ public class EventWrapper  {
   public final String projectName;
   public final Originator originator;
   public final String prefix;
+
   private static final Gson gson = new GsonBuilder()
       .registerTypeAdapter(Supplier.class, new SupplierSerializer())
       //.registerTypeAdapter(Project.NameKey.class, new ProjectNameKeySerializer())
@@ -111,11 +113,18 @@ public class EventWrapper  {
     this.prefix = null;
   }
 
-  public EventWrapper(String projectName, Object object, Originator orig, String className, String prefix) {
-    this.event = object == null? null : gson.toJson(object);
-    this.className = className;
-    this.projectName = projectName;
-    this.originator = orig;
-    this.prefix = prefix;
+  /**
+   * This EventWrapper constructor can be used for sending status messages
+   * to the GitMS replicator. The event is generic enough so that custom messages
+   * can be passed to the GitMS replicator.
+   * @param replicatorMessageEvent
+   */
+  public EventWrapper(ReplicatorMessageEvent replicatorMessageEvent) {
+    this.event = gson.toJson(replicatorMessageEvent);
+    this.className=replicatorMessageEvent.getClass().getName();
+    this.projectName = replicatorMessageEvent.project;
+    this.originator = Originator.FOR_REPLICATOR_EVENT;
+    this.prefix = replicatorMessageEvent.prefix;
   }
+
 }

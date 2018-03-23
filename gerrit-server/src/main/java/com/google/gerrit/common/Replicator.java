@@ -39,8 +39,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
 
 import net.minidev.json.JSONObject;
-import net.minidev.json.parser.JSONParser;
-import net.minidev.json.parser.ParseException;
+import net.minidev.json.JSONValue;
 
 import org.eclipse.jgit.errors.ConfigInvalidException;
 import org.eclipse.jgit.lib.Config;
@@ -330,7 +329,7 @@ public class Replicator implements Runnable {
   }
 
   public void queueEventForReplication(EventWrapper event) {
-    queue.offer(event); // queue is unbound, no need to check for result
+      queue.offer(event); // queue is unbound, no need to check for result
   }
 
   public long getTotalPublishedForeignEventsProsals() {
@@ -548,15 +547,22 @@ public class Replicator implements Runnable {
    * and nodeIdentity which will be used for labelling the events file.
    */
   static class ParseEventJson {
-    private static final JSONParser parser = new JSONParser();
-    public static String[] jsonEventParse(String eventJson) {
-      String[] jsonData = new String[2];
-      try {
-        JSONObject jsonObject = (JSONObject) parser.parse(eventJson);
-        jsonData[0] = jsonObject.get("eventTimestamp").toString();
-        jsonData[1] = jsonObject.get("nodeIdentity").toString();
-      } catch (ParseException ex) {
-        log.error("Could not parse JSON correctly", ex);
+    public static String[] jsonEventParse(String jsonStr) {
+      String [] jsonData = null;
+      Object eventJsonObj = JSONValue.parse(jsonStr);
+
+      if(eventJsonObj == null){
+        log.error("There was an error parsing the json from the event, {}", jsonStr);
+        return null;
+      }
+      JSONObject eventJson = (JSONObject) eventJsonObj;
+      if(eventJson.containsKey("eventTimestamp") && eventJson.containsKey("nodeIdentity")){
+        jsonData = new String[2];
+        jsonData[0] = eventJson.get("eventTimestamp").toString();
+        jsonData[1] = eventJson.get("nodeIdentity").toString();
+      } else {
+        log.error("RC Encountered an Event that did not contain an " +
+            "originating nodeIdentity or an eventTimestamp. {}", jsonStr);
       }
       return jsonData;
     }
@@ -569,6 +575,11 @@ public class Replicator implements Runnable {
    */
   private void setEventsFileName(final EventWrapper originalEvent){
     String [] jsonData = ParseEventJson.jsonEventParse(originalEvent.event);
+    if(jsonData == null || jsonData.length == 0){
+        log.error("Unable to set event filename as there was a JSON parsing error "
+            + originalEvent.event);
+        return;
+    }
     if(jsonData[0] != null && jsonData[0].matches("[0-9]+")){
       eventsFileName = String.format(NEXT_EVENTS_FILE, jsonData[0], jsonData[1], 0);
     } else {

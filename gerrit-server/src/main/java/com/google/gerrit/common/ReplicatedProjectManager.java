@@ -32,7 +32,6 @@ public class ReplicatedProjectManager implements Replicator.GerritPublishable {
 
   /**
    * Make use of the GitRepositoryManager, set on startup in ChangeUtil
-   * @param grm
    */
   public static void setRepoManager(GitRepositoryManager gitRepositoryManager){
     if(repoManager == null){
@@ -63,9 +62,9 @@ public class ReplicatedProjectManager implements Replicator.GerritPublishable {
       try {
         Class<?> eventClass = Class.forName(newEvent.className);
         if (newEvent.className.equals(DeleteProjectChangeEvent.class.getName())) {
-          deleteProjectChanges(newEvent, eventClass);
+          result = deleteProjectChanges(newEvent, eventClass);
         }else {
-          deleteProject(result, newEvent, eventClass);
+          result = deleteProject(newEvent, eventClass);
         }
 
       } catch(ClassNotFoundException e) {
@@ -89,40 +88,42 @@ public class ReplicatedProjectManager implements Replicator.GerritPublishable {
    * Perform actions to actually delete the project on all nodes and send round a message
    * that the node has successfully deleted the project
    *
-   * @param result
    * @param newEvent
    * @param eventClass
    */
-  private void deleteProject(boolean result, EventWrapper newEvent, Class<?> eventClass) {
+  private boolean deleteProject(EventWrapper newEvent, Class<?> eventClass) {
     ProjectInfoWrapper originalEvent = null;
+    boolean result = false;
 
     try {
       originalEvent = (ProjectInfoWrapper) gson.fromJson(newEvent.event, eventClass);
     } catch (JsonSyntaxException je) {
       log.error("DeleteProject, Could not decode json event {}", newEvent.toString(), je);
-      return;
+      return result;
     }
 
     if (originalEvent == null) {
       log.error("DeleteProject, fromJson method returned null for {}", newEvent.toString());
-      return;
+      return result;
     }
 
     log.info("RE Original event: {}",originalEvent.toString());
     originalEvent.replicated = true; // not needed, but makes it clear
     originalEvent.setNodeIdentity(Replicator.getInstance().getThisNodeIdentity());
     result = applyActionsForDeletingProject(originalEvent);
+
+    ReplicatorMessageEvent replicatorMessageEvent = null;
     if (result && !originalEvent.preserve) {
       // If the request was to remove the repository from the disk, then we do that only after all the nodes have replied
       // So first phase is to clear the data about the repo, 2nd phase is to remove it
-      EventWrapper messageForTheReplicator = new EventWrapper(originalEvent.projectName, "DELETE_PROJECT_SUCCEEDED",
-          EventWrapper.Originator.FOR_REPLICATOR_EVENT, String.class.getName(), originalEvent.taskUuid);
-      Replicator.getInstance().queueEventForReplication(messageForTheReplicator);
+      replicatorMessageEvent = new ReplicatorMessageEvent(originalEvent.projectName, "DELETE_PROJECT_SUCCEEDED",
+          originalEvent.taskUuid, Replicator.getInstance().getThisNodeIdentity());
     } else if (!result && !originalEvent.preserve) {
-      EventWrapper messageForTheReplicator = new EventWrapper(originalEvent.projectName, "DELETE_PROJECT_FAILED",
-          EventWrapper.Originator.FOR_REPLICATOR_EVENT, String.class.getName(), originalEvent.taskUuid);
-      Replicator.getInstance().queueEventForReplication(messageForTheReplicator);
+      replicatorMessageEvent = new ReplicatorMessageEvent(originalEvent.projectName, "DELETE_PROJECT_FAILED",
+          originalEvent.taskUuid, Replicator.getInstance().getThisNodeIdentity());
     }
+    Replicator.getInstance().queueEventForReplication(new EventWrapper(replicatorMessageEvent));
+    return result;
   }
 
 
@@ -132,25 +133,26 @@ public class ReplicatedProjectManager implements Replicator.GerritPublishable {
    * @param newEvent
    * @param eventClass
    */
-  private void deleteProjectChanges(EventWrapper newEvent, Class<?> eventClass) {
+  private boolean deleteProjectChanges(EventWrapper newEvent, Class<?> eventClass) {
     DeleteProjectChangeEvent originalEvent = null;
-
+    boolean result = false;
     try {
       originalEvent = (DeleteProjectChangeEvent) gson.fromJson(newEvent.event, eventClass);
     } catch (JsonSyntaxException je) {
       log.error("DeleteProject, Could not decode json event {}", newEvent.toString(), je);
-      return;
+      return result;
     }
 
     if (originalEvent == null) {
       log.error("DeleteProject, fromJson method returned null for {}", newEvent.toString());
-      return;
+      return result;
     }
 
     log.info("RE Original event: {}",originalEvent.toString());
     originalEvent.replicated = true; // not needed, but makes it clear
     originalEvent.setNodeIdentity(Replicator.getInstance().getThisNodeIdentity());
-    applyActionsForDeletingProjectChanges(originalEvent);
+    result = applyActionsForDeletingProjectChanges(originalEvent);
+    return result;
   }
 
 
