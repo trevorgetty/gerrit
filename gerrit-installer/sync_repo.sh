@@ -166,29 +166,31 @@ function get_application_properties() {
 }
 
 function read_application_properties() {
+  check_file "$APPLICATION_PROPERTIES"
+  
   if ! SSL_ENABLED=$(fetch_property "$APPLICATION_PROPERTIES" "ssl.enabled"); then
     if [[ "$SSL_ENABLED" == "$fp_novaluefound" || "$SSL_ENABLED" == "$fp_badvalue" ]]; then
-      unset SSL_ENABLED
+      die "Could not read application property ssl.enabled not found or bad value."
     fi
   fi
   if ! REST_PORT=$(fetch_property "$APPLICATION_PROPERTIES" "jetty.http.port"); then
     if [[ "$REST_PORT" == "$fp_novaluefound" || "$REST_PORT" == "$fp_badvalue" ]]; then
-      unset REST_PORT
+      die "Could not read application property jetty.http.port not found or bad value."
     fi
   fi
   if ! SSL_REST_PORT=$(fetch_property "$APPLICATION_PROPERTIES" "jetty.https.port"); then
     if [[ "$SSL_REST_PORT" == "$fp_novaluefound" || "$SSL_REST_PORT" == "$fp_badvalue" ]]; then
-      unset SSL_REST_PORT
+      die "Could not read application property jetty.https.port not found or bad value."
     fi
   fi
   if ! GITMS_RPGROUP_ID=$(fetch_property "$APPLICATION_PROPERTIES" "gerrit.rpgroupid"); then
     if [[ "$GITMS_RPGROUP_ID" == "$fp_novaluefound" || "$GITMS_RPGROUP_ID" == "$fp_badvalue" ]]; then
-      unset GITMS_RPGROUP_ID
+      die "Could not read application property gerrit.rpgroupid not found or bad value."
     fi
   fi
   if ! GERRIT_ROOT=$(fetch_property "$APPLICATION_PROPERTIES" "gerrit.root"); then
     if [[ "$GERRIT_ROOT" == "$fp_novaluefound" || "$GERRIT_ROOT" == "$fp_badvalue" ]]; then
-      unset GERRIT_ROOT
+      die "Could not read application property gerrit.root not found or bad value."
     fi
   fi
   if [[ $numErrs -ne 0 ]]; then
@@ -216,7 +218,7 @@ function fetch_config() {
   get_gitms_credentials
 
   if [ -z "$GITMS_RPGROUP_ID" ]; then
-    perr "Could not find replication group ID property (gerrit.rpgroupid) for deployment in $APPLICATION_PROPERTIES"
+    die "Could not find replication group ID property (gerrit.rpgroupid) for deployment in $APPLICATION_PROPERTIES"
   fi
 
   if [ "$SSL_ENABLED" == "true" ]; then
@@ -356,6 +358,22 @@ function scan_repos() {
   return 0
 }
 
+function check_file() {
+  file=$1
+  
+  # Check the value passed in is actually a file
+  if [[ ! -f "$file" ]]; then
+    die "File \"$file\" does not exist, aborting"
+  fi
+
+  # Check the file is readable
+  if [[ ! -r "$file" ]]; then
+    die "Cannot read file \"$file\", aborting"
+  fi
+
+  return 0;
+}
+
 # Special return value
 fp_novaluefound="NoVaLuE"
 fp_badvalue="BaDvAlUe"
@@ -365,27 +383,6 @@ function fetch_property() {
   property=$2
   illegalKeyChars="[$\?\`*+%:<>]"
   illegalValChars="[$\?\`*%<>]"
-
-  # Check if file does not exist
-  if [[ ! -e "$file" ]]; then
-   perr "\"$file\" does not exist."
-   echo "$fp_badvalue"
-   exit 2
-  fi
-
-  # Check the value passed in is actually a file
-  if [[ ! -f "$file" ]]; then
-    perr "File \"$file\" does not exist, aborting"
-    echo "$fp_badvalue"
-    exit 2
-  fi
-
-  # Check the file is readable
-  if [[ ! -r "$file" ]]; then
-    perr "Cannot read file \"$file\", aborting"
-    echo "$fp_badvalue"
-    exit 2
-  fi
 
   while IFS='=' read -r key value
   do
