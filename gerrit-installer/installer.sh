@@ -1256,6 +1256,51 @@ function cleanup() {
   if [[ ! -z "$SCRATCH" && -d "$SCRATCH" ]]; then
     rm -rf "$SCRATCH"
   fi
+  if [[ "$REPLICATED_UPGRADE" == "true" ]]; then 
+    remove_obsolete_dirs
+    remove_all_gerrit_event_files
+  fi
+}
+
+## GER-583
+## Remove absolete files on upgrade no longer in use by gerrit
+function remove_obsolete_dirs() {
+  echo "Removing obsolete directories..."
+  for odir in "${GERRIT_EVENTS_PATH}/replicated_events/failed_retry" \
+              "${GERRIT_EVENTS_PATH}/replicated_events/gen_events" \
+              "${GERRIT_EVENTS_PATH}/replicated_events/failed_definitely"; do
+      if [[ -d "${odir}" ]]; then
+        if rm -rf "${odir}"; then
+          echo "Removed obsolete directory: \"${odir}\" during cleanup phase."
+        else
+          echo "Failed to remove obsolete directory: \"${odir}\" during cleanup phase. Please removed manually."
+        fi
+      fi
+  done
+}
+
+## GER-562
+## Delete replicated events json files during upgrade
+function remove_all_gerrit_event_files() {
+  tf="/tmp/${myname}_tf_$$"
+  file_total=$(find "$GERRIT_EVENTS_PATH/replicated_events/" -type f -print | tee ${tf}| wc -l)
+
+  echo "Checking for extra files in the gerrit events directory..."
+  if [[ $file_total -eq 0 ]]; then
+    echo "No files requiring cleanup."
+  else
+    echo "Found ${file_total} files in gerrit events directory, these will be deleted now..."
+
+    while read afile; do
+      if rm -f "${afile}"; then
+        echo "Removed file \"${afile}\""
+      else
+        echo "Failed to remove file \"${afile}\" during cleanup phase. Please remove manually."
+      fi
+    done < ${tf}
+  fi
+
+  rm -f ${tf}
 }
 
 ## Check for non-interactive mode. If all the required environment variables are set,
