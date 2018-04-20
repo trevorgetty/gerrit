@@ -882,8 +882,15 @@ public class Replicator implements Runnable {
         throw new IOException(e);
       }
 
-      String appProperties = config.getString("core", null, "gitmsconfig");
-      File applicationProperties = new File(appProperties);
+      File applicationProperties;
+      try {
+        String appProperties = config.getString("core", null, "gitmsconfig");
+        applicationProperties = new File(appProperties);
+        // GER-662 NPE thrown if GerritMS is started without a reference to a valid GitMS application.properties file.
+      } catch (NullPointerException exception) {
+        throw new FileNotFoundException("GerritMS cannot continue without a valid GitMS application.properties file referenced in its .gitconfig file.");
+      }
+
       if(!applicationProperties.exists() || !applicationProperties.canRead()) {
         log.warn("Could not find/read (1) " + applicationProperties);
         applicationProperties = new File(DEFAULT_MS_APPLICATION_PROPERTIES,"application.properties");
