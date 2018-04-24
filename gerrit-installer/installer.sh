@@ -104,7 +104,6 @@ function prereqs() {
 
     FIRST_NODE=$(get_boolean "Is this the first node GerritMS will be installed to?" "true")
   fi
-
 }
 
 function check_environment_variables_that_affect_curl() {
@@ -487,6 +486,12 @@ function check_gerrit_root() {
   if [ ! -e "$gerrit_war_path" ]; then
     echo " ERROR: $gerrit_war_path does not exist"
     return 1
+  fi
+  
+  #check the permmisions of the gerrit.war file
+  if [ -w "$gerrit_war_path" ]; then
+    echo " ERROR: The gerrit.war file is not writable"
+    exit 1
   fi
 
   ## Check the version of the detected gerrit.war
@@ -1080,6 +1085,10 @@ function replace_gerrit_war() {
   OLD_WAR="$GERRIT_ROOT/bin/gerrit.war"
 
   cp "$RELEASE_WAR" "$OLD_WAR"
+  if [ $? -ne 0 ]; then
+    echo "Failed to copy $RELEASE_WAR to $OLD_WAR"
+    exit 1
+  fi
 }
 
 function remove_gitms_gerrit_plugin() {
