@@ -593,6 +593,26 @@ function replicated_upgrade() {
   fi
 }
 
+## arg1 = string to look within.
+## arg2 = value to look in arg1 for.
+function stringContains() {
+  [[ -z "${1##*$2*}" ]] && [[ -z "$2" || -n "$1" ]];
+}
+
+function checkForCacheName() {
+  if ! stringContains $GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD $table_cache_name;
+  then
+    ## N.B. Do NOT change this evaluation to anything which spawns a sub process like [ -z $x ] as our
+    ## Params will no longer be changed as they are local to the child process. http://tldp.org/LDP/abs/html/subshells.html
+    if [[ -z "$GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD" ]]
+    then
+      GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD=$table_cache_name;
+    else
+      GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD+=",$table_cache_name";
+    fi
+  fi
+}
+
 function get_config_from_user() {
   header
   bold " Configuration Information"
@@ -784,9 +804,20 @@ function get_config_from_user() {
   fi
   set_property "gerrit.replicated.cache.enabled" "$GERRIT_REPLICATED_CACHE_ENABLED"
 
+  ## Array of caches we do not wish to reload.  We need to deal with fresh install / upgrade scenarios and user changes to this field.
+  CACHE_NAMES_NOT_TO_RELOAD=(changes projects groups_byinclude groups_byname groups_byuuid groups_external groups_members)
+
   if [ -z "$GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD" ]; then
-    GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD="changes,projects"
+    # to avoid keeping 2 lists of same info, just build from our array above.
+    printf -v GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD ',%s' "${CACHE_NAMES_NOT_TO_RELOAD[@]}" # yields ",changes,projects,....."
+    GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD=${GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD:1} # drop leading comma
   else
+    ## Check that an upgraded value contains dont reload group caches.
+    for table_cache_name in "${CACHE_NAMES_NOT_TO_RELOAD[@]}"
+    do
+      checkForCacheName
+    done
+
     info " Gerrit Replicated Cache exclude reload for: $GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD"
   fi
   set_property "gerrit.replicated.cache.names.not.to.reload" "$GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD"
