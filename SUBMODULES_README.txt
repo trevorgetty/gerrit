@@ -7,9 +7,11 @@ submodules.
 
 Example :
 
-./git-update-submodules.sh v2.13.11
+./git-update-submodules.sh stable-2.13
 
-This will checkout submodules for branch v2.13.11.  
+This will checkout submodules for branch stable-2.13. "stable-2.13" is the name of the corresponding
+branch that exists on the remote repo(s), where we are pulling the submodules from.
+  
 The user can then commit these updated submodule links.
 
 Note well :  This ONLY needs to be run once at the start of a development cycle.
