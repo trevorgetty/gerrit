@@ -87,10 +87,11 @@ function validate_input {
   fi
 }
 
-function parse_gerrit_url {
+function parse_gerrit_config {
   GIT_CONFIG="$CONFIG"
   export GIT_CONFIG
   GERRIT_URL=$(git config gerrit.canonicalWebUrl)
+  DIGEST_FLAG=$(git config auth.gitBasicAuth)
   unset GIT_CONFIG
 
   if [ -z "$GERRIT_URL" ]; then
@@ -100,12 +101,30 @@ function parse_gerrit_url {
   if ! [[ "$GERRIT_URL" == "*/" ]]; then
     GERRIT_URL="${GERRIT_URL}/"
   fi
+
+  # If canonical web url contains https, set -k flag in curl call
+  if [[ "$GERRIT_URL" = *"https"* ]]; then
+    SSL_FLAG="-k"
+  fi
+  
+  # If git basic auth is not set, or set false, set --digest in curl call
+  if [[ ! -z "$DIGEST_FLAG" ]]; then
+    
+    DIGEST_FLAG=$(echo "$DIGEST_FLAG" | tr '[:upper:]' '[:lower:]')
+    
+    if [[ "$DIGEST_FLAG" != "true" ]]; then
+      DIGEST_FLAG="--digest"
+    fi
+  fi
+
 }
 
 USERNAME=""
 PASSWORD=""
 CONFIG=""
 CHANGEID=""
+DIGEST_FLAG=""
+SSL_FLAG=""
 
 while getopts u:p:c:i:h opt
 do
@@ -121,7 +140,7 @@ do
 done
 
 validate_input
-parse_gerrit_url
+parse_gerrit_config
 
 # Make sure curl is installed
 if ! type -p "curl" >/dev/null 2>&1; then
@@ -137,8 +156,7 @@ case $GERRIT_URL in
 esac
 URL="${GERRIT_URL}/a/changes/${CHANGEID}/index"
 
-return_code=$(curl --digest -X POST -u "$USERNAME":"$PASSWORD" -s -o /dev/null -w "%{http_code}" "$URL")
-
+return_code=$(curl "$SSL_FLAG" "$DIGEST_FLAG" "$REINDEX_ARG" -X POST -u "$USERNAME":"$PASSWORD" -s -o /dev/null -w "%{http_code}" "$URL")
 if [ ! "$return_code" == "204" ]; then
   die "Reindex call failed, got return code ${return_code}, expected 204"
 else
