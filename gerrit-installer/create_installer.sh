@@ -16,6 +16,7 @@ install -m 0550 gerrit-installer/installer.sh target/tmp
 install -m 0550 gerrit-installer/sync_repo.sh target/tmp
 install -m 0550 gerrit-installer/reindex.sh target/tmp
 install -m 0640 gerrit-installer/resources/logo.txt target/tmp/resources
+install -m 0640 gerrit-war/src/main/resources/log4j.properties target/tmp
 install -m 0640 ${RELEASE_WAR} target/tmp
 
 makeself target/tmp gerritms-installer.sh "GerritMS Installer" ./installer.sh

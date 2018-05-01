@@ -450,17 +450,20 @@ function get_gerrit_replication_group_id() {
 
 ## Check a Gerrit root for a valid gerrit install
 function check_gerrit_root() {
-  local gerrit_root="$1"
+  local gerrit_root="$(sanitize_path "$1")"
 
   ## Make sure that GERRIT_ROOT/etc/gerrit.config exists
  
-  local gerrit_config="$(sanitize_path "${gerrit_root}/etc/gerrit.config")"
+  local gerrit_config=$gerrit_root"/etc/gerrit.config"
 
   if [ ! -e "$gerrit_config" ]; then
     echo "ERROR: $gerrit_config does not exist, invalid Gerrit Root directory"
     return 1
   fi
-
+  
+  #add the java option to use alternative log4j.properites file to the gerrit.config file
+  sed -i -e '/\[container\]/a\'$'\n\t''javaOptions = -Dlog4j.configuration=file://'$gerrit_root'/etc/log4j.properties' $gerrit_config
+  
   ## Get the location of the gerrit.war file
 
   ## default location
@@ -1092,6 +1095,10 @@ function install_gerrit_scripts() {
   cp -f "sync_repo.sh" "$SCRIPT_INSTALL_DIR"
 }
 
+function install_default_log4j_properties() {
+  cp -f "log4j.properties" "$GERRIT_ROOT/etc"
+}
+
 function write_new_config() {
   header
   bold " Finalizing Install"
@@ -1100,6 +1107,7 @@ function write_new_config() {
   write_gitms_config
   replace_gerrit_war
   install_gerrit_scripts
+  install_default_log4j_properties
   replicated_upgrade
 
   info ""
