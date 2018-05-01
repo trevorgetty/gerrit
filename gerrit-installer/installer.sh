@@ -950,7 +950,7 @@ function create_backup() {
   header
   bold " Backup Information"
   info ""
-  info " Taking a backup of the of GitMS + Gerrit configuration. Where should this"
+  info " Taking a backup of the GitMS + Gerrit configuration. Where should this"
   info " be saved?"
   info ""
 
