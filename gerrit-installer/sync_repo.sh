@@ -93,6 +93,17 @@ function get_string() {
   echo "$INPUT"
 }
 
+function get_secure_string() {
+  while true
+  do
+    read -s -p "$1: " INPUT
+    if [ ! -z "$INPUT" ]; then
+      break
+    fi
+  done
+  echo "$INPUT"
+}
+
 function find_gitms() {
   ## Make sure $HOME has been set
   if [[ -z "$home" ]]; then
@@ -206,7 +217,8 @@ function get_gitms_credentials() {
   fi
 
   if [ -z "$GITMS_PASSWORD" ]; then
-    GITMS_PASSWORD=$(get_string "GitMS Password")
+    GITMS_PASSWORD=$(get_secure_string "GitMS Password")
+    echo
   else
     echo "Using GitMS Password: $GITMS_PASSWORD"
   fi
