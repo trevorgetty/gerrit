@@ -699,6 +699,8 @@ public class Replicator implements Runnable {
 
         Arrays.sort(listFiles);
         for (File file : listFiles) {
+          //Adding debug logging to allow for checking the sorting of events files
+          log.debug("Reading incoming event file : " + file.getName());
           try {
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             FileInputStream plainFileReader = new FileInputStream(file);
