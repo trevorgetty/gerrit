@@ -8,7 +8,8 @@ CORE = [
 ]
 CUSTOM = [
   # Add custom core plugins here
-  'gerrit-delete-project-plugin'
+  'gerrit-delete-project-plugin',
+  'gerrit-lfs-plugin'
 ]
 
 # buck audit parses and resolves all deps even if not reachable
