@@ -489,7 +489,7 @@ function check_gerrit_root() {
   fi
   
   #check the permmisions of the gerrit.war file
-  if [ -w "$gerrit_war_path" ]; then
+  if [ ! -w "$gerrit_war_path" ]; then
     echo " ERROR: The gerrit.war file is not writable"
     exit 1
   fi
