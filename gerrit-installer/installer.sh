@@ -283,8 +283,16 @@ function get_directory() {
   while true
   do
     INPUT_DIR=$(get_string "$1")
-    INPUT_DIR=$(sanitize_path "$INPUT_DIR")
 
+    # If the user does not specify a value starting with "/" 
+    # then they are attempting to use a relative path and this is not allowed
+    if [[ "$INPUT_DIR" != /* ]]; then
+      echo " ERROR: relative paths not allowed"
+      continue
+    fi
+    
+    INPUT_DIR=$(sanitize_path "$INPUT_DIR")
+    
     ## If the directory does not exist and create_directory is true, offer to create it
     if [[ ! -d "$INPUT_DIR" && ! -e "$INPUT_DIR" && "$create_directory" == "true" ]]; then
       local create_dir=$(get_boolean "The directory [ "$INPUT_DIR" ] does not exist, do you want to create it?" "true")
