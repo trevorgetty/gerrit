@@ -4,7 +4,8 @@ CORE = [
   'download-commands',
   'hooks',
   'reviewnotes',
-  'singleusergroup'
+  'singleusergroup',
+  'replication'
 ]
 CUSTOM = [
   # Add custom core plugins here
