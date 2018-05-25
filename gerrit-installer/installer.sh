@@ -1442,10 +1442,14 @@ if [ "$NON_INTERACTIVE" == "1" ]; then
   echo "BACKUP_DIR: $BACKUP_DIR"
   echo "SCRIPT_INSTALL_DIR: $SCRIPT_INSTALL_DIR"
   echo "FIRST_NODE: $FIRST_NODE"
-  echo "UPDATE_REPO_CONFIG: $UPDATE_REPO_CONFIG"
-  echo "RUN_GERRIT_INIT: $RUN_GERRIT_INIT"
-  echo "REMOVE_PLUGIN: $REMOVE_PLUGIN"
   echo "CURL_ENVVARS_APPROVED: $CURL_ENVVARS_APPROVED"
+  
+  [[ ! -z "$UPGRADE" ]] && UPGRADE=$(echo "$UPGRADE" | tr '[:upper:]' '[:lower:]')
+  if [[ "$UPGRADE" == "true" ]]; then
+    echo "UPDATE_REPO_CONFIG: $UPDATE_REPO_CONFIG"
+    echo "RUN_GERRIT_INIT: $RUN_GERRIT_INIT"
+    echo "REMOVE_PLUGIN: $REMOVE_PLUGIN"
+  fi
 fi
 
 prereqs
