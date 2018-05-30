@@ -469,8 +469,13 @@ function check_gerrit_root() {
   fi
   
   #add the java option to use alternative log4j.properites file to the gerrit.config file
-  sed -i -e '/\[container\]/a\'$'\n\t''javaOptions = -Dlog4j.configuration=file://'$gerrit_root'/etc/log4j.properties' $gerrit_config
-  
+  JAVAOPTION="javaOptions = -Dlog4j.configuration=file://$gerrit_root/etc/log4j.properties"
+  if grep -FRq "$JAVAOPTION" "$gerrit_config"; then
+    echo "Java Option is already set : $JAVAOPTION"
+  else
+    sed -i -e '/\[container\]/a\'$'\n\t''javaOptions = -Dlog4j.configuration=file://'$gerrit_root'/etc/log4j.properties' "$gerrit_config"
+  fi
+
   ## Get the location of the gerrit.war file
 
   ## default location
