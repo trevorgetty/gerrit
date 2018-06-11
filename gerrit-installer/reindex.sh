@@ -91,7 +91,7 @@ function parse_gerrit_config {
   GIT_CONFIG="$CONFIG"
   export GIT_CONFIG
   GERRIT_URL=$(git config gerrit.canonicalWebUrl)
-  DIGEST_FLAG=$(git config auth.gitBasicAuth)
+  DIGEST_CONFIGURATION=$(git config auth.gitBasicAuth)
   unset GIT_CONFIG
 
   if [ -z "$GERRIT_URL" ]; then
@@ -108,11 +108,11 @@ function parse_gerrit_config {
   fi
   
   # If git basic auth is not set, or set false, set --digest in curl call
-  if [[ ! -z "$DIGEST_FLAG" ]]; then
+  if [[ ! -z "$DIGEST_CONFIGURATION" ]]; then
     
-    DIGEST_FLAG=$(echo "$DIGEST_FLAG" | tr '[:upper:]' '[:lower:]')
+    DIGEST_CONFIGURATION=$(echo "$DIGEST_CONFIGURATION" | tr '[:upper:]' '[:lower:]')
     
-    if [[ "$DIGEST_FLAG" != "true" ]]; then
+    if [[ "$DIGEST_CONFIGURATION" != "true" ]]; then
       DIGEST_FLAG="--digest"
     fi
   fi
@@ -156,7 +156,7 @@ case $GERRIT_URL in
 esac
 URL="${GERRIT_URL}/a/changes/${CHANGEID}/index"
 
-return_code=$(curl "$SSL_FLAG" "$DIGEST_FLAG" "$REINDEX_ARG" -X POST -u "$USERNAME":"$PASSWORD" -s -o /dev/null -w "%{http_code}" "$URL")
+ return_code=$(curl $SSL_FLAG $DIGEST_FLAG $REINDEX_ARG -X POST -u "$USERNAME":"$PASSWORD" -s -o /dev/null -w "%{http_code}" "$URL")
 if [ ! "$return_code" == "204" ]; then
   die "Reindex call failed, got return code ${return_code}, expected 204"
 else
