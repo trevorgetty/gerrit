@@ -39,6 +39,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
@@ -338,6 +339,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
       log.error("RC Directory {} cannot have files listed! (too many files open?)",indexEventsDirectory,new IllegalStateException("Cannot read index directory"));
     } else if (listFiles.length > 0) {
       log.debug("RC Found {} files", listFiles.length);
+      Arrays.sort(listFiles);
 
       // Read each file and create a list with the changes to try reindex
       List<IndexToFile> indexList = new ArrayList<>();

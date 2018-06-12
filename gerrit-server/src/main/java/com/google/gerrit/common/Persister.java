@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,6 +67,7 @@ public class Persister<T extends Persistable> {
     List<T> result = new ArrayList<>();
 
     if (listFiles != null) {
+      Arrays.sort(listFiles);
       for (File file : listFiles) {
         try (InputStreamReader fileToRead = new InputStreamReader(new FileInputStream(file),StandardCharsets.UTF_8)) {
           T fromJson = gson.fromJson(fileToRead,clazz);
