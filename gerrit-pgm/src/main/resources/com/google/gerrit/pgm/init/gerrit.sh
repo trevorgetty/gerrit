@@ -92,6 +92,23 @@ get_config() {
   fi
 }
 
+#Required to determine the version of the
+#gerrit.war file before attempting to start it
+function check_is_replicated_war(){
+  version=$(check_war_version $1)
+  if [[ $version =~ "RP" ]]; then
+      return 0
+  else
+      return 1
+  fi
+}
+
+#Return the war version.
+function check_war_version(){
+  version=$($JAVA -jar $1 version)
+  echo $version
+}
+
 ##################################################
 # Get the action and options
 ##################################################
@@ -370,6 +387,11 @@ fi
 ##################################################
 case "$ACTION" in
   start)
+    if ! check_is_replicated_war $GERRIT_WAR; then
+        echo "** ERROR: $GERRIT_WAR version [ $(check_war_version $GERRIT_WAR ) ] doesn't contain RP. It is not a WANdisco replicated version."
+        exit 1
+    fi
+
     printf '%s' "Starting Gerrit Code Review: "
 
     if test 1 = "$NO_START" ; then
