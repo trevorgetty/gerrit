@@ -39,6 +39,6 @@
 	branch = .
 
 [submodule "plugins/gerrit-lfs-plugin"]
-	path = plugins/gerrit-lfs-plugin
+	path = plugins/lfs
 	url = ../gerrit-lfs-plugin
 	branch = dev-lfs-2.13_WD
