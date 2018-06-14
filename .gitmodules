@@ -37,3 +37,6 @@
 	path = plugins/gerrit-delete-project-plugin
 	url = ../gerrit-delete-project-plugin
 	branch = .
+[submodule "plugins/lfs"]
+	path = plugins/lfs
+	url = ../gerrit-lfs-plugin
