@@ -116,12 +116,12 @@ public class ReplicatedProjectManager implements Replicator.GerritPublishable {
     if (result && !originalEvent.preserve) {
       // If the request was to remove the repository from the disk, then we do that only after all the nodes have replied
       // So first phase is to clear the data about the repo, 2nd phase is to remove it
-      replicatorMessageEvent = new ReplicatorMessageEvent(originalEvent.projectName, "DELETE_PROJECT_SUCCEEDED",
+      replicatorMessageEvent = new ReplicatorMessageEvent(originalEvent.projectName, "DELETE_PROJECT_FROM_DISK",
           originalEvent.taskUuid, Replicator.getInstance().getThisNodeIdentity());
     } else {
       // If the result is false then we have failed the first part of the removal. If we are Preserving the repo then we do not
       // want to remove the repo so we send a failed response so we know not to remove it.
-      replicatorMessageEvent = new ReplicatorMessageEvent(originalEvent.projectName, "DELETE_PROJECT_FAILED",
+      replicatorMessageEvent = new ReplicatorMessageEvent(originalEvent.projectName, "DO_NOT_DELETE_PROJECT_FROM_DISK",
           originalEvent.taskUuid, Replicator.getInstance().getThisNodeIdentity());
     }
     Replicator.getInstance().queueEventForReplication(new EventWrapper(replicatorMessageEvent));
