@@ -557,7 +557,7 @@ function replicated_upgrade() {
   info " ${GERRIT_RELEASE_NOTES}"
   info ""
   info " This will require running the command with the format: "
-  bold "   java -jar gerrit.war init -d site_path"
+  bold "   java -Dhttps.protocols=TLSv1.2 -jar gerrit.war init -d site_path"
   info ""
   info " Note: This command must be run across all nodes being upgraded, even if a replicated/shared"
   info " database is in use. This is required to update locally stored 3rd party dependencies not "
@@ -599,7 +599,7 @@ function replicated_upgrade() {
     fi
 
     local ret_code
-    $JAVA_BIN -jar "${GERRIT_ROOT}/bin/gerrit.war" init -d "${GERRIT_ROOT}" --batch
+    $JAVA_BIN -Dhttps.protocols=TLSv1.2 -jar "${GERRIT_ROOT}/bin/gerrit.war" init -d "${GERRIT_ROOT}" --batch
     ret_code="$?"
 
     if [ "$ret_code" -ne "0" ]; then
