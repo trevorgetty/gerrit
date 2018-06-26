@@ -660,7 +660,8 @@ public class Replicator implements Runnable {
       if(!jsonData[1].matches("[0-9]+")) {
         log.error("RE, Event filename does not contain a timestamp.");
       }
-      File outgoingEventFile = new File(eventsFileName);
+      // Check the outgoing events.
+      File outgoingEventFile = new File(outgoingReplEventsDirectory, eventsFileName);
       //In the unlikely event the file already exists in the dir, increment the 0 bit at the end of the filename.
       int nonUniqueIdentifier = 0;
       while (outgoingEventFile.exists()) {
