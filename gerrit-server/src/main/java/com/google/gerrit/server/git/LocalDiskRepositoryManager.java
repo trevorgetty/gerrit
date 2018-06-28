@@ -127,6 +127,7 @@ public class LocalDiskRepositoryManager implements GitRepositoryManager,
   }
 
   private final Path basePath;
+  private final boolean isNestedEnabled;
   private final Lock namesUpdateLock;
   private volatile SortedSet<Project.NameKey> names = new TreeSet<>();
 
@@ -137,6 +138,7 @@ public class LocalDiskRepositoryManager implements GitRepositoryManager,
     if (basePath == null) {
       throw new IllegalStateException("gerrit.basePath must be configured");
     }
+    isNestedEnabled = cfg.getBoolean("gerrit", "enableNestedRepos", false);
 
     namesUpdateLock = new ReentrantLock(true /* fair */);
   }
@@ -347,25 +349,31 @@ public class LocalDiskRepositoryManager implements GitRepositoryManager,
   private boolean isUnreasonableName(final Project.NameKey nameKey) {
     final String name = nameKey.get();
 
-    return name.length() == 0  // no empty paths
-      || name.charAt(name.length() - 1) == '/' // no suffix
-      || name.indexOf('\\') >= 0 // no windows/dos style paths
-      || name.charAt(0) == '/' // no absolute paths
-      || new File(name).isAbsolute() // no absolute paths
-      || name.startsWith("../") // no "l../etc/passwd"
-      || name.contains("/../") // no "foo/../etc/passwd"
-      || name.contains("/./") // "foo/./foo" is insane to ask
-      || name.contains("//") // windows UNC path can be "//..."
-      || name.contains(".git/") // no path segments that end with '.git' as "foo.git/bar"
-      || name.contains("?") // common unix wildcard
-      || name.contains("%") // wildcard or string parameter
-      || name.contains("*") // wildcard
-      || name.contains(":") // Could be used for absolute paths in windows?
-      || name.contains("<") // redirect input
-      || name.contains(">") // redirect output
-      || name.contains("|") // pipe
-      || name.contains("$") // dollar sign
-      || name.contains("\r"); // carriage return
+    boolean unreasonable = name.length() == 0  // no empty paths
+        || name.charAt(name.length() - 1) == '/' // no suffix
+        || name.indexOf('\\') >= 0 // no windows/dos style paths
+        || name.charAt(0) == '/' // no absolute paths
+        || new File(name).isAbsolute() // no absolute paths
+        || name.startsWith("../") // no "l../etc/passwd"
+        || name.contains("/../") // no "foo/../etc/passwd"
+        || name.contains("/./") // "foo/./foo" is insane to ask
+        || name.contains("//") // windows UNC path can be "//..."
+        || name.contains("?") // common unix wildcard
+        || name.contains("%") // wildcard or string parameter
+        || name.contains("*") // wildcard
+        || name.contains(":") // Could be used for absolute paths in windows?
+        || name.contains("<") // redirect input
+        || name.contains(">") // redirect output
+        || name.contains("|") // pipe
+        || name.contains("$") // dollar sign
+        || name.contains("\r");
+
+    if (unreasonable){
+      return true;
+    }
+
+    // no path segments that end with '.git' as "foo.git/bar", if nesting disabled
+    return (!isNestedEnabled) && name.contains(".git");
   }
 
   @Override
@@ -410,7 +418,9 @@ public class LocalDiskRepositoryManager implements GitRepositoryManager,
         BasicFileAttributes attrs) throws IOException {
       if (!dir.equals(startFolder) && isRepo(dir)) {
         addProject(dir);
-        return FileVisitResult.SKIP_SUBTREE;
+        if(!isNestedEnabled){
+          return  FileVisitResult.SKIP_SUBTREE;
+        }
       }
       return FileVisitResult.CONTINUE;
     }
@@ -434,7 +444,14 @@ public class LocalDiskRepositoryManager implements GitRepositoryManager,
         if (isUnreasonableName(nameKey)) {
           log.warn(
               "Ignoring unreasonably named repository " + p.toAbsolutePath());
-        } else {
+        } else if(isNestedEnabled &&
+            !FileKey.isGitRepository(p.toFile(),FS.DETECTED)){
+          // stops directories called .git that are not repos
+          // from entering cache and failing jgit lookup @203
+          log.warn(
+              "Ignoring unreasonably named repository " + p.toAbsolutePath());
+        }
+        else {
           found.add(nameKey);
         }
       }
