@@ -134,6 +134,7 @@ public class AccountCacheImpl implements AccountCache {
     if (accountId != null) {
       byId.invalidate(accountId);
       indexer.get().index(accountId);
+      ReplicatedCacheManager.replicateEvictionFromCache(BYID_NAME,accountId);
     }
   }
 
