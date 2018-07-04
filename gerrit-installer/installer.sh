@@ -1109,9 +1109,6 @@ function install_gerrit_scripts() {
   cp -f "sync_repo.sh" "$SCRIPT_INSTALL_DIR"
 }
 
-function install_default_log4j_properties() {
-  cp -f "log4j.properties" "$GERRIT_ROOT/etc"
-}
 
 function write_new_config() {
   header
@@ -1121,7 +1118,6 @@ function write_new_config() {
   write_gitms_config
   replace_gerrit_war
   install_gerrit_scripts
-  install_default_log4j_properties
   replicated_upgrade
 
   info ""
