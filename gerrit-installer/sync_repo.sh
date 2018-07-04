@@ -16,6 +16,7 @@ typeset -i maxReposInBatch=100
 typeset -i secsSleepForTaskCompletion=10
 typeset -i verbose=0
 typeset -i debug=0
+typeset -i noChanges=0
 
 function perr() {
   (( numErrs=numErrs+1 ))
@@ -227,17 +228,24 @@ function get_gitms_credentials() {
 function fetch_config() {
   get_application_properties
   read_application_properties
-  get_gitms_credentials
-
-  if [ -z "$GITMS_RPGROUP_ID" ]; then
-    die "Could not find replication group ID property (gerrit.rpgroupid) for deployment in $APPLICATION_PROPERTIES"
+  
+  # do not bother getting credentials if doing a dry run.
+  if [[ $noChanges == 1 ]]; then
+        return
+  else 
+  	get_gitms_credentials
+  	
+  	if [ "$SSL_ENABLED" == "true" ]; then
+      GITMS_URL="https://127.0.0.1:${SSL_REST_PORT}"
+    else
+      GITMS_URL="http://127.0.0.1:${REST_PORT}"
+    fi
+    
+    if [ -z "$GITMS_RPGROUP_ID" ]; then
+    	  die "Could not find replication group ID property (gerrit.rpgroupid) for deployment in $APPLICATION_PROPERTIES"
+  	fi
   fi
-
-  if [ "$SSL_ENABLED" == "true" ]; then
-    GITMS_URL="https://127.0.0.1:${SSL_REST_PORT}"
-  else
-    GITMS_URL="http://127.0.0.1:${REST_PORT}"
-  fi
+  
 }
 
 function wait_for_all_tasks() {
@@ -342,7 +350,7 @@ function scan_repos() {
   echo ""
 
   rm -f ${tf}_sr
-  if ! find "$GERRIT_GIT_BASE" -type f -name 'config' | sort > ${tf}_sr; then
+  if ! find "$GERRIT_GIT_BASE" -type f -a -name 'config' | sort > ${tf}_sr; then
     die "'find $GERRIT_GIT_BASE ...' failed: $?"
   fi
   while read configPath; do
@@ -365,17 +373,42 @@ function scan_repos() {
       pverbose "no sibling \"refs\" directory, skipping $configPath"
       continue
     fi
-    add_repo "$repoPath"
+    if [[ $noChanges == 1 ]]; then
+        echo "Would add $repoPath"
+    else
+        add_repo "$repoPath"
+    fi
   done < ${tf}_sr
+  rm -f ${tf}_sr
+
+  if [[ $noChanges == 1 ]]; then
+    # Check for case of directory ending in ".git" but not a git repo:
+    if ! find "$GERRIT_GIT_BASE" -type d -a -name '*.git' | sort > ${tf}_sr; then
+      die "'find $GERRIT_GIT_BASE ...' failed: $?"
+    fi
+    while read aDir; do
+      cFile="${aDir}/config"
+      if [[ ! -f "${cFile}" ]]; then
+        echo "Found non-Git repo: $cFile"
+      fi
+    done < ${tf}_sr
+    rm -f ${tf}_sr
+  fi
+
   return 0
 }
 
 function check_file() {
   file=$1
   
+  # Check the value passed in exists
+  if [[ ! -e "$file" ]]; then
+    die "File \"$file\" does not exist, aborting"
+  fi
+
   # Check the value passed in is actually a file
   if [[ ! -f "$file" ]]; then
-    die "File \"$file\" does not exist, aborting"
+    die "File \"$file\" is not a file, aborting"
   fi
 
   # Check the file is readable
@@ -448,6 +481,7 @@ function print_help {
   usage="Usage: $myname
       -h  Show this help
       -m  Max repositories added before checking tasks are all done (default $maxReposInBatch)
+      -n  Do not add repos to GitMS (just identify possibilities)
       -u  GitMS username
       -p  GitMS password
       -r  Path of git-multisite install directory (GITMS_ROOT)
@@ -458,11 +492,12 @@ function print_help {
   exit
 }
 
-while getopts D:m:p:r:s:u:vh opt
+while getopts D:m:np:r:s:u:vh opt
 do
   case "$opt" in
     D) debug="$OPTARG";;
     m) maxReposInBatch="$OPTARG";;
+    n) noChanges=1;;
     r) GITMS_ROOT="$OPTARG";;
     s) secsSleepForTaskCompletion="$OPTARG";;
     u) GITMS_USERNAME="$OPTARG";;
