@@ -88,7 +88,7 @@ function prereqs() {
     info "     - Gerrit MS: $version"
   done
   info " * Have backed up your existing Gerrit database"
-  info " * Have a version of GitMS (1.9.1 or higher) installed and running"
+  info " * Have a version of GitMS (1.9.4 or higher) installed and running"
   info " * Have a replication group created in GitMS containing all Gerrit nodes"
   info " * Have a valid GitMS admin username/password"
   info " * Stop the Gerrit service on this node"
