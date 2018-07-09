@@ -1,5 +1,6 @@
 include_defs('//lib/maven.defs')
 include_defs('//lib/JGIT_VERSION')
+include_defs('//lib/WD_REPOSITORY')
 
 maven_jar(
   name = 'jgit',

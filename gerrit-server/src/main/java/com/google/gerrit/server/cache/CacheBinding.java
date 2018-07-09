@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit;
 /** Configure a cache declared within a {@link CacheModule} instance. */
 public interface CacheBinding<K, V> {
   /** Set the total size of the cache. */
-  CacheBinding<K, V> maximumWeight(long weight);
+  CacheBinding<K, V>            maximumWeight(long weight);
 
   /** Set the time an element lives before being expired. */
   CacheBinding<K, V> expireAfterWrite(long duration, TimeUnit durationUnits);
