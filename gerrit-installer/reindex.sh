@@ -107,11 +107,14 @@ function parse_gerrit_config {
     SSL_FLAG="-k"
   fi
   
-  # If git basic auth is not set, or set false, set --digest in curl call
-  if [[ ! -z "$DIGEST_CONFIGURATION" ]]; then
-    
+  # If git basic auth is not set, set --digest in curl call
+  if [[ -z "$DIGEST_CONFIGURATION" ]]; then
+    DIGEST_FLAG="--digest"
+  fi
+  
+  # If git basic auth is set, check if not set true then set --digest in curl call  
+  if [[ -n "$DIGEST_CONFIGURATION" ]]; then
     DIGEST_CONFIGURATION=$(echo "$DIGEST_CONFIGURATION" | tr '[:upper:]' '[:lower:]')
-    
     if [[ "$DIGEST_CONFIGURATION" != "true" ]]; then
       DIGEST_FLAG="--digest"
     fi
