@@ -6,8 +6,8 @@ VERSION = '1.0.2-TEST' # When bumping VERSION, make sure no dependency conflicts
 maven_jar(
   name = 'gerrit.gitms.shared',
   id = 'com.wandisco.gerrit.gitms.shared:gerrit.gitms.shared:' + VERSION,
-  bin_sha1 = 'b7fe48b79b015908b2ed61a087054b1427ff818f',
-  src_sha1 = '50ae8299003dd7aae74ddd63e20a426f9a4e2bdb',
+  bin_sha1 = 'e93c38bd900062c0b67fa669a1ead883929a7f63',
+  src_sha1 = '5b15682d7555356a2c58563a8295357b8313d72e',
   license = 'DO_NOT_DISTRIBUTE',
   deps = ['//lib/jgit/org.eclipse.jgit:jgit'],
   repository = REPO_WD,

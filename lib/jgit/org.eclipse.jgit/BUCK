@@ -5,8 +5,8 @@ include_defs('//lib/WD_REPOSITORY')
 maven_jar(
   name = 'jgit',
   id = 'org.eclipse.jgit:org.eclipse.jgit:' + VERS_WD,
-  bin_sha1 = '3334b7cc119cb0d12b3fd5e93b8ab9d902f0cc0a',
-  src_sha1 = 'e8546dc5db1f4edb408c5f1d3bbf8e1f980eefcf',
+  bin_sha1 = '205bdc4365b6b095a2b22604fbe41341b5e93a8f',
+  src_sha1 = 'f37f93717d6d7974e5d3a53006c76a1f5ed1c445',
   license = 'jgit',
   repository = REPO_WD,
   unsign = True,
