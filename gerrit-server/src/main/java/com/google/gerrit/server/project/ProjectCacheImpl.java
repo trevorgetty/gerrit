@@ -224,7 +224,7 @@ public class ProjectCacheImpl implements ProjectCache {
       listLock.unlock();
     }
   }
-  
+
   public void onReplicatedCreateProject(Project.NameKey newProjectName) {
     listLock.lock();
     try {
