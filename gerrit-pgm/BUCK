@@ -87,7 +87,8 @@ java_library(
   name = 'util-nodep',
   srcs = glob([SRCS + 'util/*.java']),
   provided_deps = DEPS + REST_UTIL_DEPS,
-  visibility = ['//gerrit-acceptance-framework/...'],
+  visibility = ['//gerrit-acceptance-framework/...',
+'//gerritconsoleapi:'],
 )
 
 JETTY_DEPS = [

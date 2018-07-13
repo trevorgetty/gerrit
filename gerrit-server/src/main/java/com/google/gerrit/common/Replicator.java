@@ -1,5 +1,6 @@
 package com.google.gerrit.common;
 
+import com.google.common.base.Strings;
 import com.google.common.base.Supplier;
 import com.google.common.collect.HashMultiset;
 import com.google.common.collect.ImmutableMultiset;
@@ -871,8 +872,8 @@ public class Replicator implements Runnable {
     boolean result = false;
     try {
       // Used for internal integration tests at WANdisco
-      String gitConfigLoc = System.getenv("GIT_CONFIG");
-      if (gitConfigLoc == null) {
+      String gitConfigLoc = System.getProperty("GIT_CONFIG", System.getenv("GIT_CONFIG"));
+      if ( Strings.isNullOrEmpty(gitConfigLoc) && System.getenv("GIT_CONFIG") == null) {
         gitConfigLoc = System.getProperty("user.home") + "/.gitconfig";
       }
 

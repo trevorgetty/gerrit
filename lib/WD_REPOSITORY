@@ -1,0 +1,2 @@
+# Wandisco specific release asset repository.
+REPO_WD = 'http://artifacts.wandisco.com/artifactory/libs-release-local'
