@@ -207,6 +207,10 @@ function fetch_property() {
   cat "$APPLICATION_PROPERTIES" | grep "^$1 *=" | cut -f2- -d'='
 }
 
+function fetch_property_from_main_conf() {
+  cat "$MAIN_CONF_FILE" | grep "^$1 *=" | cut -f2- -d'='
+}
+
 ## Set a property in TMP_APPLICATION_PROPERTIES - also make sure any duplicate
 ## properties with the same key are not present by removing them
 function set_property() {
@@ -661,6 +665,28 @@ function get_config_from_user() {
     done
     
     GITMS_ROOT="$INPUT"
+    
+    # Check the main.conf file for the GitMS user and if the current user is not the same 
+    # then we need to abort the install
+    local currentUser=$(id -u -n)
+    MAIN_CONF_FILE="$GITMS_ROOT/config/main.conf"
+    
+    if [[ ! -r $MAIN_CONF_FILE ]]; then
+      info " \033[1mERROR:\033[0m Exiting install, \033[1mmain.conf\033[0m does not exist in the GitMS root directory."
+      exit 1
+    fi
+    
+    gitmsUser=$(fetch_property_from_main_conf "GITMS_USER")
+    
+    if [[ "$currentUser" != "$gitmsUser" ]]; then
+      info ""
+      info " \033[1mERROR:\033[0m You must run the GitMS and Gerrit services as the same user."
+      info " Current user: \033[1m$currentUser\033[0m"
+      info " GitMS user: \033[1m$gitmsUser\033[0m"
+      info " Exiting install"
+      info ""
+      exit 1
+    fi
 
     info ""
     bold " Reading GitMS Configuration..."
