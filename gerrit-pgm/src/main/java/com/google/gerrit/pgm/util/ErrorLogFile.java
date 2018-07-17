@@ -28,12 +28,22 @@ import org.apache.log4j.Logger;
 import org.apache.log4j.PatternLayout;
 import org.eclipse.jgit.lib.Config;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Properties;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Iterator;
+
+
 
 public class ErrorLogFile {
   static final String LOG_NAME = "error_log";
   static final String JSON_SUFFIX = ".json";
+  static final Logger logger = Logger.getLogger(ErrorLogFile.class);
 
   public static void errorOnlyConsole() {
     LogManager.resetConfiguration();
@@ -52,12 +62,13 @@ public class ErrorLogFile {
     root.addAppender(dst);
   }
 
-  public static LifecycleListener start(final Path sitePath, final Config config)
-      throws IOException {
+  public static LifecycleListener start(final Path sitePath,
+      final Config config) throws IOException{
     Path logdir = FileUtil.mkdirsOrDie(new SitePaths(sitePath).logs_dir,
         "Cannot create log directory");
     if (SystemLog.shouldConfigure()) {
       initLogSystem(logdir, config);
+      initWandiscoLogging(sitePath);
     }
 
     return new LifecycleListener() {
@@ -87,6 +98,39 @@ public class ErrorLogFile {
     if (json) {
       root.addAppender(SystemLog.createAppender(logdir, LOG_NAME + JSON_SUFFIX,
           new JSONEventLayoutV1()));
+    }
+  }
+
+  private static void initWandiscoLogging(final Path sitePath) {
+    // build up the list of all the values in the file
+    Properties prop = new Properties();
+    try{
+      File wdLogging = Paths.get(sitePath.toFile().getAbsolutePath(),"/etc/wd_logging.properties").toFile();
+      if(!wdLogging.exists()){
+        logger.info("Cannot find wd_logging.properties skipping");
+        return;
+      }
+      try ( FileInputStream stream = new FileInputStream(wdLogging)){
+        prop.load(stream);
+
+        Iterator<Map.Entry<Object, Object>> iter = prop.entrySet().iterator();
+        Map.Entry entry;
+
+        while(iter.hasNext()){
+          entry = iter.next();
+          String className = entry.getKey().toString();
+          String logLevelVal = entry.getValue().toString();
+          Level logLevel = Level.toLevel(logLevelVal, Level.INFO);
+
+          LogManager.getLogger(className).setLevel(logLevel);
+        }
+        logger.info("Started WANdisco Logging");
+      }catch (IOException e){
+        logger.warn("Something went wrong \n"+e.getMessage());
+      }
+    }
+    catch (NullPointerException e){
+      logger.error("Something went wrong  \n"+e.getMessage());
     }
   }
 }
