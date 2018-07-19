@@ -257,6 +257,7 @@ function fetch_config_from_application_properties() {
   GERRIT_REPLICATED_EVENTS_DISTINCT_PREFIX=$(fetch_property "gerrit.replicated.events.distinct.prefix")
   GERRIT_REPLICATED_CACHE_ENABLED=$(fetch_property "gerrit.replicated.cache.enabled")
   GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD=$(fetch_property "gerrit.replicated.cache.names.not.to.reload")
+  GERRIT_HELPER_SCRIPT_INSTALL_DIR=$(fetch_property "gerrit.helper.scripts.install.directory")
 }
 
 ## Get a password from the user, blanking the input, places it into the
@@ -920,32 +921,45 @@ function get_config_from_user() {
 
   set_property "deleted.repo.directory" $DELETED_REPO_DIRECTORY
 
-  if [ ! "$NON_INTERACTIVE" == "1" ]; then
+  if [ -z "$GERRIT_HELPER_SCRIPT_INSTALL_DIR" ]; then
+  
     info ""
     bold " Helper Scripts"
     info ""
     info " We provide some optional scripts to aid in installation/administration of "
     info " GerritMS. Where should these scripts be installed?"
     info ""
-
-    local default=$(sanitize_path "$GERRIT_ROOT/bin")
+    
+    #provide a default
+    GERRIT_HELPER_SCRIPT_DEFAULT_INSTALL_DIR=$(sanitize_path "$GERRIT_ROOT/bin")
     while true
     do
-      read -e -p " Helper Script Install Directory [$default]: " INPUT
-      if [ -z "$INPUT" ]; then
-        INPUT=$default
-      fi
+      read -e -p " Helper Script Install Directory [$GERRIT_HELPER_SCRIPT_DEFAULT_INSTALL_DIR]: " INPUT
 
-      if [[ -d "$INPUT" && -w "$INPUT" ]]; then
+      #If the input is empty then set the directory to the default directory
+      if [ -z "$INPUT" ]; then
+        INPUT=$GERRIT_HELPER_SCRIPT_DEFAULT_INSTALL_DIR
+        GERRIT_HELPER_SCRIPT_INSTALL_DIR=$INPUT
         break
       else
-        info ""
-        info " \033[1mERROR:\033[0m directory does not exist or is not writable"
-        info ""
+      	INPUT=$(sanitize_path "$INPUT")
+        if [[ -d "$INPUT" && -w "$INPUT" ]]; then
+          GERRIT_HELPER_SCRIPT_INSTALL_DIR=$INPUT
+          break
+        else
+          info ""
+          info " \033[1mERROR:\033[0m directory does not exist or is not writable"
+          info ""
+          continue
+        fi
       fi
     done
-    SCRIPT_INSTALL_DIR="$INPUT"
+  else
+    info " Helper Script Install Directory: $GERRIT_HELPER_SCRIPT_INSTALL_DIR"
   fi
+
+  set_property "gerrit.helper.scripts.install.directory" $GERRIT_HELPER_SCRIPT_INSTALL_DIR
+
 }
 
 function create_directory {
@@ -1131,8 +1145,8 @@ function remove_gitms_gerrit_plugin() {
 }
 
 function install_gerrit_scripts() {
-  cp -f "reindex.sh" "$SCRIPT_INSTALL_DIR"
-  cp -f "sync_repo.sh" "$SCRIPT_INSTALL_DIR"
+  cp -f "reindex.sh" "$GERRIT_HELPER_SCRIPT_INSTALL_DIR"
+  cp -f "sync_repo.sh" "$GERRIT_HELPER_SCRIPT_INSTALL_DIR"
 }
 
 
@@ -1160,7 +1174,7 @@ function write_new_config() {
     info "   be verified to be correct for this node."
   else
     local gerrit_base_path=$(get_gerrit_base_path "$GERRIT_ROOT")
-    local syncRepoCmdPath=$(sanitize_path "${SCRIPT_INSTALL_DIR}/sync_repo.sh")
+    local syncRepoCmdPath=$(sanitize_path "${GERRIT_HELPER_SCRIPT_INSTALL_DIR}/sync_repo.sh")
 
     if [ ! "$REPLICATED_UPGRADE" == "true" ]; then
       info " * rsync $GERRIT_ROOT to all of your GerritMS nodes"
@@ -1287,7 +1301,7 @@ function remove_all_gerrit_event_files() {
 ## and GERRIT_ROOT exist
 function check_for_non_interactive_mode() {
   ## These properties will not be set in applicaton.properties
-  if [[ ! -z "$GITMS_ROOT" && ! -z "$BACKUP_DIR" && ! -z "$SCRIPT_INSTALL_DIR" && ! -z "$FIRST_NODE" && ! -z "$CURL_ENVVARS_APPROVED" ]]; then
+  if [[ ! -z "$GITMS_ROOT" && ! -z "$BACKUP_DIR" && ! -z "$GERRIT_HELPER_SCRIPT_INSTALL_DIR" && ! -z "$FIRST_NODE" && ! -z "$CURL_ENVVARS_APPROVED" ]]; then
 
     APPLICATION_PROPERTIES="$GITMS_ROOT"
     APPLICATION_PROPERTIES+="/replicator/properties/application.properties"
@@ -1311,6 +1325,7 @@ function check_for_non_interactive_mode() {
     local tmp_gerrit_replicated_events_distinct_prefix=$(fetch_property "gerrit.replicated.events.distinct.prefix")
     local tmp_gerrit_replicated_cache_enabled=$(fetch_property "gerrit.replicated.cache.enabled")
     local tmp_gerrit_replicated_cache_names_not_to_reload=$(fetch_property "gerrit.replicated.cache.names.not.to.reload")
+    local tmp_gerrit_helper_script_install_directory=$(fetch_property "gerrit.helper.scripts.install.directory")
 
     ## Override env variables where the property already exists
     if [ ! -z "$tmp_gerrit_root" ]; then
@@ -1360,6 +1375,10 @@ function check_for_non_interactive_mode() {
     if [ ! -z "$tmp_gerrit_replicated_cache_names_not_to_reload" ]; then
       GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD="$tmp_gerrit_replicated_cache_names_not_to_reload"
     fi
+    
+    if [ ! -z "$tmp_gerrit_helper_script_install_directory" ]; then
+      GERRIT_HELPER_SCRIPT_INSTALL_DIR="$tmp_gerrit_helper_script_install_directory"
+    fi
 
     ## Check that all variables are now set to something
     if [[ ! -z "$GERRIT_ROOT"
@@ -1367,7 +1386,7 @@ function check_for_non_interactive_mode() {
       && ! -z "$GERRIT_REPLICATED_EVENTS_SEND" && ! -z "$GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL"
       && ! -z "$GERRIT_REPLICATED_EVENTS_RECEIVE_DISTINCT" && ! -z "$GERRIT_REPLICATED_EVENTS_LOCAL_REPUBLISH_DISTINCT"
       && ! -z "$GERRIT_REPLICATED_EVENTS_DISTINCT_PREFIX" && ! -z "$GERRIT_REPLICATED_CACHE_ENABLED"
-      && ! -z "$GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD" ]]; then
+      && ! -z "$GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD" && ! -z "$GERRIT_HELPER_SCRIPT_INSTALL_DIR" ]]; then
 
       ## On an upgrade, some extra variables must be set. If they are not, non-interactive
       ## mode will not be set
@@ -1484,7 +1503,7 @@ if [ "$NON_INTERACTIVE" == "1" ]; then
   echo "GERRIT_REPLICATED_CACHE_ENABLED: $GERRIT_REPLICATED_CACHE_ENABLED"
   echo "GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD: $GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD"
   echo "BACKUP_DIR: $BACKUP_DIR"
-  echo "SCRIPT_INSTALL_DIR: $SCRIPT_INSTALL_DIR"
+  echo "GERRIT_HELPER_SCRIPT_INSTALL_DIR: $GERRIT_HELPER_SCRIPT_INSTALL_DIR"
   echo "FIRST_NODE: $FIRST_NODE"
   echo "CURL_ENVVARS_APPROVED: $CURL_ENVVARS_APPROVED"
   
