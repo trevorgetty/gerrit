@@ -1,5 +1,2 @@
 # Wandisco specific release asset repository.
 REPO_WD = 'http://artifacts.wandisco.com/artifactory/libs-release-local'
-
-# TODO Remove local repo override before release.
-#REPO_WD = 'http://localhost:8081/artifactory/libs-release'

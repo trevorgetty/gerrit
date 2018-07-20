@@ -10,7 +10,8 @@ gwt_module(
     '//lib:gwtorm_client',
     '//lib:gwtorm_client_src'
   ],
-  visibility = ['PUBLIC'],
+  visibility = [
+		'//gerritconsoleapi:gerritconsoleapi','PUBLIC'],
 )
 
 java_library(

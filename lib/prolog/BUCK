@@ -43,7 +43,8 @@ maven_jar(
     ':io',
     ':runtime',
   ],
-  visibility = ['//gerrit-pgm:'],
+  visibility = ['//gerrit-pgm:',
+    '//gerritconsoleapi:'],
 )
 
 java_binary(
