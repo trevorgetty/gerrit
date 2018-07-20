@@ -31,3 +31,6 @@
 
 [test]
   excluded_labels = manual
+
+[httpserver]
+  port = 0
