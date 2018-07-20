@@ -6,10 +6,18 @@ rm -rf "target"
 mkdir -p target/tmp/resources
 
 RELEASE_WAR="${1}"
+CONSOLE_API_JAR="${2}"
 
 if [ ! -f "${RELEASE_WAR}" ]; then
   echo "Error: release.war not found. Was \"buck build release\" run?"
   exit 1
+fi
+
+#skipping this and not exiting because we want this backward compatible.
+if [ ! -f "${CONSOLE_API_JAR}" ]; then
+  echo "Warning: console-api.jar not found skipping"
+else
+  install -m 0640 ${CONSOLE_API_JAR} target/tmp
 fi
 
 install -m 0550 gerrit-installer/installer.sh target/tmp
