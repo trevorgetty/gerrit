@@ -673,7 +673,7 @@ function get_config_from_user() {
     MAIN_CONF_FILE="$GITMS_ROOT/config/main.conf"
     
     if [[ ! -r $MAIN_CONF_FILE ]]; then
-      info " \033[1mERROR:\033[0m Exiting install, \033[1mmain.conf\033[0m does not exist in the GitMS root directory."
+      info " \033[1mERROR:\033[0m Exiting install, \033[1mmain.conf\033[0m does not exist in the config directory of the GitMS root directory."
       exit 1
     fi
     
