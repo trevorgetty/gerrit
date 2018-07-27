@@ -6,8 +6,8 @@ VERSION = '1.0.2-TEST' # When bumping VERSION, make sure no dependency conflicts
 maven_jar(
   name = 'gerrit.gitms.shared',
   id = 'com.wandisco.gerrit.gitms.shared:gerrit.gitms.shared:' + VERSION,
-  bin_sha1 = '817e93558e781ae3cd2840280e6bca79f1f77ad4',
-  src_sha1 = '0c560ecb6f79ce2c56d139764cbd83305d066d15',
+  bin_sha1 = 'c1a88d03419a8576355faf92996e1eb84f93f3f5',
+  src_sha1 = '953b47945d5eedd99d45589d7748125a63745a84',
   license = 'DO_NOT_DISTRIBUTE',
   deps = ['//lib/jgit/org.eclipse.jgit:jgit',
           '//lib/jackson:jackson-mapper-asl'],

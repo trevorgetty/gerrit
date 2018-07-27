@@ -202,3 +202,9 @@ java_library(
   exports = ['@derby//jar'],
   visibility = ['//visibility:public'],
 )
+
+java_library(
+  name = 'jackson-mapper-asl',
+  exports = ['@derby//jar'],
+  visibility = ['//visibility:public'],
+)
