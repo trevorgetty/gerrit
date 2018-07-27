@@ -1,0 +1,15 @@
+include_defs('//lib/maven.defs')
+
+VERSION = '1.9.12'
+EXCLUDE = []
+
+maven_jar(
+  name = 'jackson-mapper-asl',
+  id = 'org.codehaus.jackson:jackson-mapper-asl:' + VERSION,
+  bin_sha1 = '8b290aae44213e2f6da00c07af59b0d442068f4d',
+  src_sha1='0446f3d18401f02ac6741ff980d1a7566786936c',
+  license = 'Apache2.0',
+  deps = [],
+  exclude = EXCLUDE,
+)
+
