@@ -1163,6 +1163,7 @@ function write_new_config() {
   write_gitms_config
   replace_gerrit_war
   install_gerrit_scripts
+  create_wd_logging_properties_file
   replicated_upgrade
 
   info ""
@@ -1230,7 +1231,7 @@ function create_wd_logging_properties_file(){
                  #com.google.gerrit.common.Replicator = DEBUG
 EOL
   else
-    echo "wd_logging.properties already created."
+    info " wd_logging.properties already created."
   fi
 }
 
@@ -1526,5 +1527,4 @@ check_user
 get_config_from_user
 create_backup
 write_new_config
-create_wd_logging_properties_file
 cleanup
