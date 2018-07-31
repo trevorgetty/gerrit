@@ -5,11 +5,13 @@ CORE = [
   'hooks',
   'replication',
   'reviewnotes',
-  'singleusergroup'
+  'singleusergroup',
+  'replication'
 ]
 CUSTOM = [
   # Add custom core plugins here
-  'gerrit-delete-project-plugin'
+  'gerrit-delete-project-plugin',
+  'lfs'
 ]
 
 # buck audit parses and resolves all deps even if not reachable

@@ -34,7 +34,7 @@ import org.eclipse.jgit.lib.Config;
 
 import java.util.concurrent.TimeUnit;
 
-public class DefaultCacheFactory implements MemoryCacheFactory {
+  public class DefaultCacheFactory implements MemoryCacheFactory {
   public static class Module extends LifecycleModule {
     @Override
     protected void configure() {

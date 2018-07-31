@@ -15,6 +15,7 @@
 package com.google.gerrit.common;
 
 public class ProjectUtil {
+
   public static String stripGitSuffix(String name) {
     if (name.endsWith(".git")) {
       // Be nice and drop the trailing ".git" suffix, which we never keep
@@ -27,6 +28,7 @@ public class ProjectUtil {
     }
     return name;
   }
+
 
   private ProjectUtil() {
   }

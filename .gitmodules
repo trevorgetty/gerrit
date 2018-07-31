@@ -35,5 +35,8 @@
 
 [submodule "plugins/gerrit-delete-project-plugin"]
 	path = plugins/gerrit-delete-project-plugin
-	url = https://gerrit-uk.wandisco.com/gerrit-delete-project-plugin
+	url = ../gerrit-delete-project-plugin
 	branch = .
+[submodule "plugins/lfs"]
+	path = plugins/lfs
+	url = ../gerrit-lfs-plugin
