@@ -5,8 +5,7 @@ CORE = [
   'hooks',
   'replication',
   'reviewnotes',
-  'singleusergroup',
-  'replication'
+  'singleusergroup'
 ]
 CUSTOM = [
   # Add custom core plugins here
