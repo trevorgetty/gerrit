@@ -9,7 +9,6 @@ maven_jar(
   license = 'DO_NOT_DISTRIBUTE',
   deps = ['//lib/jgit/org.eclipse.jgit:jgit',
           '//lib/jackson:jackson-mapper-asl'],
-  # TODO Put shas back when we move to release candidate.
   bin_sha1 = '8bce1e067d2060d23cd73157eb926524ebf967f2',
   src_sha1 = '1bcdf495963a3a0eeb859b8a14b569bba8114862',
   repository = REPO_WD,
