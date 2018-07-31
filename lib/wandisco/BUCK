@@ -1,7 +1,7 @@
 include_defs('//lib/maven.defs')
 include_defs('//lib/WD_REPOSITORY')
 
-VERSION = '1.0.2-TEST' # When bumping VERSION, make sure no dependency conflicts on jgit version
+VERSION = '1.0.2-TC1' # When bumping VERSION, make sure no dependency conflicts on jgit version
 
 maven_jar(
   name = 'gerrit.gitms.shared',
@@ -10,8 +10,8 @@ maven_jar(
   deps = ['//lib/jgit/org.eclipse.jgit:jgit',
           '//lib/jackson:jackson-mapper-asl'],
   # TODO Put shas back when we move to release candidate.
-  #bin_sha1 = '2675699dab50bd934df6d8ea8257716f0f9ca3cb',
-  #src_sha1 = '63c05b36156b6ce1690f129adcc5c839f0f4a661',
+  bin_sha1 = '8bce1e067d2060d23cd73157eb926524ebf967f2',
+  src_sha1 = '1bcdf495963a3a0eeb859b8a14b569bba8114862',
   repository = REPO_WD,
   unsign = True,
   visibility = ['PUBLIC']
