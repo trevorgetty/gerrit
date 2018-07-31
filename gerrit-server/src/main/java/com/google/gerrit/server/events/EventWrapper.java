@@ -1,6 +1,7 @@
 package com.google.gerrit.server.events;
 
 import com.google.common.base.Supplier;
+import com.google.gerrit.common.AccountIndexEvent;
 import com.google.gerrit.common.CacheKeyWrapper;
 import com.google.gerrit.common.DeleteProjectChangeEvent;
 import com.google.gerrit.common.ProjectInfoWrapper;
@@ -28,6 +29,7 @@ public class EventWrapper  {
     GERRIT_EVENT,
     CACHE_EVENT,
     INDEX_EVENT,
+    ACCOUNT_INDEX_EVENT,
     PACKFILE_EVENT,
     DELETE_PROJECT_EVENT,
     FOR_REPLICATOR_EVENT
@@ -110,6 +112,18 @@ public class EventWrapper  {
     this.className=deleteProjectChangeEvent.getClass().getName();
     this.projectName = deleteProjectChangeEvent.project.getName();
     this.originator = Originator.DELETE_PROJECT_EVENT;
+    this.prefix = null;
+  }
+
+  /**
+   * Event for handling Account Index events
+   * @param accountIndexEvent
+   */
+  public EventWrapper(AccountIndexEvent accountIndexEvent) {
+    this.event = gson.toJson(accountIndexEvent);
+    this.className=accountIndexEvent.getClass().getName();
+    this.projectName = null;
+    this.originator = Originator.ACCOUNT_INDEX_EVENT;
     this.prefix = null;
   }
 
