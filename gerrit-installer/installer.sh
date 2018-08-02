@@ -1163,7 +1163,6 @@ function write_new_config() {
   write_gitms_config
   replace_gerrit_war
   install_gerrit_scripts
-  create_wd_logging_properties_file
   replicated_upgrade
 
   info ""
@@ -1226,6 +1225,31 @@ function cleanup() {
   if [[ "$REPLICATED_UPGRADE" == "true" ]]; then 
     remove_obsolete_dirs
     remove_all_gerrit_event_files
+  fi
+}
+
+function create_wd_logging_properties_file(){
+
+  if [[ ! -f $GERRIT_ROOT/etc/wd_logging.properties ]]; then
+
+    cat >$GERRIT_ROOT/etc/wd_logging.properties <<EOL
+    #@Copyright 2018 WANdisco
+
+    #The wd_logging.properties file is used to change WANdisco specific default logging.
+    #The default logging can be changed before startup to allow for custom logging.
+
+    #The properties contained within the file should be key-value pairs separated by an equals char.
+    #The key should be a WANdisco specific package or class and the value should be a
+    #logging level you wish to define for that package and optionaly class.
+    #Example logging levels are INFO, WARN and DEBUG
+
+    #Example usage;
+                 #Package.Class = Logging Level
+                 #com.google.gerrit = INFO
+                 #com.google.gerrit.common.Replicator = DEBUG
+EOL
+  else
+    info " wd_logging.properties already created."
   fi
 }
 
