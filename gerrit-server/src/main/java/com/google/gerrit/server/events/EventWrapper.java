@@ -29,10 +29,10 @@ public class EventWrapper  {
     GERRIT_EVENT,
     CACHE_EVENT,
     INDEX_EVENT,
-    ACCOUNT_INDEX_EVENT,
     PACKFILE_EVENT,
     DELETE_PROJECT_EVENT,
-    FOR_REPLICATOR_EVENT
+    FOR_REPLICATOR_EVENT,
+    ACCOUNT_INDEX_EVENT
   }
   public final String event;
   public final String className;
