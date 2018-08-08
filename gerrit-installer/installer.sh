@@ -1148,7 +1148,8 @@ function install_gerrit_scripts() {
   cp -f "reindex.sh" "$GERRIT_HELPER_SCRIPT_INSTALL_DIR"
   cp -f "sync_repo.sh" "$GERRIT_HELPER_SCRIPT_INSTALL_DIR"
   if [[ ! -f "console-api.jar" ]];then
-    echo "Warning: console-api.jar not found skipping"
+    echo "Error: console-api.jar not found"
+    exit 1
   else
     cp -f "console-api.jar" "$GERRIT_HELPER_SCRIPT_INSTALL_DIR"
   fi
