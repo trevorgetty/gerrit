@@ -430,7 +430,7 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
         changeEventInfo.setProjectName(event.refUpdate.get().project);
         changeEventInfo.setBranchName(new Branch.NameKey(new Project.NameKey(event.refUpdate.get().project), completeRef(event.refUpdate.get().refName)));
       } else {
-        log.error("RE {} is not supported, project name or refupdate is null!", newEvent.getClass().getName());
+        log.info("RE {} is not supported, project name or refupdate is null!", newEvent.getClass().getName());
         changeEventInfo.supported = false;
       }
     } else if (newEvent instanceof com.google.gerrit.server.events.ReviewerAddedEvent) {
@@ -440,7 +440,7 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
     } else if (newEvent instanceof com.google.gerrit.server.events.ProjectCreatedEvent) {
       changeEventInfo.setProjectName(((ProjectCreatedEvent) newEvent).projectName);
     } else {
-      log.error("RE "+newEvent.getClass().getName()+" is not supported!", new IllegalArgumentException("RE Does this event needs management?"));
+      log.info("RE " + newEvent.getClass().getName() + " is not supported!");
       changeEventInfo.supported = false;
     }
     return changeEventInfo;
