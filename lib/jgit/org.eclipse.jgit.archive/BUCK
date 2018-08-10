@@ -4,7 +4,7 @@ include_defs('//lib/JGIT_VERSION')
 maven_jar(
   name = 'jgit-archive',
   id = 'org.eclipse.jgit:org.eclipse.jgit.archive:' + VERS_WD,
-  sha1 = '926eb5d94d1f78d2c99c28285bb9efa72d76a38a',
+  sha1 = '6cc1f631981ba00bdc8087b77c12d7a0cc07a6c2',
   license = 'jgit',
   repository = REPO_WD,
   deps = ['//lib/jgit/org.eclipse.jgit:jgit'],

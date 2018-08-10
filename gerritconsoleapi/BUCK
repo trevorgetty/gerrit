@@ -24,7 +24,7 @@ DEPS = BASE_JETTY_DEPS + [
 '//gerrit-reviewdb:server',
 '//lib/log:jsonevent-layout',
 '//gerrit-pgm:util-nodep',
-'//lib/wandisco:gerrit.gitms.shared',
+'//lib/wandisco:gerrit-gitms-interface',
 '//lib/commons:dbcp', # Everything below this point should be removed if possible
 '//gerrit-util-cli:cli',
 ]
@@ -115,6 +115,6 @@ visibility = [
 java_binary(
 name = 'console-api',
 main_class = 'com.google.gerrit.gerritconsoleapi.CLI_Launcher',
-deps = [':gerritconsoleapi', '//lib/wandisco:gerrit.gitms.shared'],
+deps = [':gerritconsoleapi', '//lib/wandisco:gerrit-gitms-interface'],
 visibility = ['PUBLIC'],
 )
