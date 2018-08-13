@@ -665,10 +665,23 @@ public class Replicator implements Runnable {
       //In the unlikely event the file already exists in the dir, increment the 0 bit at the end of the filename.
       int nonUniqueIdentifier = 0;
       while (outgoingEventFile.exists()) {
+
         log.info("RE, Event file with name {} already exists, incrementing the nonUniqueIdentifier",
             outgoingEventFile.getAbsolutePath());
+
+        //An outgoing events file with the same name already exists, so we need to create a
+        //unique file. We increment, then use the nonUniqueIdentifier to create a new unique
+        //file.
+        //Example: events-1533899416153-node_id_Node1-00.json -> events-1533899416153-node_id_Node1-01.json
+
         uniqueFile = new File(outgoingReplEventsDirectory, String.format(NEXT_EVENTS_FILE,
-            jsonData[1], thisNodeIdentity, nonUniqueIdentifier++));
+            jsonData[1], thisNodeIdentity, ++nonUniqueIdentifier));
+
+        //Check that the newly created file also doesn't exist. If it does exist we will continue
+        //round the loop. If it doesn't exist, we break out of the loop and return the uniqueFile.
+        if (!uniqueFile.exists()) {
+          break;
+        }
       }
     } else{
       log.error("RE Something has gone wrong, Events file name was not set correctly");
