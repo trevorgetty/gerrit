@@ -15,7 +15,7 @@ fi
 
 #skipping this and not exiting because we want this backward compatible.
 if [ ! -f "${CONSOLE_API_JAR}" ]; then
-  echo "Error: console-api.jar not found"
+  echo "Error: ${CONSOLE_API_JAR} not found"
   exit 1
 else
   install -m 0640 ${CONSOLE_API_JAR} target/tmp

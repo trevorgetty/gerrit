@@ -1147,11 +1147,17 @@ function remove_gitms_gerrit_plugin() {
 function install_gerrit_scripts() {
   cp -f "reindex.sh" "$GERRIT_HELPER_SCRIPT_INSTALL_DIR"
   cp -f "sync_repo.sh" "$GERRIT_HELPER_SCRIPT_INSTALL_DIR"
-  if [[ ! -f "console-api.jar" ]];then
-    echo "Error: console-api.jar not found"
+  
+  CONSOLE_API_JAR="console-api.jar"
+  if [[ ! -f "$CONSOLE_API_JAR" ]];then
+    echo "Error: $CONSOLE_API_JAR not found"
     exit 1
   else
-    cp -f "console-api.jar" "$GERRIT_HELPER_SCRIPT_INSTALL_DIR"
+    cp -f "$CONSOLE_API_JAR" "$GERRIT_HELPER_SCRIPT_INSTALL_DIR"   
+    if [ $? -ne 0 ]; then
+      echo "Failed to copy ${CONSOLE_API_JAR} to $GERRIT_HELPER_SCRIPT_INSTALL_DIR"
+      exit 1
+    fi
   fi
 }
 
