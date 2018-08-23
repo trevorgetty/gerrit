@@ -22,7 +22,6 @@ function versionAllowed() {
 
 function header() {
   if [ ! "$NON_INTERACTIVE" == "1" ]; then
-    clear
     cat "resources/logo.txt"
     info "\n\n"
   fi
@@ -789,12 +788,16 @@ function get_config_from_user() {
   
   set_property "gerrit.repo.home" "$GERRIT_REPO_HOME"
 
-
-  if [ -z "$GERRIT_EVENTS_PATH" ]; then
+  if [[ -z "$GERRIT_EVENTS_PATH" ]]; then
     get_directory "Gerrit Events Directory" "true"
     GERRIT_EVENTS_PATH="$INPUT_DIR"
   else
     info " Gerrit Events Path: $GERRIT_EVENTS_PATH"
+  fi
+  
+  ## GERRIT_EVENTS_PATH must exist, if it does not attempt to create it
+  if [[ ! -d "$GERRIT_EVENTS_PATH" ]]; then
+    mkdirectory $GERRIT_EVENTS_PATH
   fi
 
   set_property "gerrit.events.basepath" "$GERRIT_EVENTS_PATH"
@@ -889,7 +892,7 @@ function get_config_from_user() {
   fi
 
   #prompt for directory to save deleted repos to
-  if [ -z "$DELETED_REPO_DIRECTORY" ]; then
+  if [[ -z "$DELETED_REPO_DIRECTORY" ]]; then
     info ""
     bold " Deleted Repositories Directory "
     info "
@@ -901,22 +904,29 @@ function get_config_from_user() {
 
     #provide a default
     DELETED_REPO_DEFAULT_DIRECTORY=$(sanitize_path "$GERRIT_REPO_HOME/archiveOfDeletedGitRepositories")
+    
     while true
     do
-      read -e -p " Location for deleted repositories to be moved to : $DELETED_REPO_DEFAULT_DIRECTORY " INPUT
+      read -e -p " Location for deleted repositories to be moved to [$DELETED_REPO_DEFAULT_DIRECTORY]: " INPUT
 
       #If the input is empty then set the directory to the default directory
-      if [ -z "$INPUT" ]; then
-        INPUT=$DELETED_REPO_DEFAULT_DIRECTORY
-        create_directory "$INPUT"
+      if [[ -z "$INPUT" ]]; then
+        DELETED_REPO_DIRECTORY=$DELETED_REPO_DEFAULT_DIRECTORY
         break
       else
-      	INPUT=$(sanitize_path "$INPUT")
-        create_directory "$INPUT"
+      	DELETED_REPO_DIRECTORY=$(sanitize_path "$INPUT")
+      	break
       fi
     done
   else
     info " Deleted Repo Directory: $DELETED_REPO_DIRECTORY"
+  fi
+  
+  echo "dir is $DELETED_REPO_DIRECTORY"
+  
+  ## DELETED_REPO_DIRECTORY must exist, if it does not attempt to create it
+  if [[ ! -d "$DELETED_REPO_DIRECTORY" ]]; then
+    mkdirectory $DELETED_REPO_DIRECTORY
   fi
 
   set_property "deleted.repo.directory" $DELETED_REPO_DIRECTORY
@@ -960,39 +970,6 @@ function get_config_from_user() {
 
   set_property "gerrit.helper.scripts.install.directory" $GERRIT_HELPER_SCRIPT_INSTALL_DIR
 
-}
-
-function create_directory {
-  INPUT_DIR="$1"
-
-  if [[ ! -d "$INPUT_DIR" && ! -e "$INPUT_DIR" ]]; then
-    local create_dir=$(get_boolean "The directory [ $INPUT_DIR ] does not exist, do you want to create it?" "true")
-
-    if [ "$create_dir" == "true" ]; then
-      mkdir -p "$INPUT_DIR"
-      if [ "$?" == "0" ]; then
-        DELETED_REPO_DIRECTORY="$INPUT_DIR"
-        break
-      else
-        echo " ERROR: Directory could not be created"
-        continue
-      fi
-    else
-      #user does not want to create the directory so prompt them again
-      continue
-    fi
-  elif [ -d "$INPUT_DIR" ]; then
-    if [ -w "$INPUT_DIR" ]; then
-      DELETED_REPO_DIRECTORY="$INPUT_DIR"
-      break
-    else
-      echo " ERROR: $INPUT_DIR is not writable"
-      continue
-    fi
-  else
-    echo " ERROR: $INPUT_DIR does not exist"
-    continue
-  fi
 }
 
 function is_gitms_running() {
@@ -1313,9 +1290,10 @@ function remove_all_gerrit_event_files() {
 ## Additionally, sanity checking is done here to make sure that application.properties
 ## and GERRIT_ROOT exist
 function check_for_non_interactive_mode() {
+
   ## These properties will not be set in applicaton.properties
   if [[ ! -z "$GITMS_ROOT" && ! -z "$BACKUP_DIR" && ! -z "$GERRIT_HELPER_SCRIPT_INSTALL_DIR" && ! -z "$FIRST_NODE" && ! -z "$CURL_ENVVARS_APPROVED" ]]; then
-
+    
     APPLICATION_PROPERTIES="$GITMS_ROOT"
     APPLICATION_PROPERTIES+="/replicator/properties/application.properties"
 
@@ -1353,12 +1331,23 @@ function check_for_non_interactive_mode() {
       GERRIT_REPO_HOME="$tmp_gerrit_repo_home"
     fi
 
-    if [ ! -z "$tmp_deleted_repo_directory" ]; then
+    if [[ ! -z "$tmp_deleted_repo_directory" ]]; then
       DELETED_REPO_DIRECTORY="$tmp_deleted_repo_directory"
+      
+      ## DELETED_REPO_DIRECTORY must exist, if it does not attempt to create it
+      if [[ ! -d "$DELETED_REPO_DIRECTORY" ]]; then
+        mkdirectory $DELETED_REPO_DIRECTORY
+      fi
     fi
-
-    if [ ! -z "$tmp_gerrit_events_path" ]; then
+    
+ 
+    if [[ ! -z "$tmp_gerrit_events_path" ]]; then
       GERRIT_EVENTS_PATH="$tmp_gerrit_events_path"
+      
+      ## GERRIT_EVENTS_PATH must exist, if it does not attempt to create it
+      if [[ ! -d "$GERRIT_EVENTS_PATH" ]]; then
+        mkdirectory $GERRIT_EVENTS_PATH
+      fi
     fi
 
     if [ ! -z "$tmp_gerrit_replicated_events_send" ]; then
@@ -1416,15 +1405,6 @@ function check_for_non_interactive_mode() {
         info "ERROR: Non-interactive installation aborted, the GERRIT_ROOT at $GERRIT_ROOT does not exist"
         exit 1
       fi
-
-      ## DELETED_REPO_DIRECTORY must exist, if it does not attempt to create it
-      if [ ! -d "$DELETED_REPO_DIRECTORY" ]; then
-        mkdir -p "$DELETED_REPO_DIRECTORY"
-        if [ "$?" != "0" ]; then
-          info "ERROR: Non-interactive installation aborted, the DELETED_REPO_DIRECTORY at $DELETED_REPO_DIRECTORY does not exist and can not be created"
-          exit 1
-        fi
-      fi
       
       ## CURL_ENVVARS_APPROVED must be either true or false
       if [ ! "$CURL_ENVVARS_APPROVED" == "true" ] && [ ! "$CURL_ENVVARS_APPROVED" == "false" ]; then
@@ -1478,6 +1458,20 @@ function versionLessThan() {
   test $comp_version_buildno -lt  $base_version_buildno && return 0
   test $comp_version_buildno -gt  $base_version_buildno && return 1
   return 1
+}
+
+function mkdirectory(){
+
+	local create_dir=$(get_boolean "The directory [ "$1" ] does not exist, do you want to create it?" "true")
+
+    if [[ "$create_dir" == "true" ]]; then
+      mkdir -p "$1"
+      if [[ "$?" != "0" ]]; then
+        info "ERROR: The directory $1 cannot be created"
+        exit 1
+      fi
+    fi
+
 }
 
 check_executables
