@@ -3,6 +3,8 @@
 # If the release war path, console api path aren't exported env variables, set to args if they have been passed in.
 [[ -z $RELEASE_WAR_PATH ]] && RELEASE_WAR_PATH=$1
 [[ -z $GERRIT_TEST_LOCATION ]] && GERRIT_TEST_LOCATION=$2
+[[ -z $CONSOLE_API_JAR_PATH ]] && CONSOLE_API_JAR_PATH=$3
+
 
 ## Unset Jenkins ENV variables for Git commits
 unset GIT_AUTHOR_NAME
@@ -16,10 +18,13 @@ unset EMAIL
 echo "**************** Package Versions *****************"
 mysql --version
 python --version
-echo "***************************************************"
+echo "***************************************************\n\n"
 
+echo "Testing environment was setup as:"
 echo "Gerrit test location is: $GERRIT_TEST_LOCATION"
 echo "Release war path is: $RELEASE_WAR_PATH"
+echo "Console-Api jar path is: $CONSOLE_API_JAR_PATH"
+echo ""
 
 # check the release war is in the source location
 if [ -f $RELEASE_WAR_PATH/release.war ]; then
@@ -56,7 +61,10 @@ else
   cd $GERRIT_TEST_LOCATION/jgit-update-service
 fi
 
+# Copy over the gerritMS build assets.  Really we should use the real installer package, but this is what it uses
+# for now.....
 cp -a $RELEASE_WAR_PATH/release.war $GERRIT_TEST_LOCATION/jgit-update-service/gerrit.war
+cp -a $CONSOLE_API_JAR_PATH/console-api.jar $GERRIT_TEST_LOCATION/jgit-update-service/console-api.jar
 
 #MySQL Setup
 echo "About to update the local mysql instance, to allow our testing user access"

@@ -62,21 +62,28 @@ fast-assembly: fast-assembly-gerrit fast-assembly-console
 # Build just gerritMS
 #
 fast-assembly-gerrit:
+
+	@echo "\n************ Compile Gerrit Starting **************"
 	@echo "Building GerritMS"
 	buck build release
+	@echo "\n************ Compile Gerrit Finished **************"
 
 #
 # Build just the console-api
 #
 fast-assembly-console:
+	@echo "\n************ Compile Console-API Starting **************"
 	@echo "Building console-api"
 	buck build //gerritconsoleapi:console-api
+	@echo "\n************ Compile Console-API Finished **************"
 
 clean: | $(JENKINS_DIRECTORY)
+	@echo "\n************ Clean Phase Starting **************"
 	buck clean
 	rm -rf $(GERRIT_BUCK_OUT)
 	rm -rf $(GERRIT_TEST_LOCATION)/jgit-update-service
 	rm $(GERRIT_ROOT)/env.properties
+	@echo "\n************ Clean Phase Finished **************"
 
 check_build_assets:
 	# check that our release.war and console-api.jar items have been built and are available
@@ -94,11 +101,12 @@ check_build_assets:
 
 
 installer: check_build_assets
-	@echo "about to create installer packages"
+	@echo "\n************ Installer Phase Starting **************"
 
 	echo "Building Gerrit Installer..."
 	$(GERRIT_ROOT)/gerrit-installer/create_installer.sh $(RELEASE_WAR_PATH)/release.war $(CONSOLE_API_JAR_PATH)/console-api.jar
 
+	@echo "\n************ Installer Phase Finished **************"
 
 
 skip-tests:
@@ -116,32 +124,37 @@ $(JENKINS_DIRECTORY):
 	mkdir -p $(GERRIT_TEST_LOCATION)
 
 run-integration-tests: check_build_assets | $(JENKINS_DIRECTORY)
+	@echo "\n************ Integration Tests Starting **************"
 	@echo "About to run integration tests -> resetting environment"
 
 	@echo "Release war path in makefile is: $(RELEASE_WAR_PATH)"
-	./build/run-integration-tests.sh $(RELEASE_WAR_PATH) $(GERRIT_TEST_LOCATION)
+	./build/run-integration-tests.sh $(RELEASE_WAR_PATH) $(GERRIT_TEST_LOCATION) $(CONSOLE_API_JAR_PATH)
+
+	@echo "\n************ Integration Tests Finished **************"
 
 deploy: deploy-console deploy-gerrit
 
 deploy-gerrit:
-			@echo "Running mvn deploy:deploy-file to deploy the gerritMS installer to Artifactory..."
-
-			@echo "TODO: For now skipping the deploy of GerritMS to artifactory."
+	@echo "\n************ Deploy GerritMS Starting **************"
+	@echo "TODO: For now skipping the deploy of GerritMS to artifactory."
+	@echo "\n************ Deploy  GerritMS Finished **************"
 
 
 deploy-console:
-				@echo "Running mvn deploy:deploy-file to deploy the console-api.jar to Artifactory..."
-				@echo "Deploying as version: $(VERSION)"
+	@echo "\n************ Deploy Console-API Phase Starting **************"
+	@echo "Running mvn deploy:deploy-file to deploy the console-api.jar to Artifactory..."
+	@echo "Deploying as version: $(VERSION)"
 
-				#gerrit-server
-				mvn deploy:deploy-file \
-				-DgroupId=$(CONSOLE_GROUPID) \
-				-DartifactId=$(CONSOLE_ARTIFACTID) \
-				-Dversion="$(VERSION)" \
-				-Dpackaging=jar \
-				-Dfile=$(CONSOLE_API_JAR_PATH)/console-api.jar \
-				-DrepositoryId=releases \
-				-Durl=http://artifacts.wandisco.com:8081/artifactory/libs-release-local
+	# use mvn deploy-file target, to deploy any file, and we will give it the pom properties to deploy as...
+	mvn deploy:deploy-file \
+	-DgroupId=$(CONSOLE_GROUPID) \
+	-DartifactId=$(CONSOLE_ARTIFACTID) \
+	-Dversion="$(VERSION)" \
+	-Dpackaging=jar \
+	-Dfile=$(CONSOLE_API_JAR_PATH)/console-api.jar \
+	-DrepositoryId=releases \
+	-Durl=http://artifacts.wandisco.com:8081/artifactory/libs-release-local
+	@echo "\n************ Deploy Console-API Phase Finished **************"
 
 help:
 	@echo
