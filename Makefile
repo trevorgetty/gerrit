@@ -39,7 +39,12 @@ PREFIX := $(RPM_PREFIX)/$(PKG_NAME)
 SKIP_TESTS :=
 
 # maybe use /var/lib/jenkins/tmp it can still be ok on our local machines, maybe make switchable to /tmp but its ok for now.
-TEST_LOCATION=/var/lib/jenkins/tmp
+JENKINS_DIRECTORY := /var/lib/jenkins
+JENKINS_TMP_TEST_LOCATION := $(JENKINS_DIRECTORY)/tmp
+DEV_BOX_TMP_TEST_LOCATION := /tmp/builds/gerritms
+GERRIT_TEST_LOCATION=$(JENKINS_TMP_TEST_LOCATION)
+BUILD_USER=$USER
+git_username=Testme
 
 all: display_version fast-assembly installer run-integration-tests
 
@@ -67,58 +72,54 @@ fast-assembly-console:
 	@echo "Building console-api"
 	buck build //gerritconsoleapi:console-api
 
-clean:
+clean: | $(JENKINS_DIRECTORY)
 	buck clean
 	rm -rf $(GERRIT_BUCK_OUT)
+	rm -rf $(GERRIT_TEST_LOCATION)/jgit-update-service
+	rm $(GERRIT_ROOT)/env.properties
 
-installer:
-	@echo "about to create installer packages"
+check_build_assets:
+	# check that our release.war and console-api.jar items have been built and are available
+	$(eval RELEASE_WAR_PATH=$(RELEASE_WAR_PATH))
+	$(eval CONSOLE_API_JAR_PATH=$(CONSOLE_API_JAR_PATH))
 
-	@echo "RELEASE_WAR_PATH=$(RELEASE_WAR_PATH)" >> "$(GERRIT_ROOT)/env.properties"
+	# Writing out a new file, so create new one.
+	@echo "RELEASE_WAR_PATH=$(RELEASE_WAR_PATH)" > "$(GERRIT_ROOT)/env.properties"
 	@echo "INSTALLER_PATH=target" >> $(GERRIT_ROOT)/env.properties
-	@echo "CONSOLE_API_JAR_PATH=$CONSOLE_API_JAR_PATH" >> $(GERRIT_ROOT)/env.properties
-	@echo "Contents of env.properties is: $(GERRIT_ROOT)/env.properties)"
+	@echo "CONSOLE_API_JAR_PATH=$(CONSOLE_API_JAR_PATH)" >> $(GERRIT_ROOT)/env.properties
+	@echo "Env.properties is saved to: $(GERRIT_ROOT)/env.properties)"
 
 	[ -f $(RELEASE_WAR_PATH)/release.war ] && echo release.war exists || ( echo releaes.war not exists && exit 1;)
 	[ -f $(CONSOLE_API_JAR_PATH)/console-api.jar ] && echo console-api.jar exists || ( echo console-api.jar not exists && exit 1;)
 
-	@echo "Building Gerrit Installer..."
+
+installer: check_build_assets
+	@echo "about to create installer packages"
+
+	echo "Building Gerrit Installer..."
 	$(GERRIT_ROOT)/gerrit-installer/create_installer.sh $(RELEASE_WAR_PATH)/release.war $(CONSOLE_API_JAR_PATH)/console-api.jar
 
 
 
 skip-tests:
-	@echo "Skipping integration tests."
+	echo "Skipping integration tests."
 
-run-integration-tests:
+# Target used to check if the jenkins tmp directory exists, and if not to use
+# /tmp on a users dev box.
+$(JENKINS_DIRECTORY):
+
+	@echo "Jenkins directory does not exist, fallback to /tmp on dev boxes"
+	$(eval GERRIT_TEST_LOCATION = $(DEV_BOX_TMP_TEST_LOCATION))
+
+	@echo Test directory is now: $(GERRIT_TEST_LOCATION)
+
+	mkdir -p $(GERRIT_TEST_LOCATION)
+
+run-integration-tests: check_build_assets | $(JENKINS_DIRECTORY)
 	@echo "About to run integration tests -> resetting environment"
-	## Unset Jenkins ENV variables for Git commits
-	unset GIT_AUTHOR_NAME
-	unset GIT_AUTHOR_EMAIL
-	unset GIT_AUTHOR_DATE
-	unset GIT_COMMITTER_NAME
-	unset GIT_COMMITTER_EMAIL
-	unset GIT_COMMITTER_DATE
-	unset EMAIL
 
-	@echo "**************** Package Versions *****************"
-		mysql --version
-		python --version
-	@echo "***************************************************"
-
-	#Run integration tests with generated Gerrit MS war against latest Git MS
-	git clone --depth 1 ssh://build.jenkins@gerrit-uk.wandisco.com:29418/jgit-update-service $GERRIT_TEST_LOCATION/jgit-update-service
-	cp -a $RELEASE_WAR_PATH/release.war $GERRIT_TEST_LOCATION/jgit-update-service/gerrit.war
-	cd $GERRIT_TEST_LOCATION/jgit-update-service
-
-	#MySQL Setup
-	mysql -uroot -e "CREATE USER 'jenkins'@'%' IDENTIFIED BY 'password';" || true
-	mysql -uroot -e "CREATE USER 'jenkins'@'localhost' IDENTIFIED BY 'password';" || true
-
-	make clean fast-assembly
-
-	#echo "Starting integration tests"
-	DELAY=60 ./test-rb/run/gerrit/default.sh
+	@echo "Release war path in makefile is: $(RELEASE_WAR_PATH)"
+	./build/run-integration-tests.sh $(RELEASE_WAR_PATH) $(GERRIT_TEST_LOCATION)
 
 deploy: deploy-console deploy-gerrit
 
@@ -154,6 +155,7 @@ help:
 	@echo "   make fast-assembly-console        -> will just build the GerritMS Console API package"
 	@echo "   make clean fast-assembly installer  -> will build the packages and installer asset"
 	@echo "   make installer                    -> will build the installer asset using already built packages"
+	@echo "   make run-integration-tests        -> will run the integration tests, against the already built packages"
 
 	@echo "   make deploy                       -> will deploy the installer packages of GerritMS and ConsoleAPI to artifactory"
 	@echo "   make deploy-gerrit                -> will deploy the installer package of GerritMS"
