@@ -23,6 +23,7 @@ LIBS = [
   '//lib/log:impl_log4j',
 ]
 PGMLIBS = ['//gerrit-pgm:pgm']
+ADDITIONAL_BINARIES = ['//gerritconsoleapi:console-api']
 
 def scan_plugins():
   import os

@@ -6,10 +6,9 @@ public class CLI_Launcher {
     final GerritCLIArgParse instance = new GerritCLIArgParse();
     try{
       instance.doMain(arguments);
-      System.exit(0);
     }
     catch (Exception ex){
-      System.out.println("ERROR: Exception encountered: " + ex);
+      System.out.println("ERROR: " + ex);
       ex.printStackTrace();
     }
   }

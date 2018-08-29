@@ -24,8 +24,8 @@ import com.google.gerrit.server.CurrentUser;
  * These matchers are "compiled" versions of the AccessSection name, supporting
  * faster selection of which sections are relevant to any given input reference.
  */
-class SectionMatcher extends RefPatternMatcher {
-  static SectionMatcher wrap(Project.NameKey project, AccessSection section) {
+public class SectionMatcher extends RefPatternMatcher {
+  public static SectionMatcher wrap(Project.NameKey project, AccessSection section) {
     String ref = section.getName();
     if (AccessSection.isValid(ref)) {
       return new SectionMatcher(project, section, getMatcher(ref));

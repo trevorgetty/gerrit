@@ -1,45 +1,19 @@
 package com.google.gerrit.gerritconsoleapi;
 
 import com.google.gerrit.common.Die;
-import com.google.gerrit.extensions.config.FactoryModule;
-import com.google.gerrit.extensions.events.GitReferenceUpdatedListener;
-import com.google.gerrit.extensions.events.LifecycleListener;
-import com.google.gerrit.extensions.registration.DynamicSet;
-import com.google.gerrit.lifecycle.LifecycleModule;
 import com.google.gerrit.metrics.DisabledMetricMaker;
 import com.google.gerrit.metrics.MetricMaker;
-import com.google.gerrit.metrics.dropwizard.DropWizardMetricMaker;
-import com.google.gerrit.pgm.util.BatchProgramModule;
-import com.google.gerrit.pgm.util.SiteLibraryBasedDataSourceProvider;
-import com.google.gerrit.server.change.ChangeResource;
 import com.google.gerrit.server.config.GerritServerConfig;
 import com.google.gerrit.server.config.GerritServerConfigModule;
 import com.google.gerrit.server.config.SitePath;
 import com.google.gerrit.server.config.SitePaths;
 import com.google.gerrit.server.git.GitRepositoryManagerModule;
-import com.google.gerrit.server.index.DummyIndexModule;
-import com.google.gerrit.server.index.change.ReindexAfterUpdate;
-import com.google.gerrit.server.notedb.ConfigNotesMigration;
-import com.google.gerrit.server.schema.DataSourceModule;
-import com.google.gerrit.server.schema.DataSourceProvider;
-import com.google.gerrit.server.schema.DataSourceType;
-import com.google.gerrit.server.schema.DatabaseModule;
-import com.google.gerrit.server.schema.SchemaModule;
+import com.google.gerrit.server.schema.*;
+
 import com.google.gerrit.server.securestore.DefaultSecureStore;
 import com.google.gerrit.server.securestore.SecureStoreClassName;
-import com.google.gwtorm.server.OrmException;
-import com.google.inject.AbstractModule;
-import com.google.inject.Binding;
-import com.google.inject.CreationException;
-import com.google.inject.Guice;
-import com.google.inject.Injector;
-import com.google.inject.Key;
-import com.google.inject.Module;
-import com.google.inject.Provider;
-import com.google.inject.ProvisionException;
-import com.google.inject.TypeLiteral;
-import com.google.inject.name.Named;
-import com.google.inject.name.Names;
+import com.google.inject.*;
+
 import com.google.inject.spi.Message;
 import com.google.inject.util.Providers;
 import org.eclipse.jgit.errors.ConfigInvalidException;
@@ -47,61 +21,55 @@ import org.eclipse.jgit.lib.Config;
 import org.eclipse.jgit.storage.file.FileBasedConfig;
 import org.eclipse.jgit.util.FS;
 
-
-import javax.sql.DataSource;
 import java.io.IOException;
-import java.lang.annotation.Annotation;
+import java.nio.file.Files;
 import java.nio.file.Path;
-import java.sql.Connection;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
-import static com.google.inject.Scopes.SINGLETON;
 import static com.google.inject.Stage.PRODUCTION;
 
 public class GuiceConfigurator {
-  private Injector injector;
-  private Injector dbInjector;
+
+  private Injector cfgInjector;
+  private Injector mainInjector;
   private Path sitePath;
-  protected Provider<DataSource> dsProvider;
+  private Config config;
 
   public GuiceConfigurator(Path sitePath) {
-      this.sitePath = sitePath;
-      dbInjector = this.createDbInjector(false, DataSourceProvider.Context.MULTI_USER);
+    this.sitePath = sitePath;
+
+    mustHaveValidSite();
+
+    mainInjector = this.createMainInjector();
   }
 
+  public Injector getMainInjector() {
+    return mainInjector;
+  }
+
+  /**
+   * Ensures we are running inside of a valid site, otherwise throws a Die.
+   */
+  protected void mustHaveValidSite() throws Die {
+    if (!Files.exists(sitePath.resolve("etc").resolve("gerrit.config"))) {
+      throw die("not a Gerrit site: '" + getSitePath() + "'\n"
+          + "Perhaps you need to run init first?");
+    }
+  }
 
   /**
    * The site path of the Gerrit installation
+   *
    * @return
    */
   protected Path getSitePath() {
     return sitePath;
   }
 
-
-  /**
-   * Installs the necessary bindings for setting up the system
-   * and returns an injector with those bindings.
-   * @return
-   */
-  Injector createSysInjector() {
-    return dbInjector.createChildInjector(new FactoryModule() {
-      @Override
-      public void configure() {
-        install(dbInjector.getInstance(BatchProgramModule.class));
-        DynamicSet.bind(binder(), GitReferenceUpdatedListener.class).to(
-            ReindexAfterUpdate.class);
-        install(new DummyIndexModule());
-        factory(ChangeResource.Factory.class);
-      }
-    });
-  }
-
-
   /**
    * Get the secure.store.class property based on the sitePath.
+   *
    * @param sitePath
    * @return
    */
@@ -114,10 +82,10 @@ public class GuiceConfigurator {
     return nullToDefault(secureStoreProperty);
   }
 
-
   /**
-   * Utility method using ternary operator which returns the className or
-   * a default secure store className.
+   * Utility method using ternary operator which returns the className or a
+   * default secure store className.
+   *
    * @param className
    * @return
    */
@@ -125,19 +93,19 @@ public class GuiceConfigurator {
     return className != null ? className : DefaultSecureStore.class.getName();
   }
 
-
   /**
    * Calls getSecureStoreClassName with a sitePath
+   *
    * @return
    */
   protected final String getConfiguredSecureStoreClass() {
     return getSecureStoreClassName(sitePath);
   }
 
-
   /**
-   * The secureStoreClass can be worked out based on the sitePath.
-   * The gerrit.config is loaded to get the secureStoreClass.
+   * The secureStoreClass can be worked out based on the sitePath. The
+   * gerrit.config is loaded to get the secureStoreClass.
+   *
    * @param sitePath
    * @return
    */
@@ -165,59 +133,15 @@ public class GuiceConfigurator {
     }
   }
 
-
   /**
-   * DB connection bindings are configured using the GerritServerModule,
-   * DataSourceModule etc.
-   * @param dsProvider
+   *
    * @return
    */
-  private String getDbType(Provider<DataSource> dsProvider) {
-    String dbProductName;
-    try (Connection conn = dsProvider.get().getConnection()) {
-      dbProductName = conn.getMetaData().getDatabaseProductName().toLowerCase();
-    } catch (SQLException e) {
-      throw new RuntimeException(e);
-    }
-
-    List<Module> modules = new ArrayList<>();
-    modules.add(new AbstractModule() {
-      @Override
-      protected void configure() {
-        bind(Path.class).annotatedWith(SitePath.class).toInstance(getSitePath());
-      }
-    });
-    modules.add(new GerritServerConfigModule());
-    modules.add(new DataSourceModule());
-    Injector i = Guice.createInjector(modules);
-    List<Binding<DataSourceType>> dsTypeBindings =
-        i.findBindingsByType(new TypeLiteral<DataSourceType>() {});
-    for (Binding<DataSourceType> binding : dsTypeBindings) {
-      Annotation annotation = binding.getKey().getAnnotation();
-      if (annotation instanceof Named) {
-        if (((Named) annotation).value().toLowerCase().contains(dbProductName)) {
-          return ((Named) annotation).value();
-        }
-      }
-    }
-    throw new IllegalStateException(String.format(
-        "Cannot guess database type from the database product name '%s'",
-        dbProductName));
-  }
-
-
-  /**
-   * Database bindings. The database server must be running for this to
-   * connect.
-   * @param enableMetrics
-   * @param context
-   * @return
-   */
-  protected Injector createDbInjector(final boolean enableMetrics,
-      final DataSourceProvider.Context context) {
+  protected Injector createMainInjector() {
     final Path sitePath = getSitePath();
     final List<Module> modules = new ArrayList<>();
 
+    // Configuration modules so we can add modules based on configuration present.
     Module sitePathModule = new AbstractModule() {
       @Override
       protected void configure() {
@@ -227,68 +151,37 @@ public class GuiceConfigurator {
       }
     };
     modules.add(sitePathModule);
-
-    if (enableMetrics) {
-      modules.add(new DropWizardMetricMaker.ApiModule());
-    } else {
-      modules.add(new AbstractModule() {
-        @Override
-        protected void configure() {
-          bind(MetricMaker.class).to(DisabledMetricMaker.class);
-        }
-      });
-    }
-
-    modules.add(new LifecycleModule() {
+    modules.add(new AbstractModule() {
       @Override
       protected void configure() {
-        bind(DataSourceProvider.Context.class).toInstance(context);
-        if (dsProvider != null) {
-          bind(Key.get(DataSource.class, Names.named("ReviewDb")))
-            .toProvider(dsProvider)
-            .in(SINGLETON);
-          if (LifecycleListener.class.isAssignableFrom(dsProvider.getClass())) {
-            listener().toInstance((LifecycleListener) dsProvider);
-          }
-        } else {
-          bind(Key.get(DataSource.class, Names.named("ReviewDb")))
-            .toProvider(SiteLibraryBasedDataSourceProvider.class)
-            .in(SINGLETON);
-          listener().to(SiteLibraryBasedDataSourceProvider.class);
-        }
+        bind(MetricMaker.class).to(DisabledMetricMaker.class);
       }
     });
-
     Module configModule = new GerritServerConfigModule();
     modules.add(configModule);
-    Injector cfgInjector = Guice.createInjector(sitePathModule, configModule);
-    Config cfg = cfgInjector.getInstance(Key.get(Config.class, GerritServerConfig.class));
-    String dbType;
-    if (dsProvider != null) {
-      dbType = getDbType(dsProvider);
-    } else {
-      dbType = cfg.getString("database", null, "type");
-    }
 
-    if (dbType == null) {
-      throw new ProvisionException("database.type must be defined");
-    }
+    // Create a standalone context, that can obtain simple gerrit configuration from the sitePath.
+    cfgInjector = Guice.createInjector(configModule, sitePathModule);
 
-    final DataSourceType dst = Guice.createInjector(new DataSourceModule(), configModule,
-            sitePathModule).getInstance(
-            Key.get(DataSourceType.class, Names.named(dbType.toLowerCase())));
+    // Get hold of the config instance from our new cfginjector
+    config = cfgInjector.getInstance(
+        Key.get(Config.class, GerritServerConfig.class));
+
+    // Now the rest of the modules are to startup this application with gitRepository management, no cache or
+    // migration logic.
+    modules.add(new SchemaModule());
+    modules.add(cfgInjector.getInstance(GitRepositoryManagerModule.class));
+    modules.add(new DataSourceModule());
 
     modules.add(new AbstractModule() {
       @Override
       protected void configure() {
-        bind(DataSourceType.class).toInstance(dst);
+// Bind my own impl of ProjectLoader which avoids the use of the ProjectCache.
+        bind(ProjectLoader.class);
+        bind(ProjectStateMinDepends.class);
       }
     });
 
-    modules.add(new DatabaseModule());
-    modules.add(new SchemaModule());
-    modules.add(cfgInjector.getInstance(GitRepositoryManagerModule.class));
-    modules.add(new ConfigNotesMigration.Module());
 
     try {
       return Guice.createInjector(PRODUCTION, modules);
@@ -296,37 +189,13 @@ public class GuiceConfigurator {
       final Message first = ce.getErrorMessages().iterator().next();
       Throwable why = first.getCause();
 
-      if (why instanceof SQLException) {
-        throw die("Cannot connect to SQL database", why);
-      }
-      if (why instanceof OrmException && why.getCause() != null
-          && "Unable to determine driver URL".equals(why.getMessage())) {
-        why = why.getCause();
-        if (isCannotCreatePoolException(why)) {
-          throw die("Cannot connect to SQL database", why.getCause());
-        }
-        throw die("Cannot connect to SQL database", why);
-      }
-
-      final StringBuilder buf = new StringBuilder();
-      if (why != null) {
-        buf.append(why.getMessage());
-        why = why.getCause();
-      } else {
-        buf.append(first.getMessage());
-      }
-      while (why != null) {
-        buf.append("\n  caused by ");
-        buf.append(why.toString());
-        why = why.getCause();
-      }
-      throw die(buf.toString(), new RuntimeException("DbInjector failed", ce));
+      throw die("Problem creating guice injector:", why);
     }
   }
 
-
   /**
    * General kill method.
+   *
    * @param why
    * @param cause
    * @return
@@ -335,11 +204,13 @@ public class GuiceConfigurator {
     return new Die(why, cause);
   }
 
-  @SuppressWarnings("deprecation")
-  private static boolean isCannotCreatePoolException(Throwable why) {
-    return why instanceof org.apache.commons.dbcp.SQLNestedException
-        && why.getCause() != null
-        && why.getMessage().startsWith(
-            "Cannot create PoolableConnectionFactory");
+  /**
+   * General kill method.
+   *
+   * @param why
+   * @return
+   */
+  protected static Die die(String why) {
+    return new Die(why);
   }
 }

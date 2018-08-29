@@ -1,47 +1,62 @@
 package com.google.gerrit.gerritconsoleapi;
 
-import com.google.gerrit.server.project.ProjectCache;
 import com.google.inject.Injector;
 import com.wandisco.gerrit.gitms.shared.properties.GitMsApplicationProperties;
 import com.wandisco.gerrit.gitms.shared.util.ReplicationUtils;
-import org.eclipse.jgit.lib.Config;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 import com.google.common.base.Strings;
+import org.kohsuke.args4j.OptionHandlerFilter;
+
+import org.slf4j.LoggerFactory;
+import org.slf4j.Logger;
+
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+import static org.kohsuke.args4j.OptionHandlerFilter.ALL;
+
 /**
  * A class used to parse configuration files stored in the All-Projects repo.
  * Command line arguments can be passed which are used to specify the config
- * in which to parse. The default is to output the entire contents of the config
- * however there are flags which can be used to specify whether sections or subsections
- * are output instead.
+ * in which to parse.
  *
+ * Use the Args4j annotations below, to control the default command, any alias the command may
+ * have and if possible put in example usage.
+ *
+ * We by default call the PrintUsage method to show help information if the user gets the args wrong
+ * or they use the --help option directly.
+ *
+ * @author trevorgetty
  * @author RonanConway
  */
 public class GerritCLIArgParse {
 
+  private static final Logger logger = LoggerFactory.getLogger(GerritCLIArgParse.class);
+
   private CmdLineParser parser;
-  private Injector injector;
+  private Injector programGuiceContext;
   private Path sitePath;
   private GitMsApplicationProperties confProps;
 
-  @Option(name="-c", aliases="--config-name", usage="Name of the config file to return", required=true)
+  @Option(name="--config-name",aliases="-c",  usage="Name of the config file to return.", metaVar="lfs.config", required=true)
   private String configName;
 
-  @Option(name="-g", aliases="--git-config", usage="The location of the .gitconfig configuration file", required=true)
+  @Option(name="--git-config", aliases="-g", usage="The location of the .gitconfig configuration file.", metaVar="/home/gitms/.gitconfig", required=true)
   private String gitConfigArg;
 
-  @Option(name="-s", aliases="--get-sections", usage="Display the config sections in the config file", required=false)
+  @Option(name="--get-sections", aliases="-s", usage="Display the config sections in the config file.", required=false)
   private boolean sections;
 
-  @Option(name="-ss", aliases="--get-sub-sections", usage="Give the section name to display subSections for", required=false)
+  @Option(name="--get-sub-sections", aliases="-ss", usage="Give the section name to display subSections for.", metaVar="lfs", required=false)
   private String subSectionArg;
+
+  @Option(name="--help", aliases ={"-h", "-?", "/?"}, usage="Show help information about available commands.", required=false)
+  private boolean showHelp;
 
   /**
    * Parses the arguments passed in from the command line of the application
@@ -53,30 +68,51 @@ public class GerritCLIArgParse {
    * @throws Exception
    * @throws IOException
    */
-  public void doMain(final String... arguments) throws Exception, IOException{
+  public void doMain(final String... arguments) throws Exception, IOException {
+
+    logger.trace("About to process args. ");
 
     parser = new CmdLineParser(this);
-    try{
+    // TODO: maybe allow users to set this, but its only a small standalone app. pity it doesn't
+    // auto scale...
+    parser.setUsageWidth(160);
+
+    try {
       parser.parseArgument(arguments);
+    } catch (CmdLineException ex) {
+      System.out.println("Warning: Invalid command-line options: " + ex.getMessage());
+
+      displayHelp();
+      return;
     }
-    catch (CmdLineException ex){
-      System.out.println("ERROR: Unable to parse command-line options: " + ex);
+
+
+    // Show help information about the args.
+    if ( showHelp )
+    {
+      logger.trace("Show help selected. ");
+
+      displayHelp();
+      return;
     }
+
 
     /*
      The gitConfigArg cannot be empty. If it is throw an exception.
      */
-    if(gitConfigArg == null || gitConfigArg.isEmpty()){
-      //logger.debug("The gitConfigArg was set as " + gitConfigArg);
-      throw new Exception("The \"--git-config\" argument must specify the full path to the \".gitconfig\" file ");
+    if (gitConfigArg.isEmpty()) {
+      logger.trace("Invalid git configuration args. ");
+      throw new LogAndExitException("The \"--git-config\" argument must specify the full path to the \".gitconfig\" file ");
     }
 
     /*
      The full path to the .gitconfig file must be specified
      */
     File gitconfigFile = new File(gitConfigArg);
-    if(!gitconfigFile.exists() || gitconfigFile.isDirectory()) {
-      System.out.println("ERROR: The \".gitconfig\" file provided is invalid or a directory. " +
+    if (!gitconfigFile.exists() || gitconfigFile.isDirectory()) {
+      logger.trace("Invalid git configuration it wasn't a valid file on disk. ");
+
+      throw new LogAndExitException("The \".gitconfig\" file provided is invalid or a directory. " +
           "Please supply the full path to this file.");
     }
 
@@ -94,56 +130,53 @@ public class GerritCLIArgParse {
      The sitePath will be the gerrit.root declared within the application.properties.
      With the sitePath declared, the Guice bindings to the application classes can be performed.
      */
-    sitePath = Paths.get(this.extractSitePath());
+    sitePath = Paths.get(extractSitePath());
+
+
     GuiceConfigurator configurator = new GuiceConfigurator(sitePath);
-    injector = configurator.createSysInjector();
+    programGuiceContext = configurator.getMainInjector();
 
     processAllProjectsConfig();
+
+    logger.trace("Exiting application. ");
+  }
+
+  /**
+   * Display Help for this application, and example use.
+   */
+  private void displayHelp() {
+
+    // Take a newline, and display the help information, and example use.
+    System.err.println("");
+
+    System.err.println("**********************************");
+    System.err.println("  Gerrit Commandline Api - Help.  ");
+    System.err.println("**********************************");
+
+    // display the arguments list, for help.
+    System.err.println("java -jar console-api.jar [options...]");
+    // print the list of available options
+    parser.printUsage(System.err);
+    System.err.println();
+
+    // print example use, of just required props.
+    System.err.println("  Example: java -jar console-api.jar " + parser.printExample(OptionHandlerFilter.REQUIRED));
   }
 
   /**
    * Using Guice to get an instance from the Injector for ProjectCache which
    * allows access to All-Projects configs
-   * @return
    */
   private void processAllProjectsConfig() {
-    ProjectCache projectCacheInstance = injector.getInstance(ProjectCache.class);
+
+    AllProjectsCommands allProjectsCommands = new AllProjectsCommands(programGuiceContext, configName);
     if (sections) {
-      displaySections(projectCacheInstance);
+      allProjectsCommands.displaySections();
     } else if (!Strings.isNullOrEmpty(subSectionArg)){
-      displaySubSectionsForSection(projectCacheInstance, subSectionArg);
+      allProjectsCommands.displaySubSectionsForSection(subSectionArg);
     } else{
-      displayConfig(projectCacheInstance);
+      allProjectsCommands.displayConfig();
     }
-  }
-
-  /**
-   * Will dsiplay the entire contents of the specified config file.
-   * @param projectCacheInstance
-   */
-  private void displayConfig(ProjectCache projectCacheInstance) {
-    Config config = projectCacheInstance.getAllProjects().getConfig(this.configName).get();
-    System.out.println(config.toText());
-  }
-
-  /**
-   * display all the config sections
-   * @param projectCacheInstance
-   */
-  private void displaySections(ProjectCache projectCacheInstance) {
-    String config = projectCacheInstance.getAllProjects().getConfig(this.configName)
-        .get().getSections().toString();
-    System.out.println(config);
-  }
-
-  /**
-   * display the subsections for a given section
-   * @param projectCacheInstance
-   */
-  private void displaySubSectionsForSection(ProjectCache projectCacheInstance, String sectionName) {
-    String config = projectCacheInstance.getAllProjects().getConfig(this.configName)
-        .get().getSubsections(sectionName).toString();
-    System.out.println(config);
   }
 
   /**
@@ -155,11 +188,5 @@ public class GerritCLIArgParse {
       return confProps.getGerritRoot();
   }
 
-  /**
-   * Returns the name of the config within the All-Projects repo to parse
-   * @return
-   */
-  public String getConfigName() {
-    return configName;
-  }
+
 }
