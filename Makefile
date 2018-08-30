@@ -82,7 +82,7 @@ clean: | $(JENKINS_DIRECTORY)
 	buck clean
 	rm -rf $(GERRIT_BUCK_OUT)
 	rm -rf $(GERRIT_TEST_LOCATION)/jgit-update-service
-	rm $(GERRIT_ROOT)/env.properties
+	rm -f $(GERRIT_ROOT)/env.properties
 	@echo "\n************ Clean Phase Finished **************"
 
 check_build_assets:
