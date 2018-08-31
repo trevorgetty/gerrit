@@ -388,4 +388,15 @@ public class PluginConfigFactory implements ReloadPluginListener {
   public synchronized void onReloadPlugin(Plugin oldPlugin, Plugin newPlugin) {
     pluginConfigs.remove(oldPlugin.getName());
   }
+
+  /**
+   * A force reload, by removing the plugin config and forcing a retrieval again.
+   *
+   * @param pluginName
+   */
+  public synchronized void forceReloadGlobalPluginConfig( final String pluginName ){
+    pluginConfigs.remove(pluginName);
+
+    getGlobalPluginConfig( pluginName );
+  }
 }
