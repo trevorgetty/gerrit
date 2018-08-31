@@ -80,7 +80,13 @@ public class GerritCLIArgParse {
     try {
       parser.parseArgument(arguments);
     } catch (CmdLineException ex) {
-      System.out.println("Warning: Invalid command-line options: " + ex.getMessage());
+
+      // hold on if they have used -h, we can ignore required properties.
+      // so only log warning about missing required properties if you dont use help!
+      if ( !showHelp )
+      {
+        System.out.println("Warning: Invalid command-line options: " + ex.getMessage());
+      }
 
       displayHelp();
       return;
