@@ -1462,8 +1462,12 @@ function versionLessThan() {
 
 function mkdirectory(){
 
-	local create_dir=$(get_boolean "The directory [ "$1" ] does not exist, do you want to create it?" "true")
-
+    local create_dir=true
+    
+    if [[ ! "$NON_INTERACTIVE" == "1" ]]
+	  create_dir=$(get_boolean "The directory [ "$1" ] does not exist, do you want to create it?" "true")
+    fi
+    
     if [[ "$create_dir" == "true" ]]; then
       mkdir -p "$1"
       if [[ "$?" != "0" ]]; then
