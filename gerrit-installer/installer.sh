@@ -1464,7 +1464,7 @@ function mkdirectory(){
 
     local create_dir=true
     
-    if [[ ! "$NON_INTERACTIVE" == "1" ]]
+    if [[ ! "$NON_INTERACTIVE" == "1" ]]; then
 	  create_dir=$(get_boolean "The directory [ "$1" ] does not exist, do you want to create it?" "true")
     fi
     
@@ -1475,7 +1475,6 @@ function mkdirectory(){
         exit 1
       fi
     fi
-
 }
 
 check_executables
