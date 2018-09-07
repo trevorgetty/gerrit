@@ -96,21 +96,21 @@ check_build_assets:
 	@echo "CONSOLE_API_JAR_PATH=$(CONSOLE_API_JAR_PATH)" >> $(GERRIT_ROOT)/env.properties
 	@echo "Env.properties is saved to: $(GERRIT_ROOT)/env.properties)"
 
-	[ -f $(RELEASE_WAR_PATH)/release.war ] && echo release.war exists || ( echo releaes.war not exists && exit 1;)
-	[ -f $(CONSOLE_API_JAR_PATH)/console-api.jar ] && echo console-api.jar exists || ( echo console-api.jar not exists && exit 1;)
+	@[ -f $(RELEASE_WAR_PATH)/release.war ] && echo release.war exists || ( echo releaes.war not exists && exit 1;)
+	@[ -f $(CONSOLE_API_JAR_PATH)/console-api.jar ] && echo console-api.jar exists || ( echo console-api.jar not exists && exit 1;)
 
 
 installer: check_build_assets
 	@echo "\n************ Installer Phase Starting **************"
 
-	echo "Building Gerrit Installer..."
+	@echo "Building Gerrit Installer..."
 	$(GERRIT_ROOT)/gerrit-installer/create_installer.sh $(RELEASE_WAR_PATH)/release.war $(CONSOLE_API_JAR_PATH)/console-api.jar
 
 	@echo "\n************ Installer Phase Finished **************"
 
 
 skip-tests:
-	echo "Skipping integration tests."
+	@echo "Skipping integration tests."
 
 # Target used to check if the jenkins tmp directory exists, and if not to use
 # /tmp on a users dev box.
