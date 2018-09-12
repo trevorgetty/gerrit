@@ -922,7 +922,7 @@ function get_config_from_user() {
     info " Deleted Repo Directory: $DELETED_REPO_DIRECTORY"
   fi
   
-  echo "dir is $DELETED_REPO_DIRECTORY"
+  echo " Directory is $DELETED_REPO_DIRECTORY"
   
   ## DELETED_REPO_DIRECTORY must exist, if it does not attempt to create it
   if [[ ! -d "$DELETED_REPO_DIRECTORY" ]]; then
@@ -1333,21 +1333,11 @@ function check_for_non_interactive_mode() {
 
     if [[ ! -z "$tmp_deleted_repo_directory" ]]; then
       DELETED_REPO_DIRECTORY="$tmp_deleted_repo_directory"
-      
-      ## DELETED_REPO_DIRECTORY must exist, if it does not attempt to create it
-      if [[ ! -d "$DELETED_REPO_DIRECTORY" ]]; then
-        mkdirectory $DELETED_REPO_DIRECTORY
-      fi
     fi
     
  
     if [[ ! -z "$tmp_gerrit_events_path" ]]; then
       GERRIT_EVENTS_PATH="$tmp_gerrit_events_path"
-      
-      ## GERRIT_EVENTS_PATH must exist, if it does not attempt to create it
-      if [[ ! -d "$GERRIT_EVENTS_PATH" ]]; then
-        mkdirectory $GERRIT_EVENTS_PATH
-      fi
     fi
 
     if [ ! -z "$tmp_gerrit_replicated_events_send" ]; then
@@ -1413,6 +1403,16 @@ function check_for_non_interactive_mode() {
       fi
 
       NON_INTERACTIVE=1
+      
+      ## DELETED_REPO_DIRECTORY must exist, if it does not attempt to create it
+      if [[ ! -d "$DELETED_REPO_DIRECTORY" ]]; then
+        mkdirectory $DELETED_REPO_DIRECTORY
+      fi
+    
+      ## GERRIT_EVENTS_PATH must exist, if it does not attempt to create it
+      if [[ ! -d "$GERRIT_EVENTS_PATH" ]]; then
+        mkdirectory $GERRIT_EVENTS_PATH
+      fi
     fi
   fi
 }
