@@ -1,4 +1,4 @@
-package com.google.gerrit.gerritconsoleapi;
+package com.google.gerrit.gerritconsoleapi.exceptions;
 
 /**
  * Class to allow an exception to be thrown which only logs out a message and terminates the application.

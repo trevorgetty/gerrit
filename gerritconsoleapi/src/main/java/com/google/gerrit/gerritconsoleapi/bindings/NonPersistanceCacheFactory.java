@@ -1,4 +1,4 @@
-package com.google.gerrit.gerritconsoleapi;
+package com.google.gerrit.gerritconsoleapi.bindings;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheLoader;

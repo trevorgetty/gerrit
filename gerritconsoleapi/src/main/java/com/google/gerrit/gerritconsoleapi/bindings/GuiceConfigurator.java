@@ -1,6 +1,8 @@
-package com.google.gerrit.gerritconsoleapi;
+package com.google.gerrit.gerritconsoleapi.bindings;
 
 import com.google.gerrit.common.Die;
+import com.google.gerrit.gerritconsoleapi.bindings.ProjectLoader;
+import com.google.gerrit.gerritconsoleapi.bindings.ProjectStateMinDepends;
 import com.google.gerrit.metrics.DisabledMetricMaker;
 import com.google.gerrit.metrics.MetricMaker;
 import com.google.gerrit.server.config.GerritServerConfig;

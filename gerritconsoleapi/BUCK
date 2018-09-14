@@ -1,5 +1,5 @@
 
-SRCS = 'src/main/java/com/google/gerrit/gerritconsoleapi/'
+SRCS = 'src/main/java/com/google/gerrit/gerritconsoleapi/**'
 RSRCS = 'src/main/resources/'
 TEST_SRCS = 'src/test/java/'
 TEST_RSRCS = 'src/test/resources/'
@@ -25,13 +25,12 @@ DEPS = BASE_DEPS + [
   '//lib:gwtorm',
   '//lib:args4j',
   '//lib/auto:auto-value',
-#  '//lib/log:jcl-over-slf4j',
   '//lib/log:impl_log4j'
 ]
 
 java_library(
   name = 'gerritconsoleapi',
-  srcs = glob([SRCS + '*.java']),
+  srcs = glob([SRCS]),
   resources = glob([RSRCS + '*']),
   deps = DEPS,
   provided_deps = [ ],

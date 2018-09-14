@@ -1,13 +1,9 @@
-package com.google.gerrit.gerritconsoleapi;
+package com.google.gerrit.gerritconsoleapi.bindings;
 
 import com.google.gerrit.reviewdb.client.Project;
-import com.google.gerrit.server.config.AllProjectsNameProvider;
 import com.google.gerrit.server.config.AllProjectsName;
 import com.google.gerrit.server.git.GitRepositoryManager;
-import com.google.gerrit.server.git.GitRepositoryManagerModule;
 import com.google.gerrit.server.git.ProjectConfig;
-import com.google.gerrit.server.git.ProjectLevelConfig;
-import com.google.gerrit.server.project.ProjectState;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
 import org.eclipse.jgit.errors.ConfigInvalidException;

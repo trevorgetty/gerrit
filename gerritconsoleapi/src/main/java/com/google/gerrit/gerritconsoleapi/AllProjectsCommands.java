@@ -1,12 +1,10 @@
 package com.google.gerrit.gerritconsoleapi;
 
 
-import com.google.gerrit.server.git.ProjectConfig;
-import com.google.gerrit.server.project.ProjectCache;
-import com.google.gerrit.server.git.ProjectLevelConfig;
-import com.google.gerrit.server.project.ProjectState;
-import org.eclipse.jgit.lib.Config;
+import com.google.gerrit.gerritconsoleapi.bindings.ProjectLevelConfigNoCache;
+import com.google.gerrit.gerritconsoleapi.bindings.ProjectLoader;
 
+import com.google.gerrit.gerritconsoleapi.bindings.ProjectStateMinDepends;
 import com.google.inject.Injector;
 
 import java.util.Set;
@@ -92,7 +90,7 @@ public class AllProjectsCommands {
       }
       return projectLevelConfig;
     } catch (Exception e) {
-      // throw Runtime nothing else we can do.
+      // throw Runtime nothing else we can do.  
       throw new RuntimeException(e);
     }
   }
@@ -102,7 +100,7 @@ public class AllProjectsCommands {
    * @return
    * @throws Exception
    */
-  private ProjectStateMinDepends  getAllProjects() throws Exception {
+  private ProjectStateMinDepends getAllProjects() throws Exception {
 
     ProjectStateMinDepends state = projectLoader.getAllProjects();
     return state;

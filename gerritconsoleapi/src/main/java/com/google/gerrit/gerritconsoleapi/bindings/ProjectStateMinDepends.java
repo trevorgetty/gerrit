@@ -1,4 +1,4 @@
-package com.google.gerrit.gerritconsoleapi;
+package com.google.gerrit.gerritconsoleapi.bindings;
 
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
@@ -6,7 +6,6 @@ import com.google.gerrit.common.data.*;
 import com.google.gerrit.extensions.api.projects.ThemeInfo;
 import com.google.gerrit.reviewdb.client.Branch;
 import com.google.gerrit.reviewdb.client.Project;
-import com.google.gerrit.reviewdb.client.RefNames;
 import com.google.gerrit.server.config.AllProjectsName;
 import com.google.gerrit.server.config.SitePaths;
 import com.google.gerrit.server.git.BranchOrderSection;
@@ -15,7 +14,6 @@ import com.google.gerrit.server.git.ProjectConfig;
 import com.google.gerrit.server.project.*;
 import com.google.inject.Inject;
 import org.eclipse.jgit.errors.ConfigInvalidException;
-import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
