@@ -41,19 +41,19 @@ public class HelpCommand extends CliCommandItemBase {
     // so this works for new commands.
     switch (helpOnCommand.toLowerCase()) {
       case "lfs-info":
-        System.out.println("lfs-info command:");
+        System.out.println(helpOnCommand + " command:");
         new LfsInformationCommand().displayHelp(true);
         break;
       case "lfs-content":
-        System.out.println("lfs-config command:");
+        System.out.println(helpOnCommand + " command:");
         new LfsContentCommand().displayHelp(true);
         break;
       case "config":
-        System.out.println("config command:");
+        System.out.println(helpOnCommand + " command:");
         new ConfigurationCommand().displayHelp(true);
         break;
       case "help":
-        System.out.println("help Command:");
+        System.out.println(helpOnCommand + " command:");
         displayHelp();
         break;
       default:
