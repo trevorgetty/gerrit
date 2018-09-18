@@ -1,6 +1,7 @@
 package com.google.gerrit.gerritconsoleapi.cli.commands;
 
 import com.google.common.base.Strings;
+import com.google.gerrit.gerritconsoleapi.cli.processing.AllProjectsInProcessLoader;
 import com.google.gerrit.gerritconsoleapi.cli.processing.CliCommandItemBase;
 import com.google.gerrit.gerritconsoleapi.cli.processing.CmdLineParserFactory;
 import com.google.gerrit.gerritconsoleapi.exceptions.LogAndExitException;
@@ -35,19 +36,27 @@ public class LfsInformationCommand extends CliCommandItemBase {
   @Option(name = "--repositoryname", aliases = "-r", usage = "The repository name to obtain LFS configuration information about.", metaVar = "lfstest01.git", required = true)
   private String repositoryName;
 
+  // We now default git config location using the standard rules employed by the installer scripts which is environment $GIT_CONFIG, or user.home/.gitconfig
+  // if you specify this arg it will overrule these.
+  @Option(name = "--git-config", aliases = "-g", usage = "The location of the .gitconfig configuration file.", metaVar = "~/.gitconfig or /opt/wandisco/gitms/.gitconfig", required = false)
+  private String gitConfigArg;
+
   public LfsInformationCommand() {
     super("lfs-info");
 
     try {
-      configFactory = LfsConfigFactory.getInstance();
-    } catch (Exception e) {
+      applicationProperties = new GitMsApplicationProperties();
+    } catch (IOException e) {
       debugStackTrace(e);
       throw new RuntimeException( new LogAndExitException("Unable to obtain LFS configuration information.", e));
     }
 
     try {
-      applicationProperties = new GitMsApplicationProperties();
-    } catch (IOException e) {
+      configFactory = LfsConfigFactory.getInstance(applicationProperties.getGerritRoot());
+      AllProjectsInProcessLoader allProjectsLoader = new AllProjectsInProcessLoader(gitConfigArg);
+
+      configFactory.setAllProjectsLoaderCallback(allProjectsLoader);
+    } catch (Exception e) {
       debugStackTrace(e);
       throw new RuntimeException( new LogAndExitException("Unable to obtain LFS configuration information.", e));
     }
@@ -83,8 +92,7 @@ public class LfsInformationCommand extends CliCommandItemBase {
     // Turn into a set of name / value pairs, representing the LFS configuration for this project for ease of use later.
     Map<String, String> lfsconfiginfo = getConfigurationMapOfValues(reposLfsConfiguration);
 
-    Path lfsStorageLocation =
-        null;
+    Path lfsStorageLocation;
     try {
       lfsStorageLocation = getLFSRepoStorageLocation( repositoryName,
           reposLfsConfiguration.getBackend(),

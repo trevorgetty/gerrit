@@ -81,7 +81,7 @@ public class AllProjectsCommands {
    * Returns the specified configuration file from the allProjects repo.
    * @return
    */
-  private ProjectLevelConfigNoCache getProjectConfig() {
+  public ProjectLevelConfigNoCache getProjectConfig() {
     try {
 
       ProjectLevelConfigNoCache projectLevelConfig = projectLoader.getConfigFromProject(getConfigName(), getAllProjects());
