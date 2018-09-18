@@ -85,9 +85,9 @@ public abstract class CliCommandItemBase extends Logging implements CommandItem 
     // Take a newline, and display the help information, and example use.
     stream.println("");
 
-    stream.println("*************************************************");
-    stream.println("  Gerrit Commandline Api - " + getCommandName() + " Help.  ");
-    stream.println("*************************************************");
+    stream.println("*********************************************************");
+    stream.println("  Gerrit command line Api - " + getCommandName() + " Help.  ");
+    stream.println("*********************************************************");
 
     // print the list of available options
     CmdLineParser localCmdLineParser = CmdLineParserFactory.createCmdLineParser(this);

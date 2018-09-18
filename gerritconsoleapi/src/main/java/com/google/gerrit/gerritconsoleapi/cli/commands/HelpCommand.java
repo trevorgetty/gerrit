@@ -73,7 +73,7 @@ public class HelpCommand extends CliCommandItemBase {
     System.out.println("");
 
     System.out.println("**********************************");
-    System.out.println("  Gerrit Commandline Api - Help.  ");
+    System.out.println("  Gerrit command line Api - Help. ");
     System.out.println("**********************************");
 
     // print example use, of just required props for each available command.

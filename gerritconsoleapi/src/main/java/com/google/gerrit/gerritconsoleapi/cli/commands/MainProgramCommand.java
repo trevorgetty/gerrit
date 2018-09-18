@@ -183,7 +183,7 @@ public class MainProgramCommand implements CommandItem {
     System.out.println("");
 
     System.out.println("**********************************");
-    System.out.println("  Gerrit Commandline Api Help    ");
+    System.out.println("  Gerrit command line Api Help    ");
     System.out.println("**********************************");
 
     // print the list of available options
