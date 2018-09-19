@@ -15,7 +15,7 @@ import java.util.List;
 @CommandMetaData(name = "help", description = "Application help")
 public class HelpCommand extends CliCommandItemBase {
 
-  @Argument(required =false, index = 0, metaVar = "<command>", usage = "Use: 'java -jar consoleapi.jar help <command>'.\n")
+  @Argument(required =false, index = 0, metaVar = "<command>", usage = "Use: 'java -jar console-api.jar help <command>'.\n")
   public String helpOnCommand;
 
   public HelpCommand(){

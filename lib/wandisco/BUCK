@@ -1,7 +1,7 @@
 include_defs('//lib/maven.defs')
 include_defs('//lib/WD_REPOSITORY')
 
-VERSION = '1.0.2-TC15' # When bumping VERSION, make sure no dependency conflicts on jgit version
+VERSION = '1.0.2' # When bumping VERSION, make sure no dependency conflicts on jgit version
 
 maven_jar(
   name = 'gerrit-gitms-interface',
@@ -9,8 +9,8 @@ maven_jar(
   license = 'DO_NOT_DISTRIBUTE',
   deps = ['//lib/jgit/org.eclipse.jgit:jgit',
           '//lib/jackson:jackson-mapper-asl'],
-  bin_sha1 = 'f3e9f6a1a3df54d3227ed82aa1d6ba66d5fbd30e',
-  src_sha1 = '8f05e0f7291396de66f29baa9c9d648b2ca60252 ',
+  bin_sha1 = 'c4fee59a70a5093e57b9a82b9183e391717e7c2a',
+  src_sha1 = '6aca6e28470e5f14fc1820250b2b8e0d4a900a99 ',
   repository = REPO_WD,
   unsign = True,
   visibility = ['PUBLIC']

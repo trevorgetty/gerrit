@@ -12,13 +12,13 @@ public abstract class Logging {
 
   public static void loginfo(String s)
   {
-    System.out.println("consoleapi: INFO: " + (s == null ? "null" : s));
+    System.out.println("console-api: INFO: " + (s == null ? "null" : s));
     logger.info(s);
   }
 
   public static void logwarning(String s)
   {
-    System.err.println("consoleapi: WARNING: " + (s == null ? "null" : s));
+    System.err.println("console-api: WARNING: " + (s == null ? "null" : s));
     logger.warn(s);
   }
 }

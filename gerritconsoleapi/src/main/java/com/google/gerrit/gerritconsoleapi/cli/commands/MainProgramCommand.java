@@ -40,12 +40,12 @@ public class MainProgramCommand implements CommandItem {
 
 
   // For backward compatibility we dont require an arg to be present, but if it is, it has to be the first command, just like
-  // git commands, e.g. git push xxx, consoleapi.jar help ...
-  @Argument(index = 0, metaVar = "command", usage = "Use: 'java -jar consoleapi.jar <command> [args]'\n" +
+  // git commands, e.g. git push xxx, console-api.jar help ...
+  @Argument(index = 0, metaVar = "command", usage = "Use: 'java -jar console-api.jar <command> [args]'\n" +
       "Commands list: \n" +
       "      config\n" +
       "      lfs-info\n" +
-      "      lfs-config\n" +
+      "      lfs-content\n" +
       "      help\n",
       handler = SubCommandHandler.class)
   @SubCommands({

@@ -138,7 +138,7 @@ public class LfsRepositoryUtilities extends Logging {
     Map<String, String> lfsconfiginfo = new HashMap<String, String>();
 
     lfsconfiginfo.put("namespace", reposLfsConfiguration.getNamespace());
-    lfsconfiginfo.put("backend", reposLfsConfiguration.getBackend());
+    lfsconfiginfo.put("backend", reposLfsConfiguration.getBackend() == null ? "default" : reposLfsConfiguration.getBackend());
     lfsconfiginfo.put("maxObjectSize", Long.toString(reposLfsConfiguration.getMaxObjectSize()));
     lfsconfiginfo.put("enabled", Boolean.toString(reposLfsConfiguration.isEnabled()));
     lfsconfiginfo.put("readOnly", Boolean.toString(reposLfsConfiguration.isReadOnly()));

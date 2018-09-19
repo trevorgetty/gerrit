@@ -3,6 +3,6 @@ include_defs('//lib/WD_REPOSITORY')
 
 REPO = MAVEN_CENTRAL # Leave here even if set to MAVEN_CENTRAL.
 VERS = '4.5.2.201704071617-r'
-VERS_WD = '4.5.2.201704071617-r_WDv4_TC5'
+VERS_WD = '4.5.2.201704071617-r_WDv4_TC6'
 DOC_VERS = VERS # Set to VERS unless using a snapshot
 JGIT_DOC_URL="http://download.eclipse.org/jgit/site/" + DOC_VERS + "/apidocs"
