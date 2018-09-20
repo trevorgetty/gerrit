@@ -114,10 +114,6 @@ public class LfsRepositoryUtilities extends Logging {
                 repositoryName, repoHome));
       }
 
-      // the repo exists, with the correct extension, make a quick note and continue
-      logwarning(
-          String.format("RepositoryName required updating from {%s} to {%s}", repositoryName, tmpRepositoryName));
-
     }
 
     if (!repositoryLocation.canRead())

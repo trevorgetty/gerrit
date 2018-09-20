@@ -16,9 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import static com.google.gerrit.gerritconsoleapi.LfsRepositoryUtilities.getConfigurationMapOfValues;
-import static com.google.gerrit.gerritconsoleapi.LfsRepositoryUtilities.getLFSRepoStorageLocation;
-import static com.google.gerrit.gerritconsoleapi.LfsRepositoryUtilities.validateRepositoryIsReal;
+import static com.google.gerrit.gerritconsoleapi.LfsRepositoryUtilities.*;
 import static com.wandisco.gerrit.gitms.shared.commands.GitCommandRunner.lfsLsFiles;
 
 @CommandMetaData(name = "lfs-content", description = "Lfs content filepaths for belonging to the specified repo")
@@ -66,6 +64,12 @@ public class LfsContentCommand extends CliCommandItemBase {
     logtrace("Starting execution.");
     logtrace(String.format("Using repository: {%s} and outputFile: {%s}", repositoryName, outputfile));
 
+    // Now we have 2 typos of use of the reponame, 1) for lfs checking, it uses the projectname without the .git
+    // suffix.  But for finding it on disk, it might need the .git suffix on the end.
+    if ( repositoryName.endsWith(".git")) {
+      repositoryName = stripGitSuffix(repositoryName);
+    }
+    
     // check the repo is valid -> and can be found in gerrit_repo_home.
     Path repositoryPath = validateRepositoryIsReal(applicationProperties, repositoryName);
 
