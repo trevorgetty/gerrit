@@ -13,6 +13,9 @@ public class CLI_Launcher {
       // default output to the console, and stack trace to the error stream which may be rooted differently.
       System.out.println("Unexpected error occurred, Error Details: " + ex.getMessage());
       ex.printStackTrace();
+
+      // TODO Possibly add different exit codes if we need them in the calling apps.
+      System.exit(1);
     }
   }
 
