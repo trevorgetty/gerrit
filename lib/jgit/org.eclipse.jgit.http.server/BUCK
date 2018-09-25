@@ -17,7 +17,7 @@ include_defs('//lib/JGIT_VERSION')
 maven_jar(
   name = 'jgit-servlet',
   id = 'org.eclipse.jgit:org.eclipse.jgit.http.server:' + VERS_WD,
-#   sha1 = 'c5741190b246034174817666af941968a581d24f',
+  sha1 = '8fa4ff5c5d34ed4408c1bdaad266edb288ad08c3',
   license = 'jgit',
   repository = REPO_WD,
   deps = ['//lib/jgit/org.eclipse.jgit:jgit'],

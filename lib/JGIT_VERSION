@@ -1,8 +1,14 @@
 include_defs('//lib/maven.defs')
 include_defs('//lib/WD_REPOSITORY')
 
+# Defines main maven central repo
 REPO = MAVEN_CENTRAL # Leave here even if set to MAVEN_CENTRAL.
+
+# Defines the jgit base version
 VERS = '4.5.2.201704071617-r'
-VERS_WD = '4.5.2.201704071617-r_WDv4_TC6'
+
+# Defines the WD replicated version of jgit
+VERS_WD = '4.5.2.201704071617-r_WDv4'
+
 DOC_VERS = VERS # Set to VERS unless using a snapshot
 JGIT_DOC_URL="http://download.eclipse.org/jgit/site/" + DOC_VERS + "/apidocs"
