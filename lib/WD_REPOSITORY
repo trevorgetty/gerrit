@@ -1,2 +1,9 @@
 # Wandisco specific release asset repository.
-REPO_WD = 'http://artifacts.wandisco.com/artifactory/libs-release-local'
+REPO_INTERNAL = 'http://artifacts.wandisco.com/artifactory/libs-release-local'
+
+# Public release assets repository
+REPO_EXTERNAL = 'https://nexus.wandisco.com/repository/wd_releases'
+
+
+# Please make sure this is internal repo during Dev cycle but external for release / open sourcing.
+REPO_WD = REPO_EXTERNAL
