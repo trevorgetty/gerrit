@@ -22,7 +22,7 @@ GERRIT_ROOT= $(mkfile_path)
 
 # Works on OSX.
 VERSION := $(shell $(GERRIT_ROOT)/build/get_version_number.sh $(GERRIT_ROOT))
-
+GITMS_VERSION := GITMS_VERSION
 GERRIT_BUCK_OUT := $(GERRIT_ROOT)/buck-out
 RELEASE_WAR_PATH := $(GERRIT_BUCK_OUT)/gen/release
 CONSOLE_API_JAR_PATH := $(GERRIT_BUCK_OUT)/gen/gerritconsoleapi
@@ -128,7 +128,7 @@ run-integration-tests: check_build_assets | $(JENKINS_DIRECTORY)
 	@echo "About to run integration tests -> resetting environment"
 
 	@echo "Release war path in makefile is: $(RELEASE_WAR_PATH)"
-	./build/run-integration-tests.sh $(RELEASE_WAR_PATH) $(GERRIT_TEST_LOCATION) $(CONSOLE_API_JAR_PATH)
+	./build/run-integration-tests.sh $(RELEASE_WAR_PATH) $(GERRIT_TEST_LOCATION) $(CONSOLE_API_JAR_PATH) $(GITMS_VERSION)
 
 	@echo "\n************ Integration Tests Finished **************"
 

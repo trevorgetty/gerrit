@@ -4,6 +4,7 @@
 [[ -z $RELEASE_WAR_PATH ]] && RELEASE_WAR_PATH=$1
 [[ -z $GERRIT_TEST_LOCATION ]] && GERRIT_TEST_LOCATION=$2
 [[ -z $CONSOLE_API_JAR_PATH ]] && CONSOLE_API_JAR_PATH=$3
+[[ -z $GITMS_VERSION ]] && GITMS_VERSION=$4
 
 
 ## Unset Jenkins ENV variables for Git commits
@@ -24,6 +25,7 @@ echo "Testing environment was setup as:"
 echo "Gerrit test location is: $GERRIT_TEST_LOCATION"
 echo "Release war path is: $RELEASE_WAR_PATH"
 echo "Console-Api jar path is: $CONSOLE_API_JAR_PATH"
+echo "GITMS_VERSION is: $GITMS_VERSION"
 echo ""
 
 # check the release war is in the source location
@@ -57,7 +59,7 @@ if [ -d $GERRIT_TEST_LOCATION/jgit-update-service/.git ]; then
   git pull
 else
   # clone a fresh repo
-  git clone --depth 1 ssh://$git_username@gerrit-uk.wandisco.com:29418/jgit-update-service $GERRIT_TEST_LOCATION/jgit-update-service
+  git clone --branch "$GITMS_VERSION" --depth 1 ssh://$git_username@gerrit-uk.wandisco.com:29418/jgit-update-service $GERRIT_TEST_LOCATION/jgit-update-service
   cd $GERRIT_TEST_LOCATION/jgit-update-service
 fi
 

@@ -8,7 +8,7 @@ REPO = MAVEN_CENTRAL # Leave here even if set to MAVEN_CENTRAL.
 VERS = '4.5.5.201812240535-r'
 
 # Defines the WD postfix
-POSTFIX_WD = '_WDv1'
+POSTFIX_WD = '_WDv2'
 
 # Defines the WD replicated version of jgit
 VERS_WD = VERS + POSTFIX_WD
