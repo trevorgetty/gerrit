@@ -10,7 +10,7 @@
  * Apache License, Version 2.0
  *
  ********************************************************************************/
- 
+
 package com.google.gerrit.server.events;
 
 import com.google.common.base.Supplier;
@@ -92,6 +92,14 @@ public class EventWrapper  {
     this.prefix = prefix;
   }
 
+  public EventWrapper(String projectName, CacheKeyWrapper cacheNameAndKey) {
+    this.event = gson.toJson(cacheNameAndKey);
+    this.className=cacheNameAndKey.getClass().getName();
+    this.projectName = projectName;
+    this.originator = Originator.CACHE_EVENT;
+    this.prefix = null;
+  }
+
   public EventWrapper(CacheKeyWrapper cacheNameAndKey) {
     this.event = gson.toJson(cacheNameAndKey);
     this.className=cacheNameAndKey.getClass().getName();
@@ -112,6 +120,7 @@ public class EventWrapper  {
   public String toString() {
     return "EventWrapper{" + "event=" + event + ", className=" + className + ", projectName=" + projectName + ", originator=" + originator + ", prefix=" + prefix + '}';
   }
+
   public EventWrapper(ProjectInfoWrapper projectInfoWrapper) {
     this.event = gson.toJson(projectInfoWrapper);
     this.className=projectInfoWrapper.getClass().getName();
@@ -127,15 +136,14 @@ public class EventWrapper  {
     this.originator = Originator.DELETE_PROJECT_EVENT;
     this.prefix = null;
   }
-
   /**
    * Event for handling Account Index events
    * @param accountIndexEvent
    */
-  public EventWrapper(AccountIndexEvent accountIndexEvent) {
+  public EventWrapper(String projectName, AccountIndexEvent accountIndexEvent) {
     this.event = gson.toJson(accountIndexEvent);
     this.className=accountIndexEvent.getClass().getName();
-    this.projectName = null;
+    this.projectName = projectName;
     this.originator = Originator.ACCOUNT_INDEX_EVENT;
     this.prefix = null;
   }

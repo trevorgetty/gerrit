@@ -10,7 +10,7 @@
  * Apache License, Version 2.0
  *
  ********************************************************************************/
- 
+
 package com.google.gerrit.common;
 
 import com.google.common.cache.Cache;
@@ -103,7 +103,6 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
   private static final Multiset<String> reloadsPerformed   = ConcurrentHashMultiset.create();
 
   private ReplicatedCacheManager() {
-
   }
 
   public static ImmutableMultiset<String> getEvictionsPerformed() {
@@ -192,8 +191,16 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
 
   public static void replicateEvictionFromCache(String cacheName, Object key) {
     CacheKeyWrapper cacheKeyWrapper = new CacheKeyWrapper(cacheName, key, Replicator.getInstance().getThisNodeIdentity());
+    EventWrapper eventWrapper = new EventWrapper (cacheKeyWrapper);
     log.debug("CACHE About to call replicated cache event: {},{}",new Object[] {cacheName,key});
-    Replicator.getInstance().queueEventForReplication(new EventWrapper(cacheKeyWrapper));
+
+    //Block to force cache update to the All-Users repo so it is triggered in sequence after event that caused the eviction.
+    if (cacheName.equals("sshkeys") || cacheName.equals("accounts")
+        || cacheName.equals("accounts_byname")|| cacheName.equals("accounts_byemail")) {
+      log.debug("CACHE User Cache event setting update against All-Users Project {},{}",new Object[] {cacheName,key});
+      eventWrapper = new EventWrapper ("All-Users", cacheKeyWrapper);
+    }
+    Replicator.getInstance().queueEventForReplication(eventWrapper);
     evictionsSent.add(cacheName);
   }
 

@@ -10,7 +10,7 @@
  * Apache License, Version 2.0
  *
  ********************************************************************************/
- 
+
 package com.google.gerrit.common;
 
 import com.google.gerrit.reviewdb.client.Account;
@@ -46,7 +46,7 @@ public class ReplicatedAccountIndexManager implements Replicator.GerritPublishab
   public static void replicateAccountReindex(Account.Id id){
     AccountIndexEvent accountIndexEvent = new AccountIndexEvent(id.get(),replicatorInstance.getThisNodeIdentity());
     log.debug("RC AccountReIndex reindex being replicated for ID: {} ",id.get());
-    replicatorInstance.queueEventForReplication(new EventWrapper(accountIndexEvent));
+    replicatorInstance.queueEventForReplication(new EventWrapper("All-Users",accountIndexEvent));
   }
 
   public static synchronized void initAccountIndexer(AccountIndexerImpl indexer){
