@@ -40,6 +40,7 @@ import com.google.gerrit.server.events.ProjectCreatedEvent;
 import com.google.gerrit.server.events.RefEvent;
 import com.google.gerrit.server.events.RefUpdatedEvent;
 import com.google.gerrit.server.events.ReviewerAddedEvent;
+import com.google.gerrit.server.events.ReviewerDeletedEvent;
 import com.google.gerrit.server.events.SupplierDeserializer;
 import com.google.gerrit.server.events.SupplierSerializer;
 import com.google.gerrit.server.events.TopicChangedEvent;
@@ -448,6 +449,8 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
       }
     } else if (newEvent instanceof com.google.gerrit.server.events.ReviewerAddedEvent) {
       changeEventInfo.setChangeAttribute(((ReviewerAddedEvent) newEvent).change.get());
+    } else if (newEvent instanceof com.google.gerrit.server.events.ReviewerDeletedEvent) {
+      changeEventInfo.setChangeAttribute(((ReviewerDeletedEvent) newEvent).change.get());
     } else if (newEvent instanceof com.google.gerrit.server.events.TopicChangedEvent) {
       changeEventInfo.setChangeAttribute(((TopicChangedEvent) newEvent).change.get());
     } else if (newEvent instanceof com.google.gerrit.server.events.ProjectCreatedEvent) {
