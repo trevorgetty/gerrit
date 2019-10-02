@@ -6,4 +6,10 @@
   'javax-validation',
   'dev',
   'user',
+  'jsinterop-annotations',
+  'ant',
+  'colt',
+  'tapestry',
+  'w3c-css-sac',
+  'jsr305'
 ]]
