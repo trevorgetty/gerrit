@@ -1,23 +1,28 @@
 include_defs('//lib/maven.defs')
 include_defs('//lib/WD_REPOSITORY')
+include_defs('//tools/gwt-constants.defs')
 
-VERSION = '2.8.2-WDv1'
+#  WD Release assets
+# GWT_REPO = REPO_WD
+
+# Local maven repo.
+GWT_REPO = MAVEN_LOCAL
 
 maven_jar(
   name = 'user',
-  id = 'com.google.gwt:gwt-user:' + VERSION,
-  sha1 = '6585eeabcf4162a58033c46de1c560c7f9fc2e48',
+  id = 'com.google.gwt:gwt-user:' + GWT_VERSION,
+#   sha1 = '6585eeabcf4162a58033c46de1c560c7f9fc2e48',
   license = 'Apache2.0',
-  repository = REPO_WD,
+  repository = GWT_REPO,
   attach_source = False,
 )
 
 maven_jar(
   name = 'dev',
-  id = 'com.google.gwt:gwt-dev:' + VERSION,
-  sha1 = 'b3531c964f0c6b9ea581616e05eac90263b4aa89',
+  id = 'com.google.gwt:gwt-dev:' + GWT_VERSION,
+#   sha1 = 'b3531c964f0c6b9ea581616e05eac90263b4aa89',
   license = 'Apache2.0',
-  repository = REPO_WD,
+  repository = GWT_REPO,
   attach_source = False,
 )
 
