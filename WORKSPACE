@@ -62,7 +62,7 @@ maven_jar(
   sha1 = '5d9e2e895e3111622720157d0aa540066d5fce3a',
 )
 
-GWT_VERS = '2.8.2-WDv2-TC1'
+GWT_VERS = '2.8.2'
 
 maven_jar(
   name = 'user',

@@ -2,7 +2,7 @@ GWT_JVM_ARGS = ['-Xmx512m']
 
 
 # If changing version here, dont forget WORKSPACE, version also.
-GWT_VERSION = '2.8.2-WDv2-TC1'
+GWT_VERSION = '2.8.2'
 
 GWT_COMPILER_ARGS = [
   '-XdisableClassMetadata',

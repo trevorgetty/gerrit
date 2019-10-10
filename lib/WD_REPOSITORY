@@ -1,5 +1,5 @@
 # Wandisco specific release asset repository.
-REPO_INTERNAL = 'http://artifacts.wandisco.com/artifactory/libs-release-local'
+REPO_INTERNAL = 'http://artifacts.wandisco.com/artifactory/central'
 
 # Public release assets repository
 REPO_EXTERNAL = 'https://nexus.wandisco.com/repository/wd_releases'
