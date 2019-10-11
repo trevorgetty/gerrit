@@ -3,11 +3,6 @@
 	url = https://gerrit.googlesource.com/plugins/commit-message-length-validator
 	branch = .
 
-[submodule "plugins/cookbook-plugin"]
-	path = plugins/cookbook-plugin
-	url = https://gerrit.googlesource.com/plugins/cookbook-plugin
-	branch = .
-
 [submodule "plugins/download-commands"]
 	path = plugins/download-commands
 	url = https://gerrit.googlesource.com/plugins/download-commands
