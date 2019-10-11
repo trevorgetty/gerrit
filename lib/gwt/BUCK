@@ -11,7 +11,7 @@ GWT_REPO = REPO_WD
 maven_jar(
   name = 'user',
   id = 'com.google.gwt:gwt-user:' + GWT_VERSION,
-#   sha1 = '6585eeabcf4162a58033c46de1c560c7f9fc2e48',
+  sha1 = 'a2b9be2c996a658c4e009ba652a9c6a81c88a797',
   license = 'Apache2.0',
   repository = GWT_REPO,
   attach_source = False,
@@ -20,7 +20,7 @@ maven_jar(
 maven_jar(
   name = 'dev',
   id = 'com.google.gwt:gwt-dev:' + GWT_VERSION,
-#   sha1 = 'b3531c964f0c6b9ea581616e05eac90263b4aa89',
+  sha1 = '7a87e060bbf129386b7ae772459fb9f87297c332',
   license = 'Apache2.0',
   repository = GWT_REPO,
   attach_source = False,
