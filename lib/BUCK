@@ -33,6 +33,7 @@ define_license(name = 'PublicDomain')
 define_license(name = 'silk_icons')
 define_license(name = 'slf4j')
 define_license(name = 'xz')
+define_license(name = 'WANdisco')
 
 define_license(name = 'DO_NOT_DISTRIBUTE')
 

@@ -19,7 +19,7 @@ VERSION = '1.0.7' # When bumping VERSION, make sure no dependency conflicts on j
 maven_jar(
   name = 'gerrit-gitms-interface',
   id = 'com.wandisco:gerrit-gitms-interface:' + VERSION,
-  license = 'DO_NOT_DISTRIBUTE',
+  license = 'WANdisco',
   deps = ['//lib/jgit/org.eclipse.jgit:jgit',
           '//lib/jackson:jackson-mapper-asl'],
   bin_sha1 = '319000687295dfc7be9fba18b3b05e758a66a948',
