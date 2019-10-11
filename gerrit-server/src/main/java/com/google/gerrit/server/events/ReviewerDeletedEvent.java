@@ -28,4 +28,13 @@ public class ReviewerDeletedEvent extends PatchSetEvent {
   public ReviewerDeletedEvent(Change change) {
     super(TYPE, change);
   }
+
+  public ReviewerDeletedEvent(ReviewerDeletedEvent e, String type){
+    this(e, type, false);
+  }
+
+  public ReviewerDeletedEvent(ReviewerDeletedEvent e, String type, boolean replicated){
+    super(e, type, replicated);
+    this.reviewer = e.reviewer;
+  }
 }
