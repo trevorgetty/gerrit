@@ -35,3 +35,6 @@
 [submodule "plugins/lfs"]
 	path = plugins/lfs
 	url = ../gerrit-lfs-plugin
+[submodule "plugins/cookbook-plugin"]
+	path = plugins/cookbook-plugin
+	url = ../gerrit-cookbook-plugin
