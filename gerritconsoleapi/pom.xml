@@ -1,0 +1,46 @@
+
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright (c) 2014-2018 WANdisco
+ 
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
+ 
+  Apache License, Version 2.0
+--> 
+
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    
+    <groupId>com.google.gerrit</groupId>
+    <artifactId>gerrit-console-api</artifactId>
+    <version>2.16.12-SNAPSHOT</version>
+    <name>Gerrit Console API</name>
+    <description>Gerrit Command line application</description>
+    <url>https://www.gerritcodereview.com/</url>
+
+  <licenses>
+    <license>
+      <name>The Apache Software License, Version 2.0</name>
+      <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <properties>
+    <enforceJavaCompileVersion>1.8</enforceJavaCompileVersion>
+    <maven.compiler.source>${enforceJavaCompileVersion}</maven.compiler.source>
+    <maven.compiler.target>${enforceJavaCompileVersion}</maven.compiler.target>
+  </properties>
+
+  <scm>
+    <url>https://gerrit.wandisco.com/gerrit</url>
+    <connection>https://gerrit.wandisco.com/gerrit</connection>
+  </scm>
+
+  
+</project>

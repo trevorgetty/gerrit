@@ -1,6 +1,6 @@
 load("@rules_java//java:defs.bzl", "java_library")
 load("//tools/bzl:classpath.bzl", "classpath_collector")
-load("//tools/bzl:pkg_war.bzl", "LIBS", "PGMLIBS")
+load("//tools/bzl:pkg_war.bzl", "LIBS", "PGMLIBS", "ADDITIONAL_DEPS")
 load(
     "//tools/bzl:plugins.bzl",
     "CORE_PLUGINS",
@@ -36,6 +36,8 @@ DEPS = [
     "//proto:reviewdb_java_proto",
 ]
 
+ADDITIONAL_DEPS = [ ]
+
 java_library(
     name = "classpath",
     testonly = True,
@@ -47,7 +49,8 @@ classpath_collector(
     testonly = True,
     deps = LIBS + PGMLIBS + DEPS + TEST_DEPS +
            ["//plugins/%s:%s__plugin" % (n, n) for n in CORE_PLUGINS + CUSTOM_PLUGINS] +
-           ["//plugins/%s:%s__plugin_test_deps" % (n, n) for n in CUSTOM_PLUGINS_TEST_DEPS],
+           ["//plugins/%s:%s__plugin_test_deps" % (n, n) for n in CUSTOM_PLUGINS_TEST_DEPS] +
+           ADDITIONAL_DEPS,
 )
 
 classpath_collector(

@@ -233,8 +233,13 @@ public class RefControlTest {
           @Override
           public void remove(Project p) {}
 
-          @Override
-          public void remove(Project.NameKey name) {}
+      @Override
+      public void remove(Project.NameKey name) {}
+
+      @Override
+      public Iterable<Project.NameKey> all() {
+        return Collections.emptySet();
+      }
 
           @Override
           public ImmutableSortedSet<Project.NameKey> all() {

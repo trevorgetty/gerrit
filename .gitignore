@@ -4,6 +4,7 @@
 *.pyc
 *.sublime-*
 *.swp
+*.asc
 *~
 .DS_Store
 .gwt_work_dir
@@ -32,3 +33,7 @@
 /tools/format
 /.vscode
 /.ijwb
+/bin/
+release.war
+target
+env\.properties

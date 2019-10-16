@@ -1,3 +1,16 @@
+
+/********************************************************************************
+ * Copyright (c) 2014-2018 WANdisco
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Apache License, Version 2.0
+ *
+ ********************************************************************************/
+ 
 // Copyright (C) 2014 The Android Open Source Project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,6 +32,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import com.google.common.collect.ListMultimap;
 import com.google.gerrit.extensions.api.changes.NotifyHandling;
 import com.google.gerrit.extensions.api.changes.RecipientType;
+import com.google.gerrit.common.ReplicatedProjectManager;
 import com.google.gerrit.extensions.client.ChangeKind;
 import com.google.gerrit.extensions.restapi.AuthException;
 import com.google.gerrit.extensions.restapi.ResourceConflictException;
@@ -90,6 +104,8 @@ public class ChangeEditUtil {
     this.userProvider = userProvider;
     this.changeKindCache = changeKindCache;
     this.psUtil = psUtil;
+
+    ReplicatedProjectManager.setRepoManager(gitManager);
   }
 
   /**

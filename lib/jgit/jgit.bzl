@@ -1,12 +1,17 @@
 load("//tools/bzl:maven_jar.bzl", "MAVEN_CENTRAL", "maven_jar")
 
-_JGIT_VERS = "5.1.11.201909031202-r"
+_JGIT_VANILLA_VERS = "5.1.8.201906050907-r"
+_DOC_VERS = _JGIT_VANILLA_VERS  # Set to _JGIT_VANILA_VERS unless using a snapshot
 
-_DOC_VERS = _JGIT_VERS  # Set to _JGIT_VERS unless using a snapshot
+# Defines the WD postfix
+_POSTFIX_WD = '_WDv1-SNAPSHOT'
+
+# Defines the version of jgit, even the replicated version of jgit, should be no external use of the vanilla version.
+_JGIT_VERS = _JGIT_VANILLA_VERS + _POSTFIX_WD
 
 JGIT_DOC_URL = "https://download.eclipse.org/jgit/site/" + _DOC_VERS + "/apidocs"
 
-_JGIT_REPO = MAVEN_CENTRAL  # Leave here even if set to MAVEN_CENTRAL.
+_JGIT_REPO = WANDISCO_ASSETS  # Leave here even so can be set to different maven repos easily.
 
 # set this to use a local version.
 # "/home/<user>/projects/jgit"

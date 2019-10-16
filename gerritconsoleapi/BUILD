@@ -1,0 +1,65 @@
+#/********************************************************************************
+# * Copyright (c) 2014-2018 WANdisco
+# *
+# * Licensed under the Apache License, Version 2.0 (the "License");
+# * you may not use this file except in compliance with the License.
+# * You may obtain a copy of the License at
+# * http://www.apache.org/licenses/LICENSE-2.0
+# *
+# * Apache License, Version 2.0
+# *
+# ********************************************************************************/
+load("@rules_java//java:defs.bzl", "java_library")
+
+SRCS = "src/main/java/com/google/gerrit/gerritconsoleapi/**"
+
+RSRCS = "src/main/resources/"
+
+TEST_SRCS = "src/test/java/"
+
+TEST_RSRCS = "src/test/resources/"
+
+BASE_DEPS = [
+    "//gerrit-common:server",
+    "//gerrit-extension-api:api",
+    "//gerrit-server:server",
+    "//gerrit-sshd:sshd",
+    "//lib:guava",
+    "//lib/guice:guice",
+    "//lib/guice:guice-assistedinject",
+    "//lib/guice:guice-servlet",
+    "//lib/jgit/org.eclipse.jgit:jgit",
+    "//lib/joda:joda-time",
+    "//lib/log:api",
+    "//lib/log:log4j",
+]
+
+# TREV TODO //gerrit-reviewdb has moved / gone need to find what this is now!
+DEPS = BASE_DEPS + [
+    "//gerrit-reviewdb:server",
+    "//lib/wandisco:gerrit-gitms-interface",
+    "//lib:gwtorm",
+    "//lib:args4j",
+    "//lib/auto:auto-value",
+    "//lib/log:impl_log4j",
+]
+
+java_library(
+    name = "gerritconsoleapi",
+    srcs = glob([SRCS]),
+    provided_deps = [],
+    resources = glob([RSRCS + "*"]),
+    #  excludes = glob([TEST_SRCS, TEST_RSRCS]),
+    visibility = ["//:"],
+    deps = DEPS,
+)
+
+java_binary(
+    name = "console-api",
+    main_class = "com.google.gerrit.gerritconsoleapi.CLI_Launcher",
+    visibility = ["PUBLIC"],
+    deps = [
+        ":gerritconsoleapi",
+        "//lib/wandisco:gerrit-gitms-interface",
+    ],
+)

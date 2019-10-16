@@ -31,6 +31,10 @@ PGMLIBS = [
     "//java/com/google/gerrit/pgm",
 ]
 
+ADDITIONAL_DEPS = [
+    "//gerritconsoleapi:console-api",
+]
+
 def _add_context(in_file, output):
     input_path = in_file.path
     return [

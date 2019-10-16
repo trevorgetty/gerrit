@@ -1,0 +1,130 @@
+
+/********************************************************************************
+ * Copyright (c) 2014-2018 WANdisco
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Apache License, Version 2.0
+ *
+ ********************************************************************************/
+ 
+package com.google.gerrit.gerritconsoleapi.cli.processing;
+
+import com.google.common.base.Strings;
+import com.google.gerrit.gerritconsoleapi.bindings.GuiceConfigurator;
+import com.google.gerrit.gerritconsoleapi.exceptions.LogAndExitException;
+import com.google.inject.Injector;
+import com.wandisco.gerrit.gitms.shared.properties.GitMsApplicationProperties;
+import com.wandisco.gerrit.gitms.shared.util.ReplicationUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
+import static com.wandisco.gerrit.gitms.shared.util.ReplicationUtils.getGitConfigLocationProperty;
+
+public class LocalGuiceContextLoader {
+
+  private static final Logger logger = LoggerFactory.getLogger(LocalGuiceContextLoader.class);
+
+  private Injector programGuiceContext;
+
+  // Git configuration location override only -> optional field!
+  private String gitConfigLocationOverride;
+
+  public String getGitConfigLocationOverride() {
+    return gitConfigLocationOverride;
+  }
+
+  public void setGitConfigLocationOverride(String gitConfigLocationOverride) {
+    this.gitConfigLocationOverride = gitConfigLocationOverride;
+  }
+
+  public Injector getGuiceContext() throws LogAndExitException {
+    // if we already have a context loaded, just return it.
+    if ( programGuiceContext != null )
+    {
+      return programGuiceContext;
+    }
+
+    return loadGuiceContext();
+  }
+
+  public LocalGuiceContextLoader( String gitConfigLocationOverride ){
+    this.gitConfigLocationOverride = gitConfigLocationOverride;
+  }
+
+  /**
+   * Load the main guice context, with lcoal bindings based on whatever gitconfig we have been given directly
+   * or from the environment
+   */
+  private Injector loadGuiceContext() throws LogAndExitException {
+
+    /*
+     * If the gitconfig arg is empty, try using our standard args to get it from environment.
+     */
+    if ( Strings.isNullOrEmpty(gitConfigLocationOverride) ){
+      gitConfigLocationOverride = getGitConfigLocationProperty();
+    }
+
+    /*
+     The gitConfigLocationOverride cannot be empty by this stage. If it is throw an exception.
+     */
+    if (gitConfigLocationOverride.isEmpty()) {
+      logger.trace("Invalid git configuration args. ");
+      throw new LogAndExitException("The \"git-config\" must either be specified manually or found via GIT_CONFIG java property, system environment or ${users.home}/.gitconfig file.");
+    }
+
+  /*
+   The full path to the .gitconfig file must be specified
+   */
+    File gitconfigFile = new File(gitConfigLocationOverride);
+    if (!gitconfigFile.exists() || gitconfigFile.isDirectory()) {
+      logger.trace("Invalid git configuration it wasn't a valid file on disk. ");
+
+      throw new LogAndExitException("The \".gitconfig\" file provided is invalid or a directory. " +
+          "Please supply the full path to this file.");
+    }
+
+    /*
+     * To enforce that the rest of the application now uses this gitconfig environment, regardless of where it came from.
+     * Set the full path to the .gitconfig file as a system property
+     */
+    System.setProperty("GIT_CONFIG", gitConfigLocationOverride);
+
+
+    /*
+     Calling into gerrit.gitms.shared library to parse the GitMS application.properties
+     */
+    GitMsApplicationProperties confProps;
+    try {
+      confProps = ReplicationUtils.parseGitMSConfig();
+    } catch (IOException e) {
+      throw new LogAndExitException("Problem occurred when retrieving GitMS configuration. Error Details: ", e);
+    }
+
+    /*
+     The sitePath will be the gerrit.root declared within the application.properties.
+     With the sitePath declared, the Guice bindings to the application classes can be performed.
+     */
+    Path gerritSitePath;
+    try {
+      gerritSitePath = Paths.get(confProps.getGerritRoot());
+    } catch (IOException e) {
+      throw new LogAndExitException("Problem occurred when retrieving GitMS \"gerrit_root\" configuration. Error Details: ", e);
+    }
+
+
+    GuiceConfigurator configurator = new GuiceConfigurator(gerritSitePath);
+    programGuiceContext = configurator.getMainInjector();
+
+    return programGuiceContext;
+  }
+
+}

@@ -1,3 +1,16 @@
+
+/********************************************************************************
+ * Copyright (c) 2014-2018 WANdisco
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Apache License, Version 2.0
+ *
+ ********************************************************************************/
+ 
 // Copyright (C) 2009 The Android Open Source Project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,6 +32,8 @@ import static com.google.gerrit.common.data.GlobalCapability.VIEW_CACHES;
 import static com.google.gerrit.sshd.CommandMetaData.Mode.MASTER_OR_SLAVE;
 
 import com.google.common.base.Strings;
+import com.google.gerrit.common.TimeUtil;
+import com.google.gerrit.common.ReplicatedCacheManager;
 import com.google.gerrit.common.Version;
 import com.google.gerrit.extensions.annotations.RequiresAnyCapability;
 import com.google.gerrit.extensions.events.LifecycleListener;
@@ -122,45 +137,36 @@ final class ShowCaches extends SshCommand {
     stdout.format("%-25s %-20s   uptime %16s\n", "", "", uptime(now.getTime() - serverStarted));
     stdout.print('\n');
 
-    stdout.print(
-        String.format( //
-            "%1s %-" + nw + "s|%-21s|  %-5s |%-9s|\n" //
-            ,
-            "" //
-            ,
-            "Name" //
-            ,
-            "Entries" //
-            ,
-            "AvgGet" //
-            ,
-            "Hit Ratio" //
-            ));
-    stdout.print(
-        String.format( //
-            "%1s %-" + nw + "s|%6s %6s %7s|  %-5s  |%-4s %-4s|\n" //
-            ,
-            "" //
-            ,
-            "" //
-            ,
-            "Mem" //
-            ,
-            "Disk" //
-            ,
-            "Space" //
-            ,
-            "" //
-            ,
-            "Mem" //
-            ,
-            "Disk" //
-            ));
+    stdout.print(String.format(//
+        "%1s %-"+nw+"s|%-21s|  %-5s |%-9s|%-9s|%-9s|%-9s|\n" //
+        , "" //
+        , "Name" //
+        , "Entries" //
+        , "AvgGet" //
+        , "Hit Ratio" //
+        , "Evct Sent" //
+        , "Evct Recv" //
+        , "Reld Recv" //
+    ));
+    stdout.print(String.format(//
+        "%1s %-"+nw+"s|%6s %6s %7s|  %-5s  |%-4s %-4s|%-9s|%-9s|%-9s|\n" //
+        , "" //
+        , "" //
+        , "Mem" //
+        , "Disk" //
+        , "Space" //
+        , "" //
+        , "Mem" //
+        , "Disk" //
+        ,""
+        ,""
+        ,""
+    ));
     stdout.print("--");
     for (int i = 0; i < nw; i++) {
       stdout.print('-');
     }
-    stdout.print("+---------------------+---------+---------+\n");
+    stdout.print("+---------------------+---------+---------+---------+---------+---------+\n");
 
     Collection<CacheInfo> caches = getCaches();
     printMemoryCoreCaches(caches);
@@ -227,17 +233,20 @@ final class ShowCaches extends SshCommand {
   }
 
   private void printCache(CacheInfo cache) {
-    stdout.print(
-        String.format(
-            "%1s %-" + nw + "s|%6s %6s %7s| %7s |%4s %4s|\n",
-            CacheType.DISK.equals(cache.type) ? "D" : "",
-            cache.name,
-            nullToEmpty(cache.entries.mem),
-            nullToEmpty(cache.entries.disk),
-            Strings.nullToEmpty(cache.entries.space),
-            Strings.nullToEmpty(cache.averageGet),
-            formatAsPercent(cache.hitRatio.mem),
-            formatAsPercent(cache.hitRatio.disk)));
+    stdout.print(String.format(
+        "%1s %-"+nw+"s|%6s %6s %7s| %7s |%4s %4s|%9s|%9s|%9s|\n",
+        CacheType.DISK.equals(cache.type) ? "D" : "",
+        cache.name,
+        nullToEmpty(cache.entries.mem),
+        nullToEmpty(cache.entries.disk),
+        Strings.nullToEmpty(cache.entries.space),
+        Strings.nullToEmpty(cache.averageGet),
+        formatAsPercent(cache.hitRatio.mem),
+        formatAsPercent(cache.hitRatio.disk),
+        ReplicatedCacheManager.getEvictionsSent().count(cache.name),
+        ReplicatedCacheManager.getEvictionsPerformed().count(cache.name),
+        ReplicatedCacheManager.getReloadsPerformed().count(cache.name)
+      ));
   }
 
   private static String nullToEmpty(Long l) {

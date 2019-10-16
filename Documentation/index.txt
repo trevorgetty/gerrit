@@ -60,8 +60,13 @@
 == Server Administration
 . link:install.html[Installation Guide]
 . link:config-gerrit.html[System Settings]
-. link:cmd-index.html[Command Line Tools]
-. link:config-plugins.html#replication[Replication]
+. Performance tuning
+.. link:cmd-index.html[Command Line Tools]
+.. Reading show-caches efficiently
+.. How to read stats from the JVM
+.. How to read stats from the WANdisco GitMS
+. High availability
+. Replication
 . link:config-plugins.html[Plugins]
 . link:metrics.html[Metrics]
 . link:config-reverseproxy.html[Reverse Proxy]

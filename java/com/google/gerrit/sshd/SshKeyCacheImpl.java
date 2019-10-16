@@ -1,3 +1,16 @@
+
+/********************************************************************************
+ * Copyright (c) 2014-2018 WANdisco
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Apache License, Version 2.0
+ *
+ ********************************************************************************/
+ 
 // Copyright (C) 2009 The Android Open Source Project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,6 +33,7 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.flogger.FluentLogger;
 import com.google.gerrit.server.account.AccountSshKey;
+import com.google.gerrit.common.ReplicatedCacheManager;
 import com.google.gerrit.server.account.VersionedAuthorizedKeys;
 import com.google.gerrit.server.account.externalids.ExternalId;
 import com.google.gerrit.server.account.externalids.ExternalIds;
@@ -74,6 +88,11 @@ public class SshKeyCacheImpl implements SshKeyCache {
   @Inject
   SshKeyCacheImpl(@Named(CACHE_NAME) LoadingCache<String, Iterable<SshKeyCacheEntry>> cache) {
     this.cache = cache;
+    attachToReplication();
+  }
+  
+  final void attachToReplication() {
+    ReplicatedCacheManager.watchCache(CACHE_NAME, this.cache);
   }
 
   Iterable<SshKeyCacheEntry> get(String username) {
@@ -90,6 +109,7 @@ public class SshKeyCacheImpl implements SshKeyCache {
     if (username != null) {
       logger.atFine().log("Evict SSH key for username %s", username);
       cache.invalidate(username);
+      ReplicatedCacheManager.replicateEvictionFromCache(CACHE_NAME,username);
     }
   }
 

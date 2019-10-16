@@ -1,3 +1,16 @@
+
+/********************************************************************************
+ * Copyright (c) 2014-2018 WANdisco
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Apache License, Version 2.0
+ *
+ ********************************************************************************/
+ 
 // Copyright (C) 2009 The Android Open Source Project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -55,6 +68,7 @@ public class DefaultCommandModule extends CommandModule {
     command(gerrit, Query.class);
     command(gerrit, ReloadConfig.class);
     command(gerrit, ShowCaches.class);
+    command(gerrit, ShowReplicatorStats.class);
     command(gerrit, ShowConnections.class);
     command(gerrit, ShowQueue.class);
     command(gerrit, StreamEvents.class);
@@ -85,6 +99,7 @@ public class DefaultCommandModule extends CommandModule {
     }
     command("suexec").to(SuExec.class);
     listener().to(ShowCaches.StartupListener.class);
+    listener().to(ShowReplicatorStats.StartupListener.class);
 
     command(gerrit, CreateAccountCommand.class);
     command(gerrit, CreateGroupCommand.class);

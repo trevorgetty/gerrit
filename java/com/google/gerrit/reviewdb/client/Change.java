@@ -1,3 +1,16 @@
+
+/********************************************************************************
+ * Copyright (c) 2014-2018 WANdisco
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Apache License, Version 2.0
+ *
+ ********************************************************************************/
+ 
 // Copyright (C) 2008 The Android Open Source Project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -94,7 +107,7 @@ import java.util.Arrays;
  * notice of a replacement patch set is sent, or when notice of the change submission occurs.
  */
 public final class Change {
-  public static class Id extends IntKey<com.google.gwtorm.client.Key<?>> {
+  public static class Id extends IntKey<com.google.gwtorm.client.Key<?>> implements Comparable<Id> {
     private static final long serialVersionUID = 1L;
 
     @Column(id = 1)
@@ -251,6 +264,38 @@ public final class Change {
       }
       return i;
     }
+    
+    @Override
+    public int compareTo(Id o) {
+      if (o == null) {
+        return 1;
+      } else {
+        return this.id - o.id;
+      }
+    }
+
+    @Override
+    public int hashCode() {
+      int hash = 7 * id;
+      return hash;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      if (obj == null) {
+        return false;
+      }
+      if (getClass() != obj.getClass()) {
+        return false;
+      }
+      final Id other = (Id) obj;
+      if (this.id != other.id) {
+        return false;
+      }
+      return true;
+    }
+    
+  
   }
 
   /**

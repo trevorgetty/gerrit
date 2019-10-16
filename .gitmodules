@@ -1,34 +1,44 @@
 [submodule "plugins/codemirror-editor"]
 	path = plugins/codemirror-editor
-	url = ../plugins/codemirror-editor
-	branch = .
+	url = https://gerrit.googlesource.com/plugins/codemirror-editor
+	branch = stable-2.16
 
 [submodule "plugins/commit-message-length-validator"]
 	path = plugins/commit-message-length-validator
-	url = ../plugins/commit-message-length-validator
-	branch = .
+	url = https://gerrit.googlesource.com/plugins/commit-message-length-validator
+	branch = stable-2.16
 
 [submodule "plugins/download-commands"]
 	path = plugins/download-commands
-	url = ../plugins/download-commands
-	branch = .
+	url = https://gerrit.googlesource.com/plugins/download-commands
+	branch = stable-2.16
 
 [submodule "plugins/hooks"]
 	path = plugins/hooks
-	url = ../plugins/hooks
-	branch = .
+	url = https://gerrit.googlesource.com/plugins/hooks
+	branch = stable-2.16
 
 [submodule "plugins/replication"]
-	path = plugins/replication
-	url = ../plugins/replication
-	branch = .
+        path = plugins/replication
+	url = https://gerrit.googlesource.com/plugins/replication
+        branch = stable-2.16
 
 [submodule "plugins/reviewnotes"]
 	path = plugins/reviewnotes
-	url = ../plugins/reviewnotes
-	branch = .
+	url = https://gerrit.googlesource.com/plugins/reviewnotes
+	branch = stable-2.16
 
 [submodule "plugins/singleusergroup"]
 	path = plugins/singleusergroup
-	url = ../plugins/singleusergroup
+	url = https://gerrit.googlesource.com/plugins/singleusergroup
+	branch = stable-2.16
+
+[submodule "plugins/gerrit-delete-project-plugin"]
+	path = plugins/gerrit-delete-project-plugin
+	url = ../gerrit-delete-project-plugin
+	branch = .
+
+[submodule "plugins/lfs"]
+	path = plugins/lfs
+	url = ../gerrit-lfs-plugin
 	branch = .

@@ -1,3 +1,16 @@
+
+/********************************************************************************
+ * Copyright (c) 2014-2018 WANdisco
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Apache License, Version 2.0
+ *
+ ********************************************************************************/
+ 
 // Copyright (C) 2010 The Android Open Source Project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,5 +38,14 @@ public class ChangeAbandonedEvent extends PatchSetEvent {
 
   public ChangeAbandonedEvent(Change change) {
     super(TYPE, change);
+  }
+  public ChangeAbandonedEvent(ChangeAbandonedEvent e, String type){
+    this(e, type, false);
+  }
+
+  public ChangeAbandonedEvent(ChangeAbandonedEvent e, String type, boolean replicated){
+    super(e,type,replicated);
+    this.abandoner = e.abandoner;
+    this.reason = e.reason;
   }
 }
