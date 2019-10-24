@@ -36,6 +36,7 @@ import com.google.gerrit.common.data.Permission;
 import com.google.gerrit.common.data.PermissionRule;
 import com.google.gerrit.common.data.PermissionRule.Action;
 import com.google.gerrit.extensions.client.InheritableBoolean;
+import com.google.gerrit.extensions.restapi.PreconditionFailedException;
 import com.google.gerrit.reviewdb.client.BooleanProjectConfig;
 import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.reviewdb.client.RefNames;
@@ -152,7 +153,7 @@ public class AllProjectsCreator {
         initAllProjects(git);
         RefUpdate u = git.updateRef(Constants.HEAD);
         u.link(RefNames.REFS_CONFIG);
-      } catch (RepositoryNotFoundException err) {
+      } catch (RepositoryNotFoundException | PreconditionFailedException err) {
         String name = allProjectsName.get();
         throw new IOException("Cannot create repository " + name, err);
       }

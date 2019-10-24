@@ -1,10 +1,10 @@
-load("//tools/bzl:maven_jar.bzl", "MAVEN_CENTRAL", "maven_jar")
+load("//tools/bzl:maven_jar.bzl", "MAVEN_CENTRAL", "WANDISCO_ASSETS", "maven_jar")
 
 _JGIT_VANILLA_VERS = "5.1.8.201906050907-r"
 _DOC_VERS = _JGIT_VANILLA_VERS  # Set to _JGIT_VANILA_VERS unless using a snapshot
 
-# Defines the WD postfix
-_POSTFIX_WD = '_WDv1-SNAPSHOT'
+# Defines the WD postfi
+_POSTFIX_WD = "_WDv1-TESTING-001"
 
 # Defines the version of jgit, even the replicated version of jgit, should be no external use of the vanilla version.
 _JGIT_VERS = _JGIT_VANILLA_VERS + _POSTFIX_WD
@@ -45,28 +45,28 @@ def jgit_maven_repos():
         name = "jgit-lib",
         artifact = "org.eclipse.jgit:org.eclipse.jgit:" + _JGIT_VERS,
         repository = _JGIT_REPO,
-        sha1 = "5aa0e29d7b4db4e6c17e3ddee9bdc8d578f02ef0",
-        src_sha1 = "48ae1f24793a18c94d7b2e335ccdee6f16f8dd09",
+        #        sha1 = "5aa0e29d7b4db4e6c17e3ddee9bdc8d578f02ef0",
+        #        src_sha1 = "48ae1f24793a18c94d7b2e335ccdee6f16f8dd09",
         unsign = True,
     )
     maven_jar(
         name = "jgit-servlet",
         artifact = "org.eclipse.jgit:org.eclipse.jgit.http.server:" + _JGIT_VERS,
-        repository = _JGIT_REPO,
-        sha1 = "2650749548a85adf53ffa7c334834edf3411d7c7",
+        repository = WANDISCO_ASSETS,
+        #        sha1 = "2650749548a85adf53ffa7c334834edf3411d7c7",
         unsign = True,
     )
     maven_jar(
         name = "jgit-archive",
         artifact = "org.eclipse.jgit:org.eclipse.jgit.archive:" + _JGIT_VERS,
         repository = _JGIT_REPO,
-        sha1 = "0eb22173603c141047c790e28f9d8a1df39b8067",
+        #        sha1 = "0eb22173603c141047c790e28f9d8a1df39b8067",
     )
     maven_jar(
         name = "jgit-junit",
         artifact = "org.eclipse.jgit:org.eclipse.jgit.junit:" + _JGIT_VERS,
         repository = _JGIT_REPO,
-        sha1 = "35f4b77f8e8339da192120ee0b037944b94b4194",
+        #        sha1 = "35f4b77f8e8339da192120ee0b037944b94b4194",
         unsign = True,
     )
 

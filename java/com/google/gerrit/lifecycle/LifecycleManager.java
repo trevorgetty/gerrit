@@ -43,7 +43,7 @@ import java.util.List;
 /** Tracks and executes registered {@link LifecycleListener}s. */
 public class LifecycleManager {
   private static final FluentLogger logger = FluentLogger.forEnclosingClass();
-
+  
   private final List<Provider<LifecycleListener>> listeners = newList();
   private final List<RegistrationHandle> handles = newList();
 
@@ -137,7 +137,7 @@ public class LifecycleManager {
 
   public static void await() {
 
-    log.info("Waiting on startLock ...");
+    logger.atInfo().log("Waiting on startLock ...");
 
     while (true) {
       synchronized (startLock) {
@@ -145,7 +145,7 @@ public class LifecycleManager {
           startLock.wait();
           break;
         } catch (InterruptedException e) {
-          log.warn("startlock wait was interrupted, attempting to wait again ...");
+          logger.atWarning().withCause(e).log("startlock wait was interrupted, attempting to wait again ...");
         }
       }
     }

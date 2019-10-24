@@ -87,12 +87,6 @@ public interface ProjectCache {
    */
   void remove(Project.NameKey name) throws IOException;
 
-  /**
-   * Remove information about the given project from the cache. It will no longer be returned from
-   * {@link #all()}.
-   */
-  void remove(Project.NameKey name);
-
   /** @return sorted iteration of projects. */
   ImmutableSortedSet<Project.NameKey> all();
 

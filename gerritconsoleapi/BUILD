@@ -20,10 +20,10 @@ TEST_SRCS = "src/test/java/"
 TEST_RSRCS = "src/test/resources/"
 
 BASE_DEPS = [
-    "//gerrit-common:server",
-    "//gerrit-extension-api:api",
-    "//gerrit-server:server",
-    "//gerrit-sshd:sshd",
+    "//java/com/google/gerrit/common:server",
+    "//java/com/google/gerrit/extensions:api",
+    "//java/com/google/gerrit/server:server",
+    "//java/com/google/gerrit/sshd:sshd",
     "//lib:guava",
     "//lib/guice:guice",
     "//lib/guice:guice-assistedinject",
@@ -34,32 +34,28 @@ BASE_DEPS = [
     "//lib/log:log4j",
 ]
 
-# TREV TODO //gerrit-reviewdb has moved / gone need to find what this is now!
+# TREV TODO //gerrit-reviewdb, does this need abstracted to work with NoteDB?
 DEPS = BASE_DEPS + [
-    "//gerrit-reviewdb:server",
+    "//java/com/google/gerrit/reviewdb:server",
     "//lib/wandisco:gerrit-gitms-interface",
     "//lib:gwtorm",
     "//lib:args4j",
     "//lib/auto:auto-value",
-    "//lib/log:impl_log4j",
+    "//lib/log:impl-log4j",
 ]
 
 java_library(
     name = "gerritconsoleapi",
     srcs = glob([SRCS]),
-    provided_deps = [],
     resources = glob([RSRCS + "*"]),
-    #  excludes = glob([TEST_SRCS, TEST_RSRCS]),
-    visibility = ["//:"],
     deps = DEPS,
 )
 
 java_binary(
     name = "console-api",
     main_class = "com.google.gerrit.gerritconsoleapi.CLI_Launcher",
-    visibility = ["PUBLIC"],
-    deps = [
+    visibility = ["//visibility:public"],
+    runtime_deps = [
         ":gerritconsoleapi",
-        "//lib/wandisco:gerrit-gitms-interface",
     ],
 )

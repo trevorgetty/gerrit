@@ -2,7 +2,7 @@ workspace(name = "gerrit")
 
 load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file")
-load("//tools/bzl:maven_jar.bzl", "GERRIT", "MAVEN_LOCAL", "maven_jar")
+load("//tools/bzl:maven_jar.bzl", "GERRIT", "MAVEN_LOCAL", "WANDISCO_ASSETS", "maven_jar")
 load("//lib/codemirror:cm.bzl", "CM_VERSION", "DIFF_MATCH_PATCH_VERSION")
 load("//plugins:external_plugin_deps.bzl", "external_plugin_deps")
 load("//tools:nongoogle.bzl", "declare_nongoogle_deps")
@@ -1151,10 +1151,17 @@ maven_jar(
     sha1 = "38721e908cad8a30fa3f8e659c0571150a60cab3",
 )
 
+# Note jackson-core is different namespace now from jackson-mapper which is still using codehaus (asl) packages.
 maven_jar(
     name = "jackson-core",
     artifact = "com.fasterxml.jackson.core:jackson-core:2.9.8",
     sha1 = "0f5a654e4675769c716e5b387830d19b501ca191",
+)
+
+maven_jar(
+    name = "jackson-mapper",
+    artifact = "org.codehaus.jackson:jackson-mapper-asl:1.9.13",
+    #    sha1 = "0f5a654e4675769c716e5b387830d19b501ca191",
 )
 
 TESTCONTAINERS_VERSION = "1.12.1"
@@ -1193,6 +1200,30 @@ maven_jar(
     name = "javax-activation",
     artifact = "javax.activation:activation:1.1.1",
     sha1 = "485de3a253e23f645037828c07f1d7f1af40763a",
+)
+
+# Joda Assets
+maven_jar(
+    name = "joda_time",
+    artifact = "joda-time:joda-time:2.8",
+    sha1 = "9f2785d7184b97d005a44241ccaf980f43b9ccdb",
+)
+
+maven_jar(
+    name = "joda_convert",
+    artifact = "org.joda:joda-convert:1.2",
+    sha1 = "35ec554f0cd00c956cc69051514d9488b1374dec",
+)
+
+# WANdisco maven assets
+# TREV TODO consider do we need to download this - test this for running the gerrit-console-api jar direct from IDE run command to verify!!
+_GERRIT_GITMS_VERSION = "1.0.7"
+
+maven_jar(
+    name = "gerrit-gitms-interface",
+    artifact = "com.wandisco:gerrit-gitms-interface:" + _GERRIT_GITMS_VERSION,
+    repository = WANDISCO_ASSETS,
+    #    sha1 = 213e4234
 )
 
 load("//tools/bzl:js.bzl", "bower_archive", "npm_binary")

@@ -47,14 +47,7 @@ import com.google.gerrit.extensions.client.InheritableBoolean;
 import com.google.gerrit.extensions.client.SubmitType;
 import com.google.gerrit.extensions.common.ProjectInfo;
 import com.google.gerrit.extensions.events.NewProjectCreatedListener;
-import com.google.gerrit.extensions.restapi.BadRequestException;
-import com.google.gerrit.extensions.restapi.IdString;
-import com.google.gerrit.extensions.restapi.PreconditionFailedException;
-import com.google.gerrit.extensions.restapi.ResourceConflictException;
-import com.google.gerrit.extensions.restapi.Response;
-import com.google.gerrit.extensions.restapi.RestApiException;
-import com.google.gerrit.extensions.restapi.RestCollectionCreateView;
-import com.google.gerrit.extensions.restapi.TopLevelResource;
+import com.google.gerrit.extensions.restapi.*;
 import com.google.gerrit.reviewdb.client.AccountGroup;
 import com.google.gerrit.reviewdb.client.BooleanProjectConfig;
 import com.google.gerrit.reviewdb.client.Project;
@@ -171,10 +164,9 @@ public class CreateProject
   }
 
   @Override
-  public Response<ProjectInfo> apply(TopLevelResource resource,
-      ProjectInput input) throws BadRequestException,
-      UnprocessableEntityException, ResourceConflictException,
-      ResourceNotFoundException, IOException, ConfigInvalidException, PreconditionFailedException {
+  public Response<ProjectInfo> apply(TopLevelResource resource, IdString id,
+                                     ProjectInput input) throws
+      RestApiException, IOException, ConfigInvalidException, PermissionBackendException {
     String name = id.get();
     if (input == null) {
       input = new ProjectInput();
@@ -256,7 +248,7 @@ public class CreateProject
     }
   }
 
-  private Project createProject(CreateProjectArgs args)
+  private ProjectState createProject(CreateProjectArgs args)
       throws BadRequestException, ResourceConflictException, IOException,
       ConfigInvalidException, PreconditionFailedException {
     final Project.NameKey nameKey = args.getProject();
@@ -294,12 +286,12 @@ public class CreateProject
     } catch (RepositoryNotFoundException badName) {
       throw new BadRequestException("invalid project name: " + nameKey);
     } catch (PreconditionFailedException e) {
-      String msg = "Resource with the name: " + nameKey + ", already exists on one or more nodes.";
-      log.error(msg, e);
+      String msg = "Resource with the name: %s, already exists on one or more nodes.";
+      logger.atSevere().withCause(e).log(msg, nameKey);
       throw new PreconditionFailedException(msg);
     } catch (ConfigInvalidException e) {
-      String msg = "Cannot create " + nameKey;
-      logger.atSevere().withCause(e).log(msg);
+      String msg = "Cannot create %s";
+      logger.atSevere().withCause(e).log(msg, nameKey);
       throw e;
     }
   }
