@@ -31,8 +31,16 @@ import com.google.gerrit.common.FileUtil;
 import com.google.gerrit.extensions.events.LifecycleListener;
 import com.google.gerrit.server.config.SitePaths;
 import com.google.gerrit.server.util.SystemLog;
+
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Properties;
+
 import net.logstash.log4j.JSONEventLayoutV1;
 import org.apache.log4j.ConsoleAppender;
 import org.apache.log4j.Level;

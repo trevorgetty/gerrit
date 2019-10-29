@@ -1231,7 +1231,7 @@ function create_wd_logging_properties_file(){
     #Example usage;
                  #Package.Class = Logging Level
                  #com.google.gerrit = INFO
-                 #com.google.gerrit.common.Replicator = DEBUG
+                 #com.google.gerrit.server.replication.Replicator = DEBUG
 EOL
   else
     info " wd_logging.properties already created."

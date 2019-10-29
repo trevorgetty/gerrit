@@ -18,6 +18,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Iterators;
 import com.google.gerrit.extensions.registration.DynamicSet;
 import com.google.gerrit.extensions.registration.Extension;
+import com.google.gerrit.extensions.registration.RegistrationHandle;
 import com.google.gerrit.server.plugincontext.PluginContext.ExtensionImplConsumer;
 import com.google.gerrit.server.plugincontext.PluginContext.PluginMetrics;
 import com.google.inject.Inject;
@@ -131,6 +132,16 @@ public class PluginSetContext<T> implements Iterable<PluginSetEntryContext<T>> {
   public SortedSet<String> plugins() {
     return dynamicSet.plugins();
   }
+
+  /**
+   * Adds / Registers a new implementation for this extension point for the given plugin.
+   * @param name
+   * @param item
+   * @return
+   */
+  public RegistrationHandle registerImplementation(String name, T item){
+    return dynamicSet.add(name, item);
+  };
 
   /**
    * Invokes each extension in the set. All exceptions from the plugin extensions are caught and

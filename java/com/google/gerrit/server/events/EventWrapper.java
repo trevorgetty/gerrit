@@ -14,13 +14,13 @@
 package com.google.gerrit.server.events;
 
 import com.google.common.base.Supplier;
-import com.google.gerrit.common.AccountIndexEvent;
-import com.google.gerrit.common.CacheKeyWrapper;
-import com.google.gerrit.common.DeleteProjectChangeEvent;
-import com.google.gerrit.common.ProjectInfoWrapper;
-import com.google.gerrit.common.ReplicatedEventsManager;
-import com.google.gerrit.common.ReplicatedIndexEventManager;
-import com.google.gerrit.common.ReplicatorMessageEvent;
+import com.google.gerrit.server.replication.AccountIndexEvent;
+import com.google.gerrit.server.replication.CacheKeyWrapper;
+import com.google.gerrit.server.replication.DeleteProjectChangeEvent;
+import com.google.gerrit.server.replication.ProjectInfoWrapper;
+import com.google.gerrit.server.replication.ReplicatedEventsManager;
+import com.google.gerrit.server.replication.ReplicatedIndexEventManager;
+import com.google.gerrit.server.replication.ReplicatorMessageEvent;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 

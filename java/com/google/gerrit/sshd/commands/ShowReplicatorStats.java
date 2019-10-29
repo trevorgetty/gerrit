@@ -14,7 +14,7 @@
 package com.google.gerrit.sshd.commands;
 
 import com.google.common.collect.ImmutableMultiset;
-import com.google.gerrit.common.Replicator;
+import com.google.gerrit.server.replication.Replicator;
 import com.google.gerrit.common.Version;
 import static com.google.gerrit.sshd.CommandMetaData.Mode.MASTER_OR_SLAVE;
 
@@ -23,7 +23,7 @@ import com.google.gerrit.extensions.annotations.RequiresCapability;
 import com.google.gerrit.extensions.events.LifecycleListener;
 import com.google.gerrit.server.IdentifiedUser;
 import com.google.gerrit.server.events.EventWrapper;
-import com.google.gerrit.common.TimeUtil;
+import com.google.gerrit.server.util.time.TimeUtil;
 import com.google.gerrit.sshd.CommandMetaData;
 import com.google.gerrit.sshd.SshCommand;
 
@@ -138,7 +138,7 @@ final class ShowReplicatorStats extends SshCommand {
         "Avg gzipped bytes/proposal:",
         localProposals == 0 ? "n/a": repl.getTotalPublishedLocalEventsBytes()*6/100/localProposals,
         foreignProposals == 0 ? "n/a": repl.getTotalPublishedForeignEventsBytes()*6/100/foreignProposals));
-    stdout.print(String.format("%-30s | %19s | %19s |\n", //
+    stdout.print(String.format("%-30s | %19s | %19s |\n", //ErrorLog
         "Files in Incoming directory:", "n/a",repl.getIncomingDirFileCount()));
     stdout.print(String.format("%-30s | %19s | %19s |\n", //
         "Files in Outgoing directory:", "n/a",repl.getOutgoingDirFileCount()));

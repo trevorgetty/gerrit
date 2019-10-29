@@ -11,7 +11,7 @@
  *
  ********************************************************************************/
  
-package com.google.gerrit.common;
+package com.google.gerrit.server.replication;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;

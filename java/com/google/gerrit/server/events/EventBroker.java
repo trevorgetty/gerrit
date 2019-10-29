@@ -40,7 +40,9 @@ import com.google.inject.Inject;
 import com.google.inject.Provider;
 import com.google.inject.Singleton;
 
-/** Distributes Events to listeners if they are allowed to see them */
+/**
+ * Distributes Events to listeners if they are allowed to see them
+ */
 @Singleton
 public class EventBroker implements EventDispatcher {
   private static final FluentLogger logger = FluentLogger.forEnclosingClass();
@@ -53,10 +55,14 @@ public class EventBroker implements EventDispatcher {
     }
   }
 
-  /** Listeners to receive changes as they happen (limited by visibility of user). */
+  /**
+   * Listeners to receive changes as they happen (limited by visibility of user).
+   */
   protected final PluginSetContext<UserScopedEventListener> listeners;
 
-  /** Listeners to receive all changes as they happen. */
+  /**
+   * Listeners to receive all changes as they happen.
+   */
   protected final PluginSetContext<EventListener> unrestrictedListeners;
 
   private final PermissionBackend permissionBackend;
@@ -225,4 +231,25 @@ public class EventBroker implements EventDispatcher {
     }
     return true;
   }
+
+  /**
+   * All the update of the DynamicSets which are the eventlisteners for the plugin events.
+   * This method updates the restricted set (by user context) of listeners.
+   * @param name
+   * @param listener
+   */
+  public void registerEventListener(String name, UserScopedEventListener listener) {
+    this.listeners.registerImplementation(name, listener);
+  }
+
+  /**
+   * All the update of the DynamicSets which are the eventlisteners for the plugin events.
+   * This method updates the unrestricted set of listeners.
+   * @param name
+   * @param unrestrictedListener
+   */
+  public void registerUnrestrictedEventListener(String name, EventListener unrestrictedListener) {
+    this.unrestrictedListeners.registerImplementation(name, unrestrictedListener);
+  }
+
 }

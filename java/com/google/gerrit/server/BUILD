@@ -110,6 +110,8 @@ java_library(
         "//lib/jgit/org.eclipse.jgit.archive:jgit-archive",
         "//lib/jgit/org.eclipse.jgit:jgit",
         "//lib/jsoup",
+        "//lib/log:api",
+        "//lib/log:json-smart",
         "//lib/log:jsonevent-layout",
         "//lib/log:log4j",
         "//lib/lucene:lucene-analyzers-common",

@@ -32,7 +32,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import com.google.common.collect.ListMultimap;
 import com.google.gerrit.extensions.api.changes.NotifyHandling;
 import com.google.gerrit.extensions.api.changes.RecipientType;
-import com.google.gerrit.common.ReplicatedProjectManager;
+import com.google.gerrit.server.replication.ReplicatedProjectManager;
 import com.google.gerrit.extensions.client.ChangeKind;
 import com.google.gerrit.extensions.restapi.AuthException;
 import com.google.gerrit.extensions.restapi.ResourceConflictException;

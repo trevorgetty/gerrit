@@ -11,7 +11,7 @@
  *
  ********************************************************************************/
  
-package com.google.gerrit.common;
+package com.google.gerrit.server.replication;
 
 
 import com.google.common.base.Supplier;
@@ -58,7 +58,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.NavigableMap;
 import java.util.Objects;
-import java.util.Random;
 import java.util.Set;
 import java.util.TimeZone;
 import java.util.TreeMap;

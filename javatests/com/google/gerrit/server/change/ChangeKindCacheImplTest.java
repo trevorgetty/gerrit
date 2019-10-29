@@ -23,6 +23,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.gerrit.server.cache.proto.Cache.ChangeKindKeyProto;
 import com.google.gerrit.server.cache.serialize.CacheSerializer;
 import com.google.gerrit.server.change.ChangeKindCacheImpl.Key;
+import com.google.gerrit.server.cache.testing.SerializedClassSubject;
 import org.eclipse.jgit.lib.ObjectId;
 import org.junit.Test;
 
@@ -50,7 +51,7 @@ public class ChangeKindCacheImplTest {
   }
 
   /**
-   * See {@link com.google.gerrit.server.cache.testing.SerializedClassSubject} for background and
+   * See {@link SerializedClassSubject} for background and
    * what to do if this test fails.
    */
   @Test

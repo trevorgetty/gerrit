@@ -45,4 +45,5 @@ public class CapabilityConstants extends TranslationBundle {
   public String viewPlugins;
   public String viewQueue;
   public String viewAccess;
+  public String viewReplicatorStats;
 }

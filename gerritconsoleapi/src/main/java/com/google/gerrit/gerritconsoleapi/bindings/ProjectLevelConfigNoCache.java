@@ -14,7 +14,7 @@
 package com.google.gerrit.gerritconsoleapi.bindings;
 
 import com.google.gerrit.reviewdb.client.RefNames;
-import com.google.gerrit.server.git.VersionedMetaData;
+import com.google.gerrit.server.git.meta.VersionedMetaData;
 import org.eclipse.jgit.errors.ConfigInvalidException;
 import org.eclipse.jgit.lib.CommitBuilder;
 import org.eclipse.jgit.lib.Config;

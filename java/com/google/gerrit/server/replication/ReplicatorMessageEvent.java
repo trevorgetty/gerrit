@@ -11,43 +11,41 @@
  *
  ********************************************************************************/
  
-package com.google.gerrit.common;
+package com.google.gerrit.server.replication;
 
 /**
- * This is a wrapper for the delete project message to be replicated,
- *
+ * This event is passed to the Git Multisite replicator to communicate
+ * a status message.
  */
-public class ProjectInfoWrapper {
-  public String projectName;
-  public boolean preserve;
-  public String taskUuid;
+public class ReplicatorMessageEvent{
+  public String project;
+  public String status;
+  public String prefix;
   public long eventTimestamp;
   public String nodeIdentity;
-  public transient boolean replicated = false;
 
-  public ProjectInfoWrapper(String projectName, boolean preserve, String taskUuid, String nodeIdentity) {
-    this.projectName = projectName;
-    this.preserve = preserve;
-    this.taskUuid = taskUuid;
+
+  public ReplicatorMessageEvent(String project, String status, String prefix, String nodeIdentity) {
+    this.project = project;
+    this.status = status;
+    this.prefix = prefix;
     this.eventTimestamp = System.currentTimeMillis();
     this.nodeIdentity = nodeIdentity;
   }
-
-  public ProjectInfoWrapper() {}
 
   public void setNodeIdentity(String nodeIdentity) {
     this.nodeIdentity = nodeIdentity;
   }
 
+
   @Override
   public String toString() {
-    return "ProjectInfoWrapper{" +
-        "projectName='" + projectName + '\'' +
-        ", preserve=" + preserve +
-        ", taskUuid='" + taskUuid + '\'' +
+    return "ReplicatorMessageEvent{" +
+        "project='" + project + '\'' +
+        ", status='" + status + '\'' +
+        ", prefix='" + prefix + '\'' +
         ", eventTimestamp=" + eventTimestamp +
         ", nodeIdentity='" + nodeIdentity + '\'' +
-        ", replicated=" + replicated +
         '}';
   }
 }

@@ -80,7 +80,7 @@ public class MultiBaseLocalDiskRepositoryManagerTest extends GerritBaseTests {
 
   @Test
   public void testDefaultRepositoryLocation()
-      throws RepositoryCaseMismatchException, RepositoryNotFoundException, PreconditionFailedException{
+      throws RepositoryCaseMismatchException, RepositoryNotFoundException, IOException {
     Project.NameKey someProjectKey = new Project.NameKey("someProject");
     Repository repo = repoManager.createRepository(someProjectKey);
     assertThat(repo.getDirectory()).isNotNull();

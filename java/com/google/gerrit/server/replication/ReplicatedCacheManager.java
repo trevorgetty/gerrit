@@ -11,7 +11,7 @@
  *
  ********************************************************************************/
 
-package com.google.gerrit.common;
+package com.google.gerrit.server.replication;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.LoadingCache;

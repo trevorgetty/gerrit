@@ -1,7 +1,7 @@
 /*
  * Copyright (c) WANdisco 2017
  */
-package com.google.gerrit.common;
+package com.google.gerrit.server.replication;
 
 import com.google.gerrit.reviewdb.client.Change;
 import com.google.gerrit.reviewdb.client.Project;

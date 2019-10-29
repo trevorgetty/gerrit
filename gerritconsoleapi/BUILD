@@ -11,19 +11,16 @@
 # ********************************************************************************/
 load("@rules_java//java:defs.bzl", "java_library")
 
-SRCS = "src/main/java/com/google/gerrit/gerritconsoleapi/**"
-
-RSRCS = "src/main/resources/"
-
-TEST_SRCS = "src/test/java/"
-
-TEST_RSRCS = "src/test/resources/"
+SRCS = "src/main/java/com/google/gerrit/gerritconsoleapi/**/*.java"
+RSRCS = "src/main/resources/**/*"
 
 BASE_DEPS = [
     "//java/com/google/gerrit/common:server",
     "//java/com/google/gerrit/extensions:api",
-    "//java/com/google/gerrit/server:server",
+    "//java/com/google/gerrit/server",
     "//java/com/google/gerrit/sshd:sshd",
+    "//java/com/google/gerrit/metrics",
+    "//java/com/google/gerrit/server/schema",
     "//lib:guava",
     "//lib/guice:guice",
     "//lib/guice:guice-assistedinject",
@@ -31,7 +28,7 @@ BASE_DEPS = [
     "//lib/jgit/org.eclipse.jgit:jgit",
     "//lib/joda:joda-time",
     "//lib/log:api",
-    "//lib/log:log4j",
+    "//lib/log:log4j"
 ]
 
 # TREV TODO //gerrit-reviewdb, does this need abstracted to work with NoteDB?
@@ -44,8 +41,10 @@ DEPS = BASE_DEPS + [
     "//lib/log:impl-log4j",
 ]
 
+# Create a lib full of the source required to run a command line application which
+# obtains information from gerrit state OR configuration.
 java_library(
-    name = "gerritconsoleapi",
+    name = "gerrit-console-api-module",
     srcs = glob([SRCS]),
     resources = glob([RSRCS + "*"]),
     deps = DEPS,
@@ -56,6 +55,6 @@ java_binary(
     main_class = "com.google.gerrit.gerritconsoleapi.CLI_Launcher",
     visibility = ["//visibility:public"],
     runtime_deps = [
-        ":gerritconsoleapi",
+        ":gerrit-console-api-module",
     ],
 )

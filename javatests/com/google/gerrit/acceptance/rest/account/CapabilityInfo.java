@@ -49,6 +49,12 @@ class CapabilityInfo {
   public boolean viewCaches;
   public boolean viewConnections;
   public boolean viewPlugins;
+
+  @Override
+  public int hashCode() {
+    return super.hashCode();
+  }
+
   public boolean viewQueue;
   public boolean viewReplicatorStats;
   public boolean viewAccess;

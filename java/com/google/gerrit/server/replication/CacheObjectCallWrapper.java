@@ -11,7 +11,7 @@
  *
  ********************************************************************************/
  
-package com.google.gerrit.common;
+package com.google.gerrit.server.replication;
 
 /**
  * This is a wrapper for the cache method call to be replicated,

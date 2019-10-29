@@ -9,6 +9,8 @@ import com.google.gerrit.extensions.auth.oauth.OAuthToken;
 import com.google.gerrit.server.cache.proto.Cache.OAuthTokenProto;
 import com.google.gerrit.server.cache.serialize.CacheSerializer;
 import java.lang.reflect.Type;
+
+import com.google.gerrit.server.cache.testing.SerializedClassSubject;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -57,7 +59,7 @@ public final class OAuthTokenCacheTest {
   }
 
   /**
-   * See {@link com.google.gerrit.server.cache.testing.SerializedClassSubject} for background and
+   * See {@link SerializedClassSubject} for background and
    * what to do if this test fails.
    */
   @Test

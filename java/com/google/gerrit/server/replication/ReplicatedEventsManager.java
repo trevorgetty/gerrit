@@ -17,7 +17,7 @@
  *
  * http://www.wandisco.com/
  */
-package com.google.gerrit.common;
+package com.google.gerrit.server.replication;
 
 import com.google.common.base.Supplier;
 import com.google.gerrit.reviewdb.client.Branch;
@@ -25,24 +25,8 @@ import com.google.gerrit.reviewdb.client.Change;
 import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.reviewdb.server.ReviewDb;
 import com.google.gerrit.server.data.ChangeAttribute;
-import com.google.gerrit.server.events.ChangeAbandonedEvent;
-import com.google.gerrit.server.events.ChangeEvent;
-import com.google.gerrit.server.events.EventWrapper;
-import com.google.gerrit.server.events.ChangeMergedEvent;
-import com.google.gerrit.server.events.ChangeRestoredEvent;
-import com.google.gerrit.server.events.CommentAddedEvent;
-import com.google.gerrit.server.events.CommitReceivedEvent;
-import com.google.gerrit.server.events.DraftPublishedEvent;
-import com.google.gerrit.server.events.Event;
-import com.google.gerrit.server.events.EventDeserializer;
-import com.google.gerrit.server.events.PatchSetCreatedEvent;
-import com.google.gerrit.server.events.ProjectCreatedEvent;
-import com.google.gerrit.server.events.RefEvent;
-import com.google.gerrit.server.events.RefUpdatedEvent;
-import com.google.gerrit.server.events.ReviewerAddedEvent;
-import com.google.gerrit.server.events.SupplierDeserializer;
-import com.google.gerrit.server.events.SupplierSerializer;
-import com.google.gerrit.server.events.TopicChangedEvent;
+import com.google.gerrit.server.events.*;
+import com.google.gerrit.server.permissions.PermissionBackendException;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
@@ -150,7 +134,7 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
         log.info("RE ReplicatedEvents instance added");
         logMe("ReplicatedEvents instance added",null);
 
-        changeHookRunner.unrestrictedListeners.add(instance.listener);
+        changeHookRunner.registerUnrestrictedEventListener(EVENTS_REPLICATION_THREAD_NAME, instance.listener);
         log.info("ReplicatedEvents change listener added");
       } else {
         log.error("RE Thread {} is already running!",EVENTS_REPLICATION_THREAD_NAME);
@@ -404,7 +388,7 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
           log.error("RE Internal error, it's *supported*, but refs is null",new Exception("refs is null for supported event"));
           changeEventInfo.supported = false;
         }
-      } catch (OrmException e) {
+      } catch (OrmException | PermissionBackendException e) {
         log.error("RE While trying to publish a replicated event", e);
       }
     }
@@ -433,8 +417,6 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
       CommitReceivedEvent event = (CommitReceivedEvent) newEvent;
       changeEventInfo.setProjectName(event.project.getName());
       changeEventInfo.setBranchName(new Branch.NameKey(event.project.getNameKey(), completeRef(event.refName)));
-    } else if (newEvent instanceof com.google.gerrit.server.events.DraftPublishedEvent) {
-      changeEventInfo.setChangeAttribute(((DraftPublishedEvent) newEvent).change.get());
     } else if (newEvent instanceof com.google.gerrit.server.events.PatchSetCreatedEvent) {
       changeEventInfo.setChangeAttribute(((PatchSetCreatedEvent) newEvent).change.get());
     } else if (newEvent instanceof com.google.gerrit.server.events.RefUpdatedEvent) {

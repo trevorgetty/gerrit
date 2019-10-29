@@ -24,6 +24,7 @@ import static com.google.gerrit.server.cache.testing.SerializedClassSubject.asse
 import com.google.common.collect.ImmutableMap;
 import com.google.gerrit.extensions.client.SubmitType;
 import com.google.gerrit.server.cache.proto.Cache.ConflictKeyProto;
+import com.google.gerrit.server.cache.testing.SerializedClassSubject;
 import org.eclipse.jgit.lib.ObjectId;
 import org.junit.Test;
 
@@ -82,7 +83,7 @@ public class ConflictKeyTest {
   }
 
   /**
-   * See {@link com.google.gerrit.server.cache.testing.SerializedClassSubject} for background and
+   * See {@link SerializedClassSubject} for background and
    * what to do if this test fails.
    */
   @Test

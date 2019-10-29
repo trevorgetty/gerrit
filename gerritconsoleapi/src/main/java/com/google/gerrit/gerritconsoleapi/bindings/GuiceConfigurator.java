@@ -48,8 +48,8 @@ public class GuiceConfigurator {
 
   private Injector cfgInjector;
   private Injector mainInjector;
-  private Path sitePath;
   private Config config;
+  private Path sitePath;
 
   public GuiceConfigurator(Path sitePath) {
     this.sitePath = sitePath;
