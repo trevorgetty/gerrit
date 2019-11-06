@@ -45,6 +45,6 @@ public class ChangeDeletedEvent extends ChangeEvent {
 
   public ChangeDeletedEvent(ChangeDeletedEvent e, String type, boolean replicated) {
     super(e, type, replicated);
-    this.uploader = e.uploader;
+    this.deleter = e.deleter;
   }
 }

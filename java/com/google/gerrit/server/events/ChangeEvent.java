@@ -46,6 +46,17 @@ public abstract class ChangeEvent extends RefEvent {
     this.changeKey = change.getKey();
   }
 
+  public ChangeEvent(ChangeEvent e, String type) {
+    this(e, type, false);
+  }
+
+  public ChangeEvent(ChangeEvent e, String type, boolean replicated) {
+    super(type);
+    this.change = e.change;
+    this.eventCreatedOn = e.eventCreatedOn;
+    this.replicated = replicated;
+  }
+  
   @Override
   public Project.NameKey getProjectNameKey() {
     return project;
@@ -60,14 +71,4 @@ public abstract class ChangeEvent extends RefEvent {
     return changeKey;
   }
 
-  public ChangeEvent(ChangeEvent e, String type) {
-    this(e, type, false);
-  }
-
-  public ChangeEvent(ChangeEvent e, String type, boolean replicated) {
-    super(type);
-    this.change = e.change;
-    this.eventCreatedOn = e.eventCreatedOn;
-    this.replicated = replicated;
-  }
 }

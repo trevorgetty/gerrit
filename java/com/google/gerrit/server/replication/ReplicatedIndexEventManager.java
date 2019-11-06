@@ -1227,15 +1227,16 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
   }
 
   /**
-   * Replicate the changes that are to be deleted when we delete a replicated repo.
-   * Takes a list of ChangeData
+   * Replicate the changes that are to be deleted when we preserve a replicated repo
+   * Takes a list of Change.ID objects.
    * @throws IOException
    */
-  public void deleteChanges(List<ChangeData> changes) throws IOException{
+  public void deleteChanges(List<Change.Id> changes) throws IOException{
     //iterate over the list of changes and delete each one
-    for (ChangeData cd: changes) {
-      indexer.delete(cd.getId());
-      log.debug(("Deleted change " + cd.getId().toString()));
+    for(Change.Id id: changes) {
+      indexer.delete(id);
+      log.debug("Deleted change {}", id.toString());
     }
   }
+
 }

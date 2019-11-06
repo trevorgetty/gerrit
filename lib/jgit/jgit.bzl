@@ -1,10 +1,10 @@
 load("//tools/bzl:maven_jar.bzl", "MAVEN_CENTRAL", "WANDISCO_ASSETS", "maven_jar")
 
-_JGIT_VANILLA_VERS = "5.1.8.201906050907-r"
+_JGIT_VANILLA_VERS = "5.1.12"
 _DOC_VERS = _JGIT_VANILLA_VERS  # Set to _JGIT_VANILA_VERS unless using a snapshot
 
-# Defines the WD postfi
-_POSTFIX_WD = "_WDv1-TESTING-001"
+# Defines the WD postfix
+_POSTFIX_WD = "-WDv1-TC1"
 
 # Defines the version of jgit, even the replicated version of jgit, should be no external use of the vanilla version.
 JGIT_VERS = _JGIT_VANILLA_VERS + _POSTFIX_WD

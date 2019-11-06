@@ -17,6 +17,8 @@ import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.server.config.AllProjectsName;
 import com.google.gerrit.server.git.GitRepositoryManager;
 import com.google.gerrit.server.project.ProjectConfig;
+
+
 import com.google.inject.Inject;
 import com.google.inject.Injector;
 import org.eclipse.jgit.errors.ConfigInvalidException;
@@ -87,7 +89,7 @@ public class ProjectLoader {
   public ProjectLevelConfigNoCache getConfigFromProject(String fileName, ProjectStateMinDepends project) throws Exception {
 
     // Get the ProjectLevel information, without have to clone the project ( via tree walk ).
-    ProjectLevelConfigNoCache cfg = new com.google.gerrit.gerritconsoleapi.bindings.ProjectLevelConfigNoCache(fileName, project);
+    ProjectLevelConfigNoCache cfg = new ProjectLevelConfigNoCache(fileName, project);
     try (Repository git = mgr.openRepository(project.getProject().getNameKey())) {
       cfg.load(git);
     } catch (ConfigInvalidException e) {

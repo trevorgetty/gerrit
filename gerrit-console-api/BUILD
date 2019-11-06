@@ -10,8 +10,9 @@
 # *
 # ********************************************************************************/
 load("@rules_java//java:defs.bzl", "java_library")
+load("//tools/bzl:java.bzl", "java_library2")
 
-SRCS = "src/main/java/com/google/gerrit/gerritconsoleapi/**/*.java"
+SRCS = "src/main/java/com/google/gerrit/gerritconsoleapi/**/*"
 RSRCS = "src/main/resources/**/*"
 
 BASE_DEPS = [
@@ -43,16 +44,17 @@ DEPS = BASE_DEPS + [
 
 # Create a lib full of the source required to run a command line application which
 # obtains information from gerrit state OR configuration.
-java_library(
+java_library2(
     name = "gerrit-console-api-module",
     srcs = glob([SRCS]),
     resources = glob([RSRCS + "*"]),
     deps = DEPS,
+    visibility = ["//visibility:public"],
 )
 
 java_binary(
     name = "console-api",
-    main_class = "com.google.gerrit.gerritconsoleapi.CLI_Launcher",
+    main_class = "com.google.gerrit.gerrit-console-api.CLI_Launcher",
     visibility = ["//visibility:public"],
     runtime_deps = [
         ":gerrit-console-api-module",

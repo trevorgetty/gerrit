@@ -376,7 +376,7 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
       try(ReviewDb db = schemaFactory.open()) {
         if (changeEventInfo.changeAttr != null) {
           log.debug("RE using changeAttr: {}...", changeEventInfo.changeAttr);
-          Change change = db.changes().get(Change.Id.parse(changeEventInfo.changeAttr.number));
+          Change change = db.changes().get(new Change.Id(changeEventInfo.changeAttr.number));
           log.debug("RE got change from db: {}", change);
           changeHookRunner.postEvent(change, (ChangeEvent) newEvent);
         } else if (changeEventInfo.branchName != null) {
