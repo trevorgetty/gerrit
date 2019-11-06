@@ -18,6 +18,7 @@ import com.google.common.base.Supplier;
 import com.google.gerrit.reviewdb.client.Change;
 import com.google.gerrit.server.data.AccountAttribute;
 
+@SkipReplication
 public class HashtagsChangedEvent extends ChangeEvent {
   static final String TYPE = "hashtags-changed";
   public Supplier<AccountAttribute> editor;
