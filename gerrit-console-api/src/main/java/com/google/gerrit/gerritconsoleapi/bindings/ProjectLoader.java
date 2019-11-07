@@ -86,18 +86,18 @@ public class ProjectLoader {
    * @return
    * @throws Exception
    */
-  public ProjectLevelConfigNoCache getConfigFromProject(String fileName, ProjectStateMinDepends project) throws Exception {
+  public com.google.gerrit.gerritconsoleapi.bindings.ProjectLevelConfigNoCache getConfigFromProject(String fileName, ProjectStateMinDepends project) throws Exception {
 
     // Get the ProjectLevel information, without have to clone the project ( via tree walk ).
     ProjectLevelConfigNoCache cfg = new ProjectLevelConfigNoCache(fileName, project);
-    try (Repository git = mgr.openRepository(project.getProject().getNameKey())) {
-      cfg.load(git);
+    Project.NameKey name = project.getProject().getNameKey();
+    try (Repository git = mgr.openRepository(name)) {
+      cfg.load(name, git);
     } catch (ConfigInvalidException e) {
-      logger.warn("Failed to load {} for {}", fileName, project.getProject().getName(), e);
-      throw new Exception("Failed to load " + fileName + " for " + project.getProject().getName(), e);
+      logger.warn("Failed to load {} for {}", fileName, name.toString(), e);
+      throw new Exception(String.format("Failed to load %s for %s", fileName, name.toString()), e);
     }
-
-
+    
     return cfg;
   }
 }

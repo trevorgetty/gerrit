@@ -95,7 +95,7 @@ public class ProjectStateMinDepends {
 
     ProjectLevelConfigNoCache cfg = new ProjectLevelConfigNoCache(fileName, this);
     try (Repository git = gitMgr.openRepository(getProject().getNameKey())) {
-      cfg.load(git);
+      cfg.load(getProject().getNameKey(), git);
     } catch (IOException | ConfigInvalidException e) {
       log.warn("Failed to load " + fileName + " for " + getProject().getName(), e);
     }

@@ -24,10 +24,10 @@ import java.io.IOException;
 
 public class ProjectLevelConfigNoCache extends VersionedMetaData {
     private final String fileName;
-    private final ProjectStateMinDepends project;
+    private final com.google.gerrit.gerritconsoleapi.bindings.ProjectStateMinDepends project;
     private Config cfg;
 
-  public ProjectLevelConfigNoCache(String fileName, ProjectStateMinDepends projectConfig) {
+  public ProjectLevelConfigNoCache(String fileName, com.google.gerrit.gerritconsoleapi.bindings.ProjectStateMinDepends projectConfig) {
     this.fileName = fileName;
     this.project = projectConfig;
   }

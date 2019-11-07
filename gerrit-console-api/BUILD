@@ -12,8 +12,8 @@
 load("@rules_java//java:defs.bzl", "java_library")
 load("//tools/bzl:java.bzl", "java_library2")
 
-SRCS = "src/main/java/com/google/gerrit/gerritconsoleapi/**/*"
-RSRCS = "src/main/resources/**/*"
+SRCS = "src/main/java/com/google/gerrit/"
+RSRCS = "src/main/resources/"
 
 BASE_DEPS = [
     "//java/com/google/gerrit/common:server",
@@ -46,7 +46,7 @@ DEPS = BASE_DEPS + [
 # obtains information from gerrit state OR configuration.
 java_library2(
     name = "gerrit-console-api-module",
-    srcs = glob([SRCS]),
+    srcs = glob(["src/main/java/com/google/gerrit/gerritconsoleapi/**/*.java"]),
     resources = glob([RSRCS + "*"]),
     deps = DEPS,
     visibility = ["//visibility:public"],

@@ -1217,7 +1217,7 @@ maven_jar(
 
 # WANdisco maven assets
 # TREV TODO consider do we need to download this - test this for running the gerrit-console-api jar direct from IDE run command to verify!!
-_GERRIT_GITMS_VERSION = "1.0.7"
+_GERRIT_GITMS_VERSION = "1.1.0.1-TC1"
 
 maven_jar(
     name = "gerrit-gitms-interface",

@@ -52,7 +52,8 @@ public enum GlobalPermission implements GlobalOrPluginPermission {
   VIEW_CONNECTIONS,
   VIEW_PLUGINS,
   VIEW_QUEUE,
-  VIEW_ACCESS;
+  VIEW_ACCESS,
+  VIEW_REPLICATOR_STATS;
 
   private static final FluentLogger logger = FluentLogger.forEnclosingClass();
 

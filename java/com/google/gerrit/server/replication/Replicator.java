@@ -34,12 +34,11 @@ import java.io.FileFilter;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintWriter;
-import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
@@ -61,6 +60,10 @@ import org.eclipse.jgit.storage.file.FileBasedConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.eclipse.jgit.util.FS;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.nio.file.StandardOpenOption.APPEND;
+import static java.nio.file.StandardOpenOption.CREATE;
 
 /**
  * This is the class in charge to exchange messages with the GitMS replicator, using files.
@@ -279,7 +282,7 @@ public class Replicator implements Runnable {
     if (!outgoingReplEventsDirectory.exists() && !outgoingReplEventsDirectory.mkdirs()) {
       System.err.println("Cannot create directory for internal logging: " + outgoingReplEventsDirectory);
     }
-    try (PrintWriter p = new PrintWriter(new FileWriter(internalLogFile, true))) {
+    try (PrintWriter p = new PrintWriter(Files.newBufferedWriter(internalLogFile.toPath(), UTF_8, CREATE, APPEND))) {
       p.println(new Date().toString());
       p.println(msg);
       if (t != null) {
@@ -797,7 +800,7 @@ public class Replicator implements Runnable {
   private int publishEvents(byte[] eventsBytes) {
     log.debug("RE Trying to publish original events...");
 
-    String[] events = new String(eventsBytes,StandardCharsets.UTF_8).split("\n");
+    String[] events = new String(eventsBytes, UTF_8).split("\n");
     Stats.totalPublishedForeignEventsBytes += eventsBytes.length;
     Stats.totalPublishedForeignEventsProsals++;
     int failedEvents = 0;

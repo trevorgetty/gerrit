@@ -48,11 +48,17 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.nio.charset.Charset;
+import java.nio.file.Files;
 import java.util.Date;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.nio.file.StandardOpenOption.APPEND;
+import static java.nio.file.StandardOpenOption.CREATE;
 
 /**
  *
@@ -185,7 +191,7 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
       return;
     }
 
-    try (PrintWriter p = new PrintWriter(new FileWriter(internalLogFile, true))) {
+    try (PrintWriter p = new PrintWriter(Files.newBufferedWriter(internalLogFile.toPath(), UTF_8, CREATE, APPEND))) {
       p.println(new Date().toString());
       p.println(msg);
       if (t != null) {
