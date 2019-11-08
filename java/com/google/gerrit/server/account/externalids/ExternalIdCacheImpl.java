@@ -24,6 +24,7 @@ import com.google.common.flogger.FluentLogger;
 import com.google.gerrit.reviewdb.client.Account;
 import com.google.gerrit.server.logging.TraceContext;
 import com.google.gerrit.server.logging.TraceContext.TraceTimer;
+import com.google.gerrit.server.replication.ReplicatedCacheManager;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import com.google.inject.name.Named;
@@ -54,8 +55,16 @@ class ExternalIdCacheImpl implements ExternalIdCache {
     this.extIdsByAccount = extIdsByAccount;
     this.externalIdReader = externalIdReader;
     this.lock = new ReentrantLock(true /* fair */);
+
+    attachToReplication();
   }
 
+  final void attachToReplication() {
+    ReplicatedCacheManager.watchCache(CACHE_NAME, this.extIdsByAccount);
+  }
+
+  // TODO: Trev consider is ths onReplace doing any deletions that we need to convey a eviction?  Is it an update
+  // and ok through normal listener???
   @Override
   public void onReplace(
       ObjectId oldNotesRev,

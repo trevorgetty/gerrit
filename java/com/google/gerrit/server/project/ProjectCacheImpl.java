@@ -34,22 +34,28 @@ import com.google.gerrit.server.config.AllUsersName;
 import com.google.gerrit.server.git.GitRepositoryManager;
 import com.google.gerrit.server.logging.TraceContext;
 import com.google.gerrit.server.logging.TraceContext.TraceTimer;
+import com.google.gerrit.server.replication.ReplicatedCacheManager;
+import com.google.gerrit.server.replication.ReplicatedProjectManager;
 import com.google.inject.Inject;
 import com.google.inject.Module;
 import com.google.inject.Provider;
 import com.google.inject.Singleton;
 import com.google.inject.TypeLiteral;
 import com.google.inject.name.Named;
+
 import java.io.IOException;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+
 import org.eclipse.jgit.errors.RepositoryNotFoundException;
 import org.eclipse.jgit.lib.Repository;
 
-/** Cache of project information, including access rights. */
+/**
+ * Cache of project information, including access rights.
+ */
 @Singleton
 public class ProjectCacheImpl implements ProjectCache {
   private static final FluentLogger logger = FluentLogger.forEnclosingClass();
@@ -64,7 +70,8 @@ public class ProjectCacheImpl implements ProjectCache {
       protected void configure() {
         cache(CACHE_NAME, String.class, ProjectState.class).loader(Loader.class);
 
-        cache(CACHE_LIST, ListKey.class, new TypeLiteral<ImmutableSortedSet<Project.NameKey>>() {})
+        cache(CACHE_LIST, ListKey.class, new TypeLiteral<ImmutableSortedSet<Project.NameKey>>() {
+        })
             .maximumWeight(1)
             .loader(Lister.class);
 
@@ -106,7 +113,17 @@ public class ProjectCacheImpl implements ProjectCache {
     this.listLock = new ReentrantLock(true /* fair */);
     this.clock = clock;
     this.indexer = indexer;
+
+    attachToReplication();
   }
+
+  final void attachToReplication() {
+    ReplicatedCacheManager.watchCache(CACHE_NAME, this.byName);
+    ReplicatedCacheManager.watchCache(CACHE_LIST, this.list); // it's never evicted in the code below
+    ReplicatedCacheManager.watchObject(ReplicatedCacheManager.projectCache, this);
+    ReplicatedProjectManager.enableReplicatedProjectManager();
+  }
+
 
   @Override
   public ProjectState getAllProjects() {
@@ -169,6 +186,7 @@ public class ProjectCacheImpl implements ProjectCache {
     if (state != null && state.needsRefresh(clock.read())) {
       byName.invalidate(projectName.get());
       state = byName.get(projectName.get());
+      ReplicatedCacheManager.replicateEvictionFromCache(CACHE_NAME, projectName.get());
     }
     return state;
   }
@@ -183,6 +201,7 @@ public class ProjectCacheImpl implements ProjectCache {
     if (p != null) {
       logger.atFine().log("Evict project '%s'", p.get());
       byName.invalidate(p.get());
+      ReplicatedCacheManager.replicateEvictionFromCache(CACHE_NAME, p.get());
     }
     indexer.get().index(p);
   }
@@ -207,14 +226,35 @@ public class ProjectCacheImpl implements ProjectCache {
     evict(name);
   }
 
+  /**
+   * onCreateProject update with replication enabled by default.
+   * @param newProjectName
+   * @throws IOException
+   */
   @Override
   public void onCreateProject(Project.NameKey newProjectName) throws IOException {
+    onCreateProjectImpl(newProjectName, true);
+  }
+
+  /**
+   * same as onCreateProject but without replication enabled.
+   * This will allow it to be called in response to a replication event and therefore not cause
+   * replication itself and avoid a recursive loop.
+   * @param newProjectName
+   * @throws IOException
+   */
+  public void onCreateProjectNoReplication(Project.NameKey newProjectName) throws IOException {
+    onCreateProjectImpl(newProjectName, false);
+  }
+
+  private void onCreateProjectImpl(Project.NameKey newProjectName, boolean replicationEnabled) throws IOException {
     listLock.lock();
     try {
       list.put(
           ListKey.ALL,
           ImmutableSortedSet.copyOf(
               Sets.union(list.get(ListKey.ALL), ImmutableSet.of(newProjectName))));
+      ReplicatedCacheManager.replicateMethodCallFromCache(ReplicatedCacheManager.projectCache, "onCreateProjectNoReplication", newProjectName);
     } catch (ExecutionException e) {
       logger.atWarning().withCause(e).log("Cannot list available projects");
     } finally {
@@ -290,7 +330,8 @@ public class ProjectCacheImpl implements ProjectCache {
   static class ListKey {
     static final ListKey ALL = new ListKey();
 
-    private ListKey() {}
+    private ListKey() {
+    }
   }
 
   static class Lister extends CacheLoader<ListKey, ImmutableSortedSet<Project.NameKey>> {

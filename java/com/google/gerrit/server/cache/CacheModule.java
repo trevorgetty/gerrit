@@ -70,6 +70,7 @@ public abstract class CacheModule extends FactoryModule {
       String name, TypeLiteral<K> keyType, TypeLiteral<V> valType) {
     CacheProvider<K, V> m = new CacheProvider<>(this, name, keyType, valType);
     bindCache(m, name, keyType, valType);
+
     return m;
   }
 

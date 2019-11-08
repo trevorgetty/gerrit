@@ -24,6 +24,7 @@ import com.google.gerrit.reviewdb.client.PatchSet;
 import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.reviewdb.server.ReviewDb;
 import com.google.gerrit.server.CurrentUser;
+import com.google.gerrit.server.config.GerritServerConfig;
 import com.google.gerrit.server.notedb.ChangeNotes;
 import com.google.gerrit.server.permissions.ChangePermission;
 import com.google.gerrit.server.permissions.PermissionBackend;
@@ -35,10 +36,12 @@ import com.google.gerrit.server.plugincontext.PluginSetEntryContext;
 import com.google.gerrit.server.project.NoSuchChangeException;
 import com.google.gerrit.server.project.ProjectCache;
 import com.google.gerrit.server.project.ProjectState;
+import com.google.gerrit.server.replication.ReplicatedEventsManager;
 import com.google.gwtorm.server.OrmException;
 import com.google.inject.Inject;
 import com.google.inject.Provider;
 import com.google.inject.Singleton;
+import org.eclipse.jgit.lib.Config;
 
 /**
  * Distributes Events to listeners if they are allowed to see them
@@ -67,9 +70,7 @@ public class EventBroker implements EventDispatcher {
 
   private final PermissionBackend permissionBackend;
   protected final ProjectCache projectCache;
-
   protected final ChangeNotes.Factory notesFactory;
-
   protected final Provider<ReviewDb> dbProvider;
 
   @Inject
@@ -79,13 +80,19 @@ public class EventBroker implements EventDispatcher {
       PermissionBackend permissionBackend,
       ProjectCache projectCache,
       ChangeNotes.Factory notesFactory,
-      Provider<ReviewDb> dbProvider) {
+      Provider<ReviewDb> dbProvider,
+      @GerritServerConfig Config config ) {
     this.listeners = listeners;
     this.unrestrictedListeners = unrestrictedListeners;
     this.permissionBackend = permissionBackend;
     this.projectCache = projectCache;
     this.notesFactory = notesFactory;
     this.dbProvider = dbProvider;
+    ReplicatedEventsManager.hookOnListeners(this, config );
+  }
+
+  public Provider<ReviewDb> getDbProvider() {
+    return dbProvider;
   }
 
   @Override

@@ -45,19 +45,18 @@ class CapabilityInfo {
   public boolean runAs;
   public boolean runGC;
   public boolean streamEvents;
+  public boolean viewAccess;
   public boolean viewAllAccounts;
   public boolean viewCaches;
   public boolean viewConnections;
   public boolean viewPlugins;
+  public boolean viewQueue;
+  public boolean viewReplicatorStats;
 
   @Override
   public int hashCode() {
     return super.hashCode();
   }
-
-  public boolean viewQueue;
-  public boolean viewReplicatorStats;
-  public boolean viewAccess;
 
   static class QueryLimit {
     short min;

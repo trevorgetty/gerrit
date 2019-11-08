@@ -25,8 +25,10 @@ import com.google.gerrit.server.account.AccountState;
 import com.google.gerrit.server.logging.TraceContext;
 import com.google.gerrit.server.logging.TraceContext.TraceTimer;
 import com.google.gerrit.server.plugincontext.PluginSetContext;
+import com.google.gerrit.server.replication.ReplicatedAccountIndexManager;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
+
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
@@ -44,8 +46,10 @@ public class AccountIndexerImpl implements AccountIndexer {
   private final AccountCache byIdCache;
   private final PluginSetContext<AccountIndexedListener> indexedListener;
   private final StalenessChecker stalenessChecker;
-  @Nullable private final AccountIndexCollection indexes;
-  @Nullable private final AccountIndex index;
+  @Nullable
+  private final AccountIndexCollection indexes;
+  @Nullable
+  private final AccountIndex index;
 
   @AssistedInject
   AccountIndexerImpl(
@@ -58,6 +62,7 @@ public class AccountIndexerImpl implements AccountIndexer {
     this.stalenessChecker = stalenessChecker;
     this.indexes = indexes;
     this.index = null;
+    initAccountIndexReplicator();
   }
 
   @AssistedInject
@@ -71,10 +76,40 @@ public class AccountIndexerImpl implements AccountIndexer {
     this.stalenessChecker = stalenessChecker;
     this.indexes = null;
     this.index = index;
+    initAccountIndexReplicator();
+  }
+
+  // Call to WANdisco gerrit event replicator init function
+  private void initAccountIndexReplicator() {
+    ReplicatedAccountIndexManager.initAccountIndexer(this);
   }
 
   @Override
   public void index(Account.Id id) throws IOException {
+    indexImplementation(id, true);
+  }
+
+  /**
+   * To allow an index to take place locally only, usually called by a handler in response to a replicated event,
+   * so as to avoid a cyclic replication of the same event.
+   *
+   * @param id
+   * @throws IOException
+   */
+  public void indexNoRepl(Account.Id id) throws IOException {
+    indexImplementation(id, false);
+  }
+
+  /**
+   * Internal implementation of the index call.  This allows the index to be done to replace or delete the account,
+   * but optionally allows the index to be replicated on.
+   *
+   * @param id
+   * @param replicate
+   * @throws IOException
+   */
+  private void indexImplementation(Account.Id id, boolean replicate) throws IOException {
+
     byIdCache.evict(id);
     Optional<AccountState> accountState = byIdCache.get(id);
 
@@ -88,18 +123,19 @@ public class AccountIndexerImpl implements AccountIndexer {
       // Evict the cache to get an up-to-date value for sure.
       if (accountState.isPresent()) {
         try (TraceTimer traceTimer =
-            TraceContext.newTimer(
-                "Replacing account %d in index version %d", id.get(), i.getSchema().getVersion())) {
+                 TraceContext.newTimer(
+                     "Replacing account %d in index version %d", id.get(), i.getSchema().getVersion())) {
           i.replace(accountState.get());
         }
       } else {
         try (TraceTimer traceTimer =
-            TraceContext.newTimer(
-                "Deleteing account %d in index version %d", id.get(), i.getSchema().getVersion())) {
+                 TraceContext.newTimer(
+                     "Deleteing account %d in index version %d", id.get(), i.getSchema().getVersion())) {
           i.delete(id);
         }
       }
     }
+    ReplicatedAccountIndexManager.replicateAccountReindex(id);
     fireAccountIndexedEvent(id.get());
   }
 

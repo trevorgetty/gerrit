@@ -43,6 +43,14 @@ public class AccountPredicates {
       Schema<AccountState> schema, boolean canSeeSecondaryEmails, String query) {
     // Adapt the capacity of this list when adding more default predicates.
     List<Predicate<AccountState>> preds = Lists.newArrayListWithCapacity(3);
+
+    // If query is set to * then return all active users , else use standard query
+    if (query.equals("*")) {
+      preds.add(Predicate.not(username(query)));
+      preds.add(isActive());
+      return Predicate.and(preds);
+    }
+
     Integer id = Ints.tryParse(query);
     if (id != null) {
       preds.add(id(new Account.Id(id)));

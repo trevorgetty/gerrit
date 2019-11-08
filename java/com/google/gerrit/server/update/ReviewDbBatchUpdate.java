@@ -58,6 +58,7 @@ import com.google.gerrit.server.notedb.NoteDbChangeState.PrimaryStorage;
 import com.google.gerrit.server.notedb.NoteDbUpdateManager;
 import com.google.gerrit.server.notedb.NoteDbUpdateManager.MismatchedStateException;
 import com.google.gerrit.server.notedb.NotesMigration;
+import com.google.gerrit.server.replication.ReplicatedIndexEventManager;
 import com.google.gwtorm.server.OrmException;
 import com.google.gwtorm.server.SchemaFactory;
 import com.google.inject.Inject;
@@ -703,6 +704,15 @@ public class ReviewDbBatchUpdate extends BatchUpdate {
             if (!dryrun) {
               db.commit();
             }
+
+            // If we have deleted the change, send index deletion event. But only do so when we aren't in a dry run.
+            if (!dryrun && deleted){
+              String change = id.toString();
+              int changeId = Integer.parseInt(change);
+              String projectName = project.toString();
+              ReplicatedIndexEventManager.queueReplicationIndexDeletionEvent(changeId, projectName);
+            }
+
           } else {
             logDebug("Skipping ReviewDb write since primary storage is %s", storage);
           }

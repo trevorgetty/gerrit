@@ -106,4 +106,5 @@ public interface ProjectCache {
 
   /** Notify the cache that a new project was constructed. */
   void onCreateProject(Project.NameKey newProjectName) throws IOException;
+
 }

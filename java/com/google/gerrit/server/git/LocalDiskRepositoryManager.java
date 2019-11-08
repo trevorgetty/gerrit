@@ -16,6 +16,7 @@ package com.google.gerrit.server.git;
 
 import com.google.common.flogger.FluentLogger;
 import com.google.gerrit.extensions.events.LifecycleListener;
+import com.google.gerrit.extensions.restapi.PreconditionFailedException;
 import com.google.gerrit.lifecycle.LifecycleModule;
 import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.reviewdb.client.RefNames;
@@ -23,6 +24,7 @@ import com.google.gerrit.server.config.GerritServerConfig;
 import com.google.gerrit.server.config.SitePaths;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.FileVisitOption;
@@ -35,6 +37,8 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.SortedSet;
 import java.util.TreeSet;
+
+import org.eclipse.jgit.errors.RepositoryAlreadyExistsException;
 import org.eclipse.jgit.errors.RepositoryNotFoundException;
 import org.eclipse.jgit.lib.Config;
 import org.eclipse.jgit.lib.ConfigConstants;
@@ -47,7 +51,9 @@ import org.eclipse.jgit.lib.StoredConfig;
 import org.eclipse.jgit.storage.file.WindowCacheConfig;
 import org.eclipse.jgit.util.FS;
 
-/** Manages Git repositories stored on the local filesystem. */
+/**
+ * Manages Git repositories stored on the local filesystem.
+ */
 @Singleton
 public class LocalDiskRepositoryManager implements GitRepositoryManager {
   private static final FluentLogger logger = FluentLogger.forEnclosingClass();
@@ -104,10 +110,12 @@ public class LocalDiskRepositoryManager implements GitRepositoryManager {
     }
 
     @Override
-    public void stop() {}
+    public void stop() {
+    }
   }
 
   private final Path basePath;
+  private final boolean isNestedEnabled;
 
   @Inject
   LocalDiskRepositoryManager(SitePaths site, @GerritServerConfig Config cfg) {
@@ -115,6 +123,8 @@ public class LocalDiskRepositoryManager implements GitRepositoryManager {
     if (basePath == null) {
       throw new IllegalStateException("gerrit.basePath must be configured");
     }
+
+    isNestedEnabled = cfg.getBoolean("gerrit", "enableNestedRepos", false);
   }
 
   /**
@@ -222,7 +232,9 @@ public class LocalDiskRepositoryManager implements GitRepositoryManager {
         || name.contains("$") // dollar sign
         || name.contains("\r") // carriage return
         || name.contains("/+") // delimiter in /changes/
-        || name.contains("~"); // delimiter in /changes/
+        || name.contains("~") // delimiter in /changes/
+        // no path segments that end with '.git' as "foo.git/bar", if nesting disabled
+        || (!isNestedEnabled) && name.contains(".git");
   }
 
   @Override
@@ -274,7 +286,9 @@ public class LocalDiskRepositoryManager implements GitRepositoryManager {
         throws IOException {
       if (!dir.equals(startFolder) && isRepo(dir)) {
         addProject(dir);
-        return FileVisitResult.SKIP_SUBTREE;
+        if (!isNestedEnabled) {
+          return FileVisitResult.SKIP_SUBTREE;
+        }
       }
       return FileVisitResult.CONTINUE;
     }
@@ -289,13 +303,18 @@ public class LocalDiskRepositoryManager implements GitRepositoryManager {
       String name = p.getFileName().toString();
       return !name.equals(Constants.DOT_GIT)
           && (name.endsWith(Constants.DOT_GIT_EXT)
-              || FileKey.isGitRepository(p.toFile(), FS.DETECTED));
+          || FileKey.isGitRepository(p.toFile(), FS.DETECTED));
     }
 
     private void addProject(Path p) {
       Project.NameKey nameKey = getProjectName(startFolder, p);
       if (getBasePath(nameKey).equals(startFolder)) {
         if (isUnreasonableName(nameKey)) {
+          logger.atWarning().log("Ignoring unreasonably named repository %s", p.toAbsolutePath());
+        } else if (isNestedEnabled &&
+            !FileKey.isGitRepository(p.toFile(), FS.DETECTED)) {
+          // stops directories called .git that are not repos
+          // from entering cache and failing jgit lookup @203
           logger.atWarning().log("Ignoring unreasonably named repository %s", p.toAbsolutePath());
         } else {
           found.add(nameKey);

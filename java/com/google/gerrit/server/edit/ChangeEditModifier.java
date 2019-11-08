@@ -586,7 +586,7 @@ public class ChangeEditModifier {
     ru.setForceUpdate(true);
     try (RevWalk revWalk = new RevWalk(repository)) {
       RefUpdate.Result res = ru.update(revWalk);
-      if (res != RefUpdate.Result.NEW && res != RefUpdate.Result.FORCED) {
+      if (res != RefUpdate.Result.NEW && res != RefUpdate.Result.FORCED && res != RefUpdate.Result.FAST_FORWARD) {
         throw new IOException(
             "cannot update "
                 + ru.getName()
