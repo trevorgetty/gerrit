@@ -62,7 +62,6 @@ fast-assembly: fast-assembly-gerrit fast-assembly-console
 # Build just gerritMS
 #
 fast-assembly-gerrit:
-
 	@echo "\n************ Compile Gerrit Starting **************"
 	@echo "Building GerritMS"
 	bazelisk build release
@@ -74,7 +73,7 @@ fast-assembly-gerrit:
 fast-assembly-console:
 	@echo "\n************ Compile Console-API Starting **************"
 	@echo "Building console-api"
-	bazelisk build //gerritconsoleapi:console-api
+	bazelisk build //gerrit-console-api:console-api
 	@echo "\n************ Compile Console-API Finished **************"
 
 clean: | $(JENKINS_DIRECTORY)

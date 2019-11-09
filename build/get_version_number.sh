@@ -85,7 +85,7 @@ function read_version ()
 check_in_repo_root
 
 # Export a new Variable called GERRIT_VERSION so it can be used on command line. 
-export GERRIT_VERSION=$(read_version $GERRIT_REPO_ROOT/VERSION)
+export GERRIT_VERSION=$(read_version $GERRIT_REPO_ROOT/version.bzl)
 export GERRIT_VERSION=${GERRIT_VERSION//\'/}
 echo $GERRIT_VERSION
 

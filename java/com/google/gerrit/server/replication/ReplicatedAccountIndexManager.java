@@ -28,7 +28,7 @@ import java.io.IOException;
 /**
  * This class is for replication of Account Index events
  * initialised by com.google.gerrit.server.index.account.AccountIndexerImpl
- *
+ * <p>
  * Local calls for reindex on an account are queued for replication to other Sites
  * Index events received call indexRepl
  * to update locally without calling replication again
@@ -43,14 +43,20 @@ public class ReplicatedAccountIndexManager implements Replicator.GerritPublishab
   private static Replicator replicatorInstance = null;
 
 
-  public static void replicateAccountReindex(Account.Id id){
-    AccountIndexEvent accountIndexEvent = new AccountIndexEvent(id.get(),replicatorInstance.getThisNodeIdentity());
-    logger.atFiner().log("RC AccountReIndex reindex being replicated for ID: %s ",id.get());
-    replicatorInstance.queueEventForReplication(new EventWrapper("All-Users",accountIndexEvent));
+  public static void replicateAccountReindex(Account.Id id) {
+    AccountIndexEvent accountIndexEvent = new AccountIndexEvent(id.get(), replicatorInstance.getThisNodeIdentity());
+    logger.atFiner().log("RC AccountReIndex reindex being replicated for ID: %s ", id.get());
+    replicatorInstance.queueEventForReplication(new EventWrapper("All-Users", accountIndexEvent));
   }
 
-  public static synchronized void initAccountIndexer(AccountIndexerImpl indexer){
+  public static synchronized void initAccountIndexer(AccountIndexerImpl indexer) {
     if (instance == null) {
+      // Check for override behaviour allowing vanilla gerrit behaviour without gitms.
+      if (Replicator.isGitmsDisabled()) {
+        logger.atInfo().log("RC Not creating ReplicatedAccountIndexManager as GitMS is disabled in Gerrit.");
+        return;
+      }
+
       instance = new ReplicatedAccountIndexManager(indexer);
       logger.atInfo().log("RC ReplicatedAccountIndexManager New instance created");
       replicatorInstance = Replicator.getInstance(true);
@@ -62,22 +68,22 @@ public class ReplicatedAccountIndexManager implements Replicator.GerritPublishab
   public boolean publishIncomingReplicatedEvents(
       EventWrapper newEvent) {
     boolean result = false;
-    if (newEvent != null && newEvent.originator ==  EventWrapper.Originator.ACCOUNT_INDEX_EVENT) {
+    if (newEvent != null && newEvent.originator == EventWrapper.Originator.ACCOUNT_INDEX_EVENT) {
       try {
         Class<?> eventClass = Class.forName(newEvent.className);
-          result = reindexAccount(newEvent, eventClass);
-      } catch(ClassNotFoundException e) {
-        logger.atSevere().withCause(e).log("RC AccountReIndex has been lost. Could not find %s",newEvent.className);
+        result = reindexAccount(newEvent, eventClass);
+      } catch (ClassNotFoundException e) {
+        logger.atSevere().withCause(e).log("RC AccountReIndex has been lost. Could not find %s", newEvent.className);
       }
-    } else if (newEvent != null && newEvent.originator !=  EventWrapper.Originator.ACCOUNT_INDEX_EVENT) {
-      logger.atSevere().log("RC AccountReIndex event has been sent here but originator is not the right one (%s)",newEvent.originator);
+    } else if (newEvent != null && newEvent.originator != EventWrapper.Originator.ACCOUNT_INDEX_EVENT) {
+      logger.atSevere().log("RC AccountReIndex event has been sent here but originator is not the right one (%s)", newEvent.originator);
     }
     return result;
   }
 
   public ReplicatedAccountIndexManager(
       AccountIndexerImpl indexer) {
-    this.indexer=indexer;
+    this.indexer = indexer;
   }
 
   private boolean reindexAccount(EventWrapper newEvent, Class<?> eventClass) {
@@ -90,8 +96,8 @@ public class ReplicatedAccountIndexManager implements Replicator.GerritPublishab
     } catch (JsonSyntaxException e) {
       logger.atSevere().withCause(e).log("RC AccountReIndex, Could not decode json event %s", newEvent.toString());
       return result;
-    } catch (IOException e){
-      logger.atSevere().withCause(e).log("RC AccountReindex issue hit while carrying out reindex of %s",newEvent.toString());
+    } catch (IOException e) {
+      logger.atSevere().withCause(e).log("RC AccountReindex issue hit while carrying out reindex of %s", newEvent.toString());
       return result;
     }
   }

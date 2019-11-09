@@ -58,10 +58,9 @@ import net.minidev.json.JSONValue;
 import org.eclipse.jgit.errors.ConfigInvalidException;
 import org.eclipse.jgit.lib.Config;
 import org.eclipse.jgit.storage.file.FileBasedConfig;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.eclipse.jgit.util.FS;
 
+import static com.google.gerrit.server.replication.ReplicationConstants.*;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.nio.file.StandardOpenOption.APPEND;
 import static java.nio.file.StandardOpenOption.CREATE;
@@ -79,41 +78,12 @@ import static java.nio.file.StandardOpenOption.CREATE;
 public class Replicator implements Runnable {
   private static final FluentLogger logger = FluentLogger.forEnclosingClass();
 
-  public static final String GERRIT_REPLICATED_EVENTS_ENABLED_SYNC_FILES = "gerrit.replicated.events.enabled.sync.files";
-  public static final String GERRIT_REPLICATED_EVENTS_BASEPATH = "gerrit.replicated.events.basepath";
-  public static final String GERRIT_EVENT_BASEPATH = "gerrit.events.basepath";
-
-  public static final String GERRIT_REPLICATED_EVENTS_INCOMING_ARE_GZIPPED = "gerrit.replicated.events.incoming.gzipped";
-  public static final String GERRIT_MAX_MS_TO_WAIT_BEFORE_PROPOSING_EVENTS = "gerrit.replicated.events.secs.before.proposing";
-  public static final String GERRIT_CACHE_NAMES_NOT_TO_BE_RELOADED = "gerrit.replicated.cache.names.not.to.reload";
-  public static final String GERRIT_MAX_EVENTS_TO_APPEND_BEFORE_PROPOSING = "gerrit.replicated.events.max.append.before.proposing";
-  public static final String GERRIT_MAX_SECS_TO_WAIT_ON_POLL_AND_READ = "gerrit.max.secs.to.wait.on.poll.and.read";
-  public static final String GERRIT_REPLICATED_INDEX_UNIQUE_CHANGES_QUEUE_WAIT_TIME = "gerrit.replicated.index.unique.changes.queue.wait.time";
-  public static final String GERRIT_MINUTES_SINCE_CHANGE_LAST_INDEXED_CHECK_PERIOD = "gerrit.minutes.since.change.last.indexed.check.period";
   public static final String ENC = "UTF-8"; // From BaseCommand
-
-  // as shown by statistics this means less than 2K gzipped proposals
-  public static final String DEFAULT_MAX_EVENTS_PER_FILE = "30";
-
-  //Default wait times if no configuration provided in application.properties
-  public static final String DEFAULT_MAX_SECS_TO_WAIT_BEFORE_PROPOSING_EVENTS = "5";
-  public static final String DEFAULT_MAX_SECS_TO_WAIT_ON_POLL_AND_READ = "1";
-  public static final String DEFAULT_REPLICATED_INDEX_UNIQUE_CHANGES_QUEUE_WAIT_TIME = "20";
-  public static final String DEFAULT_MINUTES_SINCE_CHANGE_LAST_INDEXED_CHECK_PERIOD = "60";
 
   public static final String CURRENT_EVENTS_FILE = "current-events.json";
   public static final String NEXT_EVENTS_FILE = "events-%s-%s-%02d.json";
   public static String eventsFileName = "";
-
-  public static final String GERRIT_REPLICATION_THREAD_NAME = "ReplicatorStreamReplication";
-  public static final String DEFAULT_MS_APPLICATION_PROPERTIES = "/opt/wandisco/git-multisite/replicator/properties/";
-  public static final String REPLICATED_EVENTS_DIRECTORY_NAME = "replicated_events";
   public static final String DEFAULT_BASE_DIR = System.getProperty("java.io.tmpdir");
-  public static final String OUTGOING_DIR = "outgoing";
-  public static final String INCOMING_DIR = "incoming";
-  public static final String INDEXING_DIR = "index_events";
-  public static final String INCOMING_PERSISTED_DIR = "incoming-persisted";
-  public static final boolean internalLogEnabled = false;
 
   private static File replicatedEventsBaseDirectory = null;
   private static File outgoingReplEventsDirectory = null;
@@ -138,6 +108,10 @@ public class Replicator implements Runnable {
   private static File internalLogFile = null; // used for debug
   private static boolean syncFiles = false;
   private static String defaultBaseDir;
+
+  // A flag, which allow there to be no application properties and for us to behave like a normal vanilla non replicated environment.
+  private static Boolean gitmsDisabled = null;
+  public static boolean internalLogEnabled = false;
   private static volatile Replicator instance = null;
   private static Object replicatorLock = new Object();
 
@@ -179,6 +153,14 @@ public class Replicator implements Runnable {
     public static long DEFAULT_STATS_UPDATE_TIME = 20000L;
   }
 
+  public static boolean isGitmsDisabled() {
+
+    if ( gitmsDisabled == null ){
+      gitmsDisabled = getOverrideBehaviour(GITMS_DISABLED);
+    }
+
+    return gitmsDisabled;
+  }
 
   public interface GerritPublishable {
     boolean publishIncomingReplicatedEvents(EventWrapper newEvent);
@@ -198,15 +180,20 @@ public class Replicator implements Runnable {
 
   public static Replicator getInstance() {
 
-    if (internalLogEnabled) {
-      internalLogFile = new File(new File(DEFAULT_BASE_DIR), "replEvents.log"); // used for debug
-    }
     if (instance == null) {
       synchronized (replicatorLock) {
         // using double checked locking JIC somone created while we waited on the lock!
         if (instance == null) {
           boolean configOk = readConfiguration();
           logger.atInfo().log("RE Configuration read: ok? %s", configOk);
+
+          if ( configOk == false )
+          {
+            // either there was an issue, or we have had GitMS Disabled, either way we should not continue
+            // with any more replication thread enablement - allows vanilla testing with this war.
+            return null;
+          }
+
           replicatedEventsBaseDirectory = new File(defaultBaseDir);
           outgoingReplEventsDirectory = new File(replicatedEventsBaseDirectory, OUTGOING_DIR);
           incomingReplEventsDirectory = new File(replicatedEventsBaseDirectory, INCOMING_DIR);
@@ -922,93 +909,129 @@ public class Replicator implements Runnable {
         throw new IOException(e);
       }
 
+      // N.B. This is for DEBUG use only.
+      // Allow for the gitms system to be disabled, via an override java property or system environment value.
+      // Allow the running of vanilla non replicated integration tests, and other simple scenarios.
+      internalLogEnabled = getOverrideBehaviour(GERRITMS_INTERNAL_LOGGING);
+
+      if (internalLogEnabled) {
+        internalLogFile = new File(new File(DEFAULT_BASE_DIR), "replEvents.log"); // used for debug
+      }
+
       File applicationProperties;
       try {
         String appProperties = config.getString("core", null, "gitmsconfig");
+
+        if (Strings.isNullOrEmpty(appProperties)) {
+          // there is no application properties location, just before we blow up, check a debug setting
+          // which allows the gerrit instance to behave like a normal instance so we can run all the default gerrit
+          // tests like a vanilla system could.
+          if (isGitmsDisabled()) {
+            logger.atWarning().log("GitMS integration has been disabled allowing Gerrit to work non-replicated.");
+            return false;
+          }
+
+          throw new NullPointerException("Missing required core.gitmsconfig configuration value.");
+        }
         applicationProperties = new File(appProperties);
         // GER-662 NPE thrown if GerritMS is started without a reference to a valid GitMS application.properties file.
       } catch (NullPointerException exception) {
-        throw new FileNotFoundException("GerritMS cannot continue without a valid GitMS application.properties file referenced in its .gitconfig file.");
+        throw new FileNotFoundException("GerritMS cannot continue in replication mode without a valid GitMS application.properties file referenced in its .gitconfig file.");
       }
 
+      // If application properties can't be found or read using the gitconfig setting,
+      // try default location 1. "/opt/wandisco/xxx
       if (!applicationProperties.exists() || !applicationProperties.canRead()) {
         logger.atWarning().log("Could not find/read (1) " + applicationProperties);
         applicationProperties = new File(DEFAULT_MS_APPLICATION_PROPERTIES, "application.properties");
       }
 
+      // if it still can't be found or read, get out.
       if (!applicationProperties.exists() || !applicationProperties.canRead()) {
         logger.atWarning().log("Could not find/read (2) " + applicationProperties);
         defaultBaseDir = DEFAULT_BASE_DIR + File.separator + REPLICATED_EVENTS_DIRECTORY_NAME;
-      } else {
-        Properties props = new Properties();
-        try (FileInputStream propsFile = new FileInputStream(applicationProperties)) {
-          props.load(propsFile);
-          syncFiles = Boolean.parseBoolean(props.getProperty(GERRIT_REPLICATED_EVENTS_ENABLED_SYNC_FILES, "false"));
+        throw new FileNotFoundException("GerritMS cannot continue in replication mode without a valid GitMS application.properties file.");
+      }
 
-          // The user can set a different path specific for the replicated events. If it's not there
-          // then the usual GERRIT_EVENT_BASEPATH will be taken.
-          defaultBaseDir = props.getProperty(GERRIT_REPLICATED_EVENTS_BASEPATH);
+      Properties props = new Properties();
+      try (FileInputStream propsFile = new FileInputStream(applicationProperties)) {
+        props.load(propsFile);
+        syncFiles = Boolean.parseBoolean(props.getProperty(GERRIT_REPLICATED_EVENTS_ENABLED_SYNC_FILES, "false"));
+
+        // The user can set a different path specific for the replicated events. If it's not there
+        // then the usual GERRIT_EVENT_BASEPATH will be taken.
+        defaultBaseDir = props.getProperty(GERRIT_REPLICATED_EVENTS_BASEPATH);
+        if (defaultBaseDir == null) {
+          defaultBaseDir = props.getProperty(GERRIT_EVENT_BASEPATH);
           if (defaultBaseDir == null) {
-            defaultBaseDir = props.getProperty(GERRIT_EVENT_BASEPATH);
-            if (defaultBaseDir == null) {
-              defaultBaseDir = DEFAULT_BASE_DIR;
-            }
-            defaultBaseDir += File.separator + REPLICATED_EVENTS_DIRECTORY_NAME;
+            defaultBaseDir = DEFAULT_BASE_DIR;
           }
-
-          incomingEventsAreGZipped = Boolean.parseBoolean(props.getProperty(GERRIT_REPLICATED_EVENTS_INCOMING_ARE_GZIPPED, "false"));
-
-          //Getting the node identity that will be used to determine the originating node for each instance.
-          thisNodeIdentity = props.getProperty("node.id");
-
-          //Configurable for the maximum amount of events allowed in the outgoing events file before proposing.
-          maxNumberOfEventsBeforeProposing = Integer.parseInt(
-              cleanLforLong(props.getProperty(GERRIT_MAX_EVENTS_TO_APPEND_BEFORE_PROPOSING, DEFAULT_MAX_EVENTS_PER_FILE)));
-
-          //Configurable for the maximum amount of seconds to wait before proposing events in the outgoing events file.
-          maxSecsToWaitBeforeProposingEvents = Long.parseLong(
-              cleanLforLongAndConvertToMilliseconds(props.getProperty(GERRIT_MAX_MS_TO_WAIT_BEFORE_PROPOSING_EVENTS,
-                  DEFAULT_MAX_SECS_TO_WAIT_BEFORE_PROPOSING_EVENTS)));
-
-          //Configurable for the wait time for threads waiting on an event to be received and published.
-          maxSecsToWaitOnPollAndRead = Long.parseLong(
-              cleanLforLongAndConvertToMilliseconds(props.getProperty(GERRIT_MAX_SECS_TO_WAIT_ON_POLL_AND_READ,
-                  DEFAULT_MAX_SECS_TO_WAIT_ON_POLL_AND_READ)));
-
-          //Configurable for changing the wait time on building up the unique replicated index events in the unique changes queue.
-          replicatedIndexUniqueChangesQueueWaitTime = Long.parseLong(
-              cleanLforLongAndConvertToMilliseconds(props.getProperty(GERRIT_REPLICATED_INDEX_UNIQUE_CHANGES_QUEUE_WAIT_TIME,
-                  DEFAULT_REPLICATED_INDEX_UNIQUE_CHANGES_QUEUE_WAIT_TIME)));
-
-          //Configurable for the time period to check since the change was last indexed, The change will need reindexed
-          //if it has been in the queue more than the specified check period. Default is 1 hour.
-          minutesSinceChangeLastIndexedCheckPeriod = TimeUnit.MINUTES.toMillis(Long.parseLong(
-              props.getProperty(GERRIT_MINUTES_SINCE_CHANGE_LAST_INDEXED_CHECK_PERIOD, DEFAULT_MINUTES_SINCE_CHANGE_LAST_INDEXED_CHECK_PERIOD)));
-
-
-          logger.atInfo().log("Property %s=%s", new Object[]{GERRIT_REPLICATED_EVENTS_BASEPATH, defaultBaseDir});
-
-          // Replicated CACHE properties
-          try {
-            String[] tempCacheNames = props.getProperty(GERRIT_CACHE_NAMES_NOT_TO_BE_RELOADED, "invalid_cache_name").split(",");
-            for (String s : tempCacheNames) {
-              String st = s.trim();
-              if (st.length() > 0) {
-                cacheNamesNotToReload.add(st);
-              }
-            }
-          } catch (Exception e) {
-            logger.atSevere().withCause(e).log("Not able to load cache properties");
-          }
-          result = true;
-        } catch (IOException e) {
-          logger.atSevere().withCause(e).log("While reading GerritMS properties file");
+          defaultBaseDir += File.separator + REPLICATED_EVENTS_DIRECTORY_NAME;
         }
+
+        incomingEventsAreGZipped = Boolean.parseBoolean(props.getProperty(GERRIT_REPLICATED_EVENTS_INCOMING_ARE_GZIPPED, "false"));
+
+        //Getting the node identity that will be used to determine the originating node for each instance.
+        thisNodeIdentity = props.getProperty("node.id");
+
+        //Configurable for the maximum amount of events allowed in the outgoing events file before proposing.
+        maxNumberOfEventsBeforeProposing = Integer.parseInt(
+            cleanLforLong(props.getProperty(GERRIT_MAX_EVENTS_TO_APPEND_BEFORE_PROPOSING, DEFAULT_MAX_EVENTS_PER_FILE)));
+
+        //Configurable for the maximum amount of seconds to wait before proposing events in the outgoing events file.
+        maxSecsToWaitBeforeProposingEvents = Long.parseLong(
+            cleanLforLongAndConvertToMilliseconds(props.getProperty(GERRIT_MAX_MS_TO_WAIT_BEFORE_PROPOSING_EVENTS,
+                DEFAULT_MAX_SECS_TO_WAIT_BEFORE_PROPOSING_EVENTS)));
+
+        //Configurable for the wait time for threads waiting on an event to be received and published.
+        maxSecsToWaitOnPollAndRead = Long.parseLong(
+            cleanLforLongAndConvertToMilliseconds(props.getProperty(GERRIT_MAX_SECS_TO_WAIT_ON_POLL_AND_READ,
+                DEFAULT_MAX_SECS_TO_WAIT_ON_POLL_AND_READ)));
+
+        //Configurable for changing the wait time on building up the unique replicated index events in the unique changes queue.
+        replicatedIndexUniqueChangesQueueWaitTime = Long.parseLong(
+            cleanLforLongAndConvertToMilliseconds(props.getProperty(GERRIT_REPLICATED_INDEX_UNIQUE_CHANGES_QUEUE_WAIT_TIME,
+                DEFAULT_REPLICATED_INDEX_UNIQUE_CHANGES_QUEUE_WAIT_TIME)));
+
+        //Configurable for the time period to check since the change was last indexed, The change will need reindexed
+        //if it has been in the queue more than the specified check period. Default is 1 hour.
+        minutesSinceChangeLastIndexedCheckPeriod = TimeUnit.MINUTES.toMillis(Long.parseLong(
+            props.getProperty(GERRIT_MINUTES_SINCE_CHANGE_LAST_INDEXED_CHECK_PERIOD, DEFAULT_MINUTES_SINCE_CHANGE_LAST_INDEXED_CHECK_PERIOD)));
+
+        logger.atInfo().log("Property %s=%s", new Object[]{GERRIT_REPLICATED_EVENTS_BASEPATH, defaultBaseDir});
+
+        // Replicated CACHE properties
+        try {
+          String[] tempCacheNames = props.getProperty(GERRIT_CACHE_NAMES_NOT_TO_BE_RELOADED, "invalid_cache_name").split(",");
+          for (String s : tempCacheNames) {
+            String st = s.trim();
+            if (st.length() > 0) {
+              cacheNamesNotToReload.add(st);
+            }
+          }
+        } catch (Exception e) {
+          logger.atSevere().withCause(e).log("Not able to load cache properties");
+        }
+
+        return true;
+      } catch (IOException e) {
+        logger.atSevere().withCause(e).log("While reading GerritMS properties file");
       }
     } catch (IOException e) {
       logger.atSevere().withCause(e).log("While loading the .gitconfig file");
     }
-    return result;
+    return false;
+  }
+
+  /**
+   * Utility method to get the system override properties and returns them as a boolean
+   * indicating whether they are enabled / disabled.
+   * @param overrideName
+   * @return
+   */
+  private static boolean getOverrideBehaviour(String overrideName) {
+    return Boolean.parseBoolean(
+        System.getProperty(overrideName, System.getenv(overrideName)));
   }
 
   /**
