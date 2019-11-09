@@ -89,7 +89,7 @@ public class ConfigRestApiBindingsIT extends AbstractRestApiBindingsTest {
 
   @Test
   public void cacheEndpoints() throws Exception {
-    execute(CACHE_ENDPOINTS, ProjectCacheImpl.CACHE_NAME);
+    execute(CACHE_ENDPOINTS, ProjectCacheImpl.CACHE_PROJECTS_BYNAME);
   }
 
   @Test

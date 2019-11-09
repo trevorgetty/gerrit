@@ -23,9 +23,9 @@ GERRIT_ROOT= $(mkfile_path)
 # Works on OSX.
 VERSION := $(shell $(GERRIT_ROOT)/build/get_version_number.sh $(GERRIT_ROOT))
 GITMS_VERSION := GITMS_VERSION
-GERRIT_BUCK_OUT := $(GERRIT_ROOT)/buck-out
-RELEASE_WAR_PATH := $(GERRIT_BUCK_OUT)/gen/release
-CONSOLE_API_JAR_PATH := $(GERRIT_BUCK_OUT)/gen/gerritconsoleapi
+GERRIT_BAZEL_OUT := $(GERRIT_ROOT)/bazel-bin
+RELEASE_WAR_PATH := $(GERRIT_BAZEL_OUT)
+CONSOLE_API_JAR_PATH := $(GERRIT_BAZEL_OUT)/gerrit-console-api
 
 CONSOLE_ARTIFACTID   := gerrit-console-api
 CONSOLE_GROUPID := com.google.gerrit
@@ -79,7 +79,7 @@ fast-assembly-console:
 clean: | $(JENKINS_DIRECTORY)
 	@echo "\n************ Clean Phase Starting **************"
 	bazelisk clean
-	rm -rf $(GERRIT_BUCK_OUT)
+	rm -rf $(GERRIT_BAZEL_OUT)
 	rm -rf $(GERRIT_TEST_LOCATION)/jgit-update-service
 	rm -f $(GERRIT_ROOT)/env.properties
 	@echo "\n************ Clean Phase Finished **************"

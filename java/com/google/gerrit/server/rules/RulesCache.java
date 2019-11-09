@@ -76,7 +76,7 @@ public class RulesCache {
     protected void configure() {
       cache(RulesCache.CACHE_NAME, ObjectId.class, PrologMachineCopy.class)
           // This cache is auxiliary to the project cache, so size it the same.
-          .configKey(ProjectCacheImpl.CACHE_NAME);
+          .configKey(ProjectCacheImpl.CACHE_PROJECTS_BYNAME);
     }
   }
 

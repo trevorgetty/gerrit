@@ -31,6 +31,7 @@ import com.google.gerrit.server.logging.TraceContext;
 import com.google.gerrit.server.logging.TraceContext.TraceTimer;
 import com.google.gerrit.server.query.group.InternalGroupQuery;
 import com.google.gerrit.server.replication.ReplicatedCacheManager;
+import com.google.gerrit.server.replication.Replicator;
 import com.google.gwtorm.server.OrmException;
 import com.google.inject.Inject;
 import com.google.inject.Module;
@@ -99,8 +100,14 @@ public class GroupIncludeCacheImpl implements GroupIncludeCache {
 
     attachToReplication();
   }
-
+  /**
+   * Attach to replication the caches that this object uses.
+   * N.B. we do not need to hook in the cache listeners if replication is disabled.
+   */
   final void attachToReplication() {
+    if(Replicator.isReplicationDisabled()){
+      return;
+    }
     ReplicatedCacheManager.watchCache(PARENT_GROUPS_NAME, this.parentGroups);
     ReplicatedCacheManager.watchCache(EXTERNAL_NAME, this.external);
     ReplicatedCacheManager.watchCache(GROUPS_WITH_MEMBER_NAME, this.groupsWithMember);

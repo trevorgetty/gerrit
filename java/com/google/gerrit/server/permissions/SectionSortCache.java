@@ -34,6 +34,7 @@ import com.google.common.flogger.FluentLogger;
 import com.google.gerrit.server.replication.ReplicatedCacheManager;
 import com.google.gerrit.common.data.AccessSection;
 import com.google.gerrit.server.cache.CacheModule;
+import com.google.gerrit.server.replication.Replicator;
 import com.google.gerrit.server.util.MostSpecificComparator;
 import com.google.inject.Inject;
 import com.google.inject.Module;
@@ -74,8 +75,14 @@ public class SectionSortCache {
     this.cache = cache;
     attachToReplication();
   }
-
+  /**
+   * Attach to replication the caches that this object uses.
+   * N.B. we do not need to hook in the cache listeners if replication is disabled.
+   */
   final void attachToReplication() {
+    if(Replicator.isReplicationDisabled()){
+      return;
+    }
     ReplicatedCacheManager.watchCache(CACHE_NAME, this.cache);
   }
 

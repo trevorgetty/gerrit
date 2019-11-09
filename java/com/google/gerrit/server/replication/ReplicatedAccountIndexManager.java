@@ -20,9 +20,6 @@ import com.google.gerrit.server.index.account.AccountIndexerImpl;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 
 /**
@@ -52,7 +49,7 @@ public class ReplicatedAccountIndexManager implements Replicator.GerritPublishab
   public static synchronized void initAccountIndexer(AccountIndexerImpl indexer) {
     if (instance == null) {
       // Check for override behaviour allowing vanilla gerrit behaviour without gitms.
-      if (Replicator.isGitmsDisabled()) {
+      if (Replicator.isReplicationDisabled()) {
         logger.atInfo().log("RC Not creating ReplicatedAccountIndexManager as GitMS is disabled in Gerrit.");
         return;
       }

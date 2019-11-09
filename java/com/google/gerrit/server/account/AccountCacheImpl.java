@@ -30,6 +30,7 @@ import com.google.gerrit.server.config.AllUsersName;
 import com.google.gerrit.server.logging.TraceContext;
 import com.google.gerrit.server.logging.TraceContext.TraceTimer;
 import com.google.gerrit.server.replication.ReplicatedCacheManager;
+import com.google.gerrit.server.replication.Replicator;
 import com.google.gerrit.server.util.time.TimeUtil;
 import com.google.inject.Inject;
 import com.google.inject.Module;
@@ -92,8 +93,14 @@ public class AccountCacheImpl implements AccountCache {
 
     attachToReplication();
   }
-
+  /**
+   * Attach to replication the caches that this object uses.
+   * N.B. we do not need to hook in the cache listeners if replication is disabled.
+   */
   final void attachToReplication() {
+    if(Replicator.isReplicationDisabled()){
+      return;
+    }
     ReplicatedCacheManager.watchCache(BYID_NAME, this.byId);
   }
 
@@ -177,11 +184,14 @@ public class AccountCacheImpl implements AccountCache {
   @Override
   public void evictAll() {
     logger.atFine().log("Evict all accounts");
-    for (Account.Id accountId : byId.asMap().keySet()) {
-      // replicate the invalidation.  I think it would be better to add a new evict All, instead of a single eviction request per item...
-      // TODO: TREV we are turning a one request into many for no benefit, and what happens if this cache has 2 members and the remote cache has 3 members, we evict
-      // all here but not all remotely.... So I think this needs to be changed long term!
-      ReplicatedCacheManager.replicateEvictionFromCache(BYID_NAME, accountId);
+
+    if (Replicator.isReplicationEnabled()) {
+      for (Account.Id accountId : byId.asMap().keySet()) {
+        // replicate the invalidation.  I think it would be better to add a new evict All, instead of a single eviction request per item...
+        // TODO: TREV we are turning a one request into many for no benefit, and what happens if this cache has 2 members and the remote cache has 3 members, we evict
+        // all here but not all remotely.... So I think this needs to be changed long term!
+        ReplicatedCacheManager.replicateEvictionFromCache(BYID_NAME, accountId);
+      }
     }
 
     byId.invalidateAll();

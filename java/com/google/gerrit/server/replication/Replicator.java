@@ -110,7 +110,7 @@ public class Replicator implements Runnable {
   private static String defaultBaseDir;
 
   // A flag, which allow there to be no application properties and for us to behave like a normal vanilla non replicated environment.
-  private static Boolean gitmsDisabled = null;
+  private static Boolean replicationDisabled = null;
   public static boolean internalLogEnabled = false;
   private static volatile Replicator instance = null;
   private static Object replicatorLock = new Object();
@@ -153,13 +153,31 @@ public class Replicator implements Runnable {
     public static long DEFAULT_STATS_UPDATE_TIME = 20000L;
   }
 
-  public static boolean isGitmsDisabled() {
+  /**
+   * A Very core configuration override now which allows the full replication element
+   * of GerritMS to be disabled and essentially for it to return to default vanilla behaviour.
+   *
+   * @return true if replication is DISABLED
+   */
+  public static boolean isReplicationDisabled() {
 
-    if ( gitmsDisabled == null ){
-      gitmsDisabled = getOverrideBehaviour(GITMS_DISABLED);
+    if ( replicationDisabled == null ){
+      replicationDisabled = getOverrideBehaviour(REPLICATION_DISABLED);
     }
 
-    return gitmsDisabled;
+    return replicationDisabled;
+  }
+
+  /**
+   * Handy utility method to inverse the isReplicationDisabled method, to allow it to be easily
+   * supplied to implementations which expected it to be the isreplicated flag, allowing us to
+   * control the turning off of replication more easily.
+   *
+   * @return true if replication is ENABLED
+   */
+  public static boolean isReplicationEnabled() {
+
+    return !isReplicationDisabled();
   }
 
   public interface GerritPublishable {
@@ -926,7 +944,7 @@ public class Replicator implements Runnable {
           // there is no application properties location, just before we blow up, check a debug setting
           // which allows the gerrit instance to behave like a normal instance so we can run all the default gerrit
           // tests like a vanilla system could.
-          if (isGitmsDisabled()) {
+          if (isReplicationDisabled()) {
             logger.atWarning().log("GitMS integration has been disabled allowing Gerrit to work non-replicated.");
             return false;
           }
