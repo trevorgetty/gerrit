@@ -52,8 +52,8 @@ all-skip-tests: display_version fast-assembly installer skip-tests
 
 display_version:
 	@echo "About to use the following version information."
-	@echo "Version is: $(VERSION)"
-#
+	@./tools/workspace-status.sh
+
 # Do an assembly without doing unit tests, of all our builds
 #
 fast-assembly: fast-assembly-gerrit fast-assembly-console
