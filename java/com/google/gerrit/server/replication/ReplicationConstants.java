@@ -25,6 +25,18 @@ public final class ReplicationConstants {
   public static final String GERRIT_MINUTES_SINCE_CHANGE_LAST_INDEXED_CHECK_PERIOD = "gerrit.minutes.since.change.last.indexed.check.period";
 
 
+  public static final String GERRIT_REPLICATED_EVENTS_ENABLED_RECEIVE = "gerrit.replicated.events.enabled.receive";
+  public static final String GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL = "gerrit.replicated.events.enabled.receive.original";
+  public static final String GERRIT_REPLICATED_EVENTS_RECEIVE_DISTINCT = "gerrit.replicated.events.enabled.receive.distinct";
+  public static final String GERRIT_REPLICATED_EVENTS_LOCAL_REPUBLISH_DISTINCT = "gerrit.replicated.events.enabled.local.republish.distinct";
+  public static final String GERRIT_REPLICATED_EVENTS_DISTINCT_PREFIX = "gerrit.replicated.events.distinct.prefix";
+  public static final String GERRIT_MAX_SECS_TO_WAIT_FOR_EVENT_ON_QUEUE = "gerrit.replicated.events.secs.on.queue";
+
+  public static final String DEFAULT_DISTINCT_PREFIX = "REPL-";
+  public static final String DEFAULT_BYTE_ENCODING = "UTF-8"; // From BaseCommand
+  public static final String DEFAULT_MAX_SECS_TO_WAIT_FOR_EVENT_ON_QUEUE = "5";
+
+  public static final String EVENTS_REPLICATION_THREAD_NAME = "EventsStreamReplication";
   public static final String GERRIT_REPLICATION_THREAD_NAME = "ReplicatorStreamReplication";
   public static final String DEFAULT_MS_APPLICATION_PROPERTIES = "/opt/wandisco/git-multisite/replicator/properties/";
 

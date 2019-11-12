@@ -133,6 +133,10 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
   private long INCOMING_PERSISTED_LINGER_TIME_VALUE = 0L;
 
   public static synchronized ReplicatedIndexEventManager initIndexer(SchemaFactory<ReviewDb> schemaFactory, ChangeIndexer indexer, Config serverConfig) {
+    if (Replicator.isReplicationDisabled()){
+      return null;
+    }
+
     if (instance == null || !instance.gerritIndexerRunning) {
       logger.atInfo().log("RC Initialising ReplicatedIndexEventManager...");
     }
@@ -142,7 +146,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
       try {
         dbProvider = Providers.of(schemaFactory.open());
       } catch (OrmException e) {
-        e.printStackTrace();
+        logger.atSevere().withCause(e).log("Failed to open dbProvider schemafactory..");
       }
 
       instance = new ReplicatedIndexEventManager(dbProvider, indexer, serverConfig);

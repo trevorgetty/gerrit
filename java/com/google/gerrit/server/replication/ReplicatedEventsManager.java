@@ -19,6 +19,46 @@
  * Generated ChangeEvent(s) can be shared with other Gerrit Nodes
  * <p>
  * http://www.wandisco.com/
+ * <p>
+ * Replicated Events Manager to be used with WANdisco GitMS
+ * Generated ChangeEvent(s) can be shared with other Gerrit Nodes
+ * <p>
+ * http://www.wandisco.com/
+ * <p>
+ * Replicated Events Manager to be used with WANdisco GitMS
+ * Generated ChangeEvent(s) can be shared with other Gerrit Nodes
+ * <p>
+ * http://www.wandisco.com/
+ * <p>
+ * Replicated Events Manager to be used with WANdisco GitMS
+ * Generated ChangeEvent(s) can be shared with other Gerrit Nodes
+ * <p>
+ * http://www.wandisco.com/
+ * <p>
+ * Replicated Events Manager to be used with WANdisco GitMS
+ * Generated ChangeEvent(s) can be shared with other Gerrit Nodes
+ * <p>
+ * http://www.wandisco.com/
+ * <p>
+ * Replicated Events Manager to be used with WANdisco GitMS
+ * Generated ChangeEvent(s) can be shared with other Gerrit Nodes
+ * <p>
+ * http://www.wandisco.com/
+ * <p>
+ * Replicated Events Manager to be used with WANdisco GitMS
+ * Generated ChangeEvent(s) can be shared with other Gerrit Nodes
+ * <p>
+ * http://www.wandisco.com/
+ * <p>
+ * Replicated Events Manager to be used with WANdisco GitMS
+ * Generated ChangeEvent(s) can be shared with other Gerrit Nodes
+ * <p>
+ * http://www.wandisco.com/
+ * <p>
+ * Replicated Events Manager to be used with WANdisco GitMS
+ * Generated ChangeEvent(s) can be shared with other Gerrit Nodes
+ * <p>
+ * http://www.wandisco.com/
  */
 
 /**
@@ -30,6 +70,7 @@
 package com.google.gerrit.server.replication;
 
 import com.google.common.base.Supplier;
+import com.google.common.flogger.FluentLogger;
 import com.google.gerrit.reviewdb.client.Branch;
 import com.google.gerrit.reviewdb.client.Change;
 import com.google.gerrit.reviewdb.client.Project;
@@ -66,6 +107,7 @@ import java.util.Properties;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
+import static com.google.gerrit.server.replication.ReplicationConstants.*;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.nio.file.StandardOpenOption.APPEND;
 import static java.nio.file.StandardOpenOption.CREATE;
@@ -75,18 +117,8 @@ import static java.nio.file.StandardOpenOption.CREATE;
  * @author antoniochirizzi
  */
 public final class ReplicatedEventsManager implements Runnable, Replicator.GerritPublishable {
-  private static final Logger log = LoggerFactory.getLogger(ReplicatedEventsManager.class);
-  public static final String GERRIT_REPLICATED_EVENTS_ENABLED_RECEIVE = "gerrit.replicated.events.enabled.receive";
-  public static final String GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL = "gerrit.replicated.events.enabled.receive.original";
-  public static final String GERRIT_REPLICATED_EVENTS_RECEIVE_DISTINCT = "gerrit.replicated.events.enabled.receive.distinct";
-  public static final String GERRIT_REPLICATED_EVENTS_LOCAL_REPUBLISH_DISTINCT = "gerrit.replicated.events.enabled.local.republish.distinct";
-  public static final String GERRIT_REPLICATED_EVENTS_DISTINCT_PREFIX = "gerrit.replicated.events.distinct.prefix";
-  public static final String DEFAULT_DISTINCT_PREFIX = "REPL-";
-  public static final String GERRIT_MAX_SECS_TO_WAIT_FOR_EVENT_ON_QUEUE = "gerrit.replicated.events.secs.on.queue";
-  public static final String ENC = "UTF-8"; // From BaseCommand
-  public static final String DEFAULT_MAX_SECS_TO_WAIT_FOR_EVENT_ON_QUEUE = "5";
-  public static final String EVENTS_REPLICATION_THREAD_NAME = "EventsStreamReplication";
-  public static final String DEFAULT_MS_APPLICATION_PROPERTIES = "/opt/wandisco/git-multisite/replicator/properties/";
+  private static final FluentLogger logger = FluentLogger.forEnclosingClass();
+
   public static final String DEFAULT_BASE_DIR = System.getProperty("java.io.tmpdir");
 
   public static final boolean internalLogEnabled = false;
@@ -123,7 +155,7 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
 
   public static synchronized ReplicatedEventsManager hookOnListeners(EventBroker changeHookRunner, Config config) {
 
-    log.info("RE ReplicatedEvents hook called...");
+    logger.atInfo().log("RE ReplicatedEvents hook called...");
 
     Replicator.setGerritConfig(config == null ? new Config() : config);
 
@@ -134,10 +166,10 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
     logMe("ReplicatedEvents hook called, with " + changeHookRunner + " set", null);
 
     boolean configOk = readConfiguration();
-    log.info("RE Configuration read: ok? {}, replicatedEvent are enabled? {}", new Object[]{configOk, replicatedEventsEnabled});
+    logger.atInfo().log("RE Configuration read: ok? %s, replicatedEvent are enabled? %s", configOk, replicatedEventsEnabled);
 
     if (replicatedEventsEnabled) {
-      if ( replicatorInstance == null ) {
+      if (replicatorInstance == null) {
         replicatorInstance = Replicator.getInstance();
       }
 
@@ -148,13 +180,13 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
         eventReaderAndPublisherThread = new Thread(instance);
         eventReaderAndPublisherThread.setName(EVENTS_REPLICATION_THREAD_NAME);
         eventReaderAndPublisherThread.start();
-        log.info("RE ReplicatedEvents instance added");
+        logger.atInfo().log("RE ReplicatedEvents instance added");
         logMe("ReplicatedEvents instance added", null);
 
         changeHookRunner.registerUnrestrictedEventListener(EVENTS_REPLICATION_THREAD_NAME, instance.listener);
-        log.info("ReplicatedEvents change listener added");
+        logger.atInfo().log("ReplicatedEvents change listener added");
       } else {
-        log.error("RE Thread {} is already running!", EVENTS_REPLICATION_THREAD_NAME);
+        logger.atSevere().log("RE Thread %s is already running!", EVENTS_REPLICATION_THREAD_NAME);
         logMe("Thread " + EVENTS_REPLICATION_THREAD_NAME + " is already running!", null);
       }
 
@@ -174,7 +206,7 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
     this.changeHookRunner = changeHookRunner;
     this.dbProvider = changeHookRunner.getDbProvider();
 
-    log.info("RE ReplicatedEvents instance added");
+    logger.atInfo().log("RE ReplicatedEvents instance added");
     logMe("ReplicatedEvents instance added", null);
   }
 
@@ -224,12 +256,11 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
           catch (NoSuchMethodException | IllegalAccessException | InstantiationException | InvocationTargetException e) {
             // log out full stacktrace in debug mode, but leave rest as info, user friendly,
             // although I hope we do not hit this any longer as we could have failed the local event somehow?
-            log.info(e.getClass().getName() + " : " + e.getMessage() + " : " + nonReplicatedEventMessage);
-            log.debug("publicIncomingReplicatedEvents failure details: ", e);
-          }
-          catch (RuntimeException e) {
-            log.info(e.getClass().getName() + " : " + e.getMessage() + " : " + nonReplicatedEventMessage);
-            log.debug("publicIncomingReplicatedEvents failure details: ", e);
+            logger.atInfo().log("%s : %s : %s", e.getClass().getName(), e.getMessage(), nonReplicatedEventMessage);
+            logger.atFiner().withCause(e).log("publicIncomingReplicatedEvents failure details: ");
+          } catch (RuntimeException e) {
+            logger.atInfo().log("%s : %s : %s", e.getClass().getName(), e.getMessage(), nonReplicatedEventMessage);
+            logger.atFiner().withCause(e).log("publicIncomingReplicatedEvents failure details: ");
           }
         }
       }
@@ -240,7 +271,8 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
   private void offer(final Event event) {
     synchronized (replicationLock) {
       if (!queue.offer(event)) {
-        log.error("RE Could not queue an event! (The event will not be replicated)", new Exception("Cannot offer event to queue"));
+        logger.atSevere().withCause(new Exception("Cannot offer event to queue")).log(
+            "RE Could not queue an event! (The event will not be replicated)");
       }
     }
   }
@@ -258,7 +290,7 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
    */
   @Override
   public void run() {
-    log.info("RE ReplicateEvents thread is starting...");
+    logger.atInfo().log("RE ReplicateEvents thread is starting...");
     logMe("ReplicateEvents thread is starting...", null);
 
     // we need to make this thread never fail, otherwise we'll lose events.
@@ -274,17 +306,17 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
           }
         }
       } catch (InterruptedException e) {
-        log.info("RE Exiting", e);
+        logger.atInfo().withCause(e).log("RE Exiting");
         finished = true;
       } catch (RuntimeException e) {
-        log.error("RE Unexpected exception", e);
+        logger.atSevere().withCause(e).log("RE Unexpected exception");
         logMe("Unexpected exception", e);
       } catch (Exception e) {
-        log.error("RE Unexpected exception", e);
+        logger.atSevere().withCause(e).log("RE Unexpected exception");
         logMe("Unexpected exception", e);
       }
     }
-    log.error("RE Thread finished");
+    logger.atSevere().log("RE Thread finished");
     logMe("Thread finished", null);
     clearThread();
     finished = true;
@@ -323,50 +355,38 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
         Event originalEvent = (Event) gson.fromJson(newEvent.event, eventClass);
 
         if (originalEvent == null) {
-          log.error("fromJson method returned null for {}", newEvent.toString());
+          logger.atSevere().log("fromJson method returned null for %s", newEvent.toString());
           return false;
         }
 
-        log.debug("RE Original event: {}", originalEvent.toString());
+        logger.atFiner().log("RE Original event: %s", originalEvent.toString());
         originalEvent.replicated = true;
         originalEvent.setNodeIdentity(replicatorInstance.getThisNodeIdentity());
 
         if (replicatedEventsReplicateOriginalEvents) {
           if (!publishIncomingReplicatedEvents(originalEvent)) {
-            log.error("RE event has been lost, not supported");
+            logger.atSevere().log("RE event has been lost, not supported");
             result = false;
           }
         }
 
         if (replicatedEventsReplicateDistinctEvents) {
           if (!publishIncomingReplicatedEvents(makeDistinct(originalEvent, newEvent.prefix))) {
-            log.error("RE distinct event has been lost, not supported");
+            logger.atSevere().log("RE distinct event has been lost, not supported");
             result = false;
           }
         }
 
-      } catch (JsonSyntaxException je) {
-        log.error("PR Could not decode json event {}", newEvent.toString(), je);
+      } catch (JsonSyntaxException e) {
+        logger.atSevere().withCause(e).log("PR Could not decode json event %s", newEvent.toString());
         return result;
       } // Just log info level with no stack trace so we don't spam the logs for
       // the following catch blocks
-      catch (ClassNotFoundException e) {
-        log.info(e.getClass().getName() + " : " + e.getMessage() + " : " + nonReplicatedEventMessage);
-        result = false;
-      } catch (NoSuchMethodException e) {
-        log.info(e.getClass().getName() + " : " + e.getMessage() + " : " + nonReplicatedEventMessage);
-        result = false;
-      } catch (IllegalAccessException e) {
-        log.info(e.getClass().getName() + " : " + e.getMessage() + " : " + nonReplicatedEventMessage);
-        result = false;
-      } catch (InstantiationException e) {
-        log.info(e.getClass().getName() + " : " + e.getMessage() + " : " + nonReplicatedEventMessage);
-        result = false;
-      } catch (InvocationTargetException e) {
-        log.info(e.getClass().getName() + " : " + e.getMessage() + " : " + nonReplicatedEventMessage);
+      catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InstantiationException | InvocationTargetException e) {
+        logger.atInfo().log("%s : %s : %s", e.getClass().getName(), e.getMessage(), nonReplicatedEventMessage);
         result = false;
       } catch (RuntimeException e) {
-        log.info(e.getClass().getName() + " : " + e.getMessage() + " : " + nonReplicatedEventMessage);
+        logger.atInfo().log("%s : %s : %s", e.getClass().getName(), e.getMessage(), nonReplicatedEventMessage);
         result = false;
       }
 
@@ -384,25 +404,26 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
     ChangeEventInfo changeEventInfo = getChangeEventInfo(newEvent);
 
     if (changeEventInfo.isSupported()) {
-      log.debug("RE going to fire event...");
+      logger.atFiner().log("RE going to fire event...");
 
       try (ReviewDb db = dbProvider.get()) {
         if (changeEventInfo.changeAttr != null) {
-          log.debug("RE using changeAttr: {}...", changeEventInfo.changeAttr);
+          logger.atFiner().log("RE using changeAttr: %s...", changeEventInfo.changeAttr);
           Change change = db.changes().get(new Change.Id(changeEventInfo.changeAttr.number));
-          log.debug("RE got change from db: {}", change);
+          logger.atFiner().log("RE got change from db: %s", change);
           changeHookRunner.postEvent(change, (ChangeEvent) newEvent);
         } else if (changeEventInfo.branchName != null) {
-          log.debug("RE using branchName: {}", changeEventInfo.branchName);
+          logger.atFiner().log("RE using branchName: %s", changeEventInfo.branchName);
           changeHookRunner.postEvent(changeEventInfo.branchName, (RefEvent) newEvent);
         } else if (newEvent instanceof ProjectCreatedEvent) {
           changeHookRunner.postEvent(((ProjectCreatedEvent) newEvent));
         } else {
-          log.error("RE Internal error, it's *supported*, but refs is null", new Exception("refs is null for supported event"));
+          logger.atSevere().withCause(new Exception("refs is null for supported event")).log(
+              "RE Internal error, it's *supported*, but refs is null");
           changeEventInfo.supported = false;
         }
       } catch (OrmException | PermissionBackendException e) {
-        log.error("RE While trying to publish a replicated event", e);
+        logger.atSevere().withCause(e).log("RE While trying to publish a replicated event");
       }
     }
     return changeEventInfo.supported;
@@ -438,7 +459,7 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
         changeEventInfo.setProjectName(event.refUpdate.get().project);
         changeEventInfo.setBranchName(new Branch.NameKey(new Project.NameKey(event.refUpdate.get().project), completeRef(event.refUpdate.get().refName)));
       } else {
-        log.info("RE {} is not supported, project name or refupdate is null!", newEvent.getClass().getName());
+        logger.atInfo().log("RE %s is not supported, project name or refupdate is null!", newEvent.getClass().getName());
         changeEventInfo.supported = false;
       }
     } else if (newEvent instanceof com.google.gerrit.server.events.ReviewerAddedEvent) {
@@ -448,7 +469,7 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
     } else if (newEvent instanceof com.google.gerrit.server.events.ProjectCreatedEvent) {
       changeEventInfo.setProjectName(((ProjectCreatedEvent) newEvent).projectName);
     } else {
-      log.info("RE " + newEvent.getClass().getName() + " is not supported!");
+      logger.atInfo().log("RE %s is not supported!", newEvent.getClass().getName());
       changeEventInfo.supported = false;
     }
     return changeEventInfo;
@@ -473,25 +494,13 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
       Constructor<? extends Event> constructor = actualClass.getConstructor(actualClass, String.class, boolean.class);
       result = constructor.newInstance(changeEvent, prefix + changeEvent.getType(), true);
       result.setNodeIdentity(replicatorInstance.getThisNodeIdentity());
-    } catch (NoSuchMethodException e) {
+    } catch (NoSuchMethodException | IllegalAccessException | InstantiationException | InvocationTargetException e) {
       // this is likely a non replicated event
-      log.debug(nonReplicatedEventMessage, e);
-      throw e;
-    } catch (IllegalAccessException e) {
-      // this is likely a non replicated event
-      log.debug(nonReplicatedEventMessage, e);
-      throw e;
-    } catch (InstantiationException e) {
-      // this is likely a non replicated event
-      log.debug(nonReplicatedEventMessage, e);
-      throw e;
-    } catch (InvocationTargetException e) {
-      // this is likely a non replicated event
-      log.debug(nonReplicatedEventMessage, e);
+      logger.atFiner().withCause(e).log(nonReplicatedEventMessage);
       throw e;
     } catch (RuntimeException e) {
       // this is likely a non replicated event
-      log.debug(nonReplicatedEventMessage, e);
+      logger.atFiner().withCause(e).log(nonReplicatedEventMessage);
       throw e;
     }
 
@@ -509,114 +518,85 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
     }
   }
 
-public static class ChangeEventInfo {
-  private ChangeAttribute changeAttr = null;
-  private Branch.NameKey branchName = null;
-  private String projectName = null;
-  private boolean supported = false;
+  public static class ChangeEventInfo {
+    private ChangeAttribute changeAttr = null;
+    private Branch.NameKey branchName = null;
+    private String projectName = null;
+    private boolean supported = false;
 
-  public void setChangeAttribute(ChangeAttribute changeAttr) {
-    this.changeAttr = changeAttr;
-    if (changeAttr != null) {
-      projectName = changeAttr.project;
+    public void setChangeAttribute(ChangeAttribute changeAttr) {
+      this.changeAttr = changeAttr;
+      if (changeAttr != null) {
+        projectName = changeAttr.project;
+        supported = true;
+      }
+    }
+
+    public void setProjectName(String projectName) {
+      this.projectName = projectName;
+      this.supported = true;
+    }
+
+    public void setBranchName(Branch.NameKey branchName) {
+      this.branchName = branchName;
       supported = true;
     }
-  }
 
-  public void setProjectName(String projectName) {
-    this.projectName = projectName;
-    this.supported = true;
-  }
+    public ChangeAttribute getChangeAttr() {
+      return changeAttr;
+    }
 
-  public void setBranchName(Branch.NameKey branchName) {
-    this.branchName = branchName;
-    supported = true;
-  }
+    public Branch.NameKey getBranchName() {
+      return branchName;
+    }
 
-  public ChangeAttribute getChangeAttr() {
-    return changeAttr;
-  }
+    public String getProjectName() {
+      return projectName;
+    }
 
-  public Branch.NameKey getBranchName() {
-    return branchName;
-  }
+    public boolean isSupported() {
+      return supported;
+    }
 
-  public String getProjectName() {
-    return projectName;
   }
-
-  public boolean isSupported() {
-    return supported;
-  }
-
-}
 
   private static boolean readConfiguration() {
     boolean result = false;
     try {
-      // Used for internal integration tests at WANdisco
-      String gitConfigLoc = System.getenv("GIT_CONFIG");
-      if (gitConfigLoc == null) {
-        gitConfigLoc = System.getProperty("user.home") + "/.gitconfig";
+      Properties props = Replicator.getApplicationProperties();
+
+      // we allow no properties to be returned when the replication is disabled in an override
+      if (props == null) {
+        return false;
       }
 
-      FileBasedConfig config = new FileBasedConfig(new File(gitConfigLoc), FS.DETECTED);
-      try {
-        config.load();
-      } catch (ConfigInvalidException e) {
-        // Configuration file is not in the valid format, throw exception back.
-        throw new IOException(e);
+      replicatedEventsSend = true; // they must be always enabled, not dependant on GERRIT_REPLICATED_EVENTS_ENABLED_SEND
+      replicatedEventsReceive = Boolean.parseBoolean(props.getProperty(GERRIT_REPLICATED_EVENTS_ENABLED_RECEIVE, "true"));
+      replicatedEventsReplicateOriginalEvents = Boolean.parseBoolean(props.getProperty(GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL, "true"));
+      replicatedEventsReplicateDistinctEvents = Boolean.parseBoolean(props.getProperty(GERRIT_REPLICATED_EVENTS_RECEIVE_DISTINCT, "false"));
+
+      receiveReplicatedEventsEnabled = replicatedEventsReceive || replicatedEventsReplicateOriginalEvents || replicatedEventsReplicateDistinctEvents;
+      replicatedEventsEnabled = receiveReplicatedEventsEnabled || replicatedEventsSend;
+      if (replicatedEventsEnabled) {
+        maxSecsToWaitForEventOnQueue = Long.parseLong(Replicator.cleanLforLongAndConvertToMilliseconds(props.getProperty(
+            GERRIT_MAX_SECS_TO_WAIT_FOR_EVENT_ON_QUEUE, DEFAULT_MAX_SECS_TO_WAIT_FOR_EVENT_ON_QUEUE)));
+        logger.atInfo().log("RE Replicated events are enabled, send: %s, receive: %s", replicatedEventsSend, receiveReplicatedEventsEnabled);
+      } else {
+        logger.atInfo().log("RE Replicated events are disabled"); // This could not apppear in the log... cause the log could not yet be ready
       }
 
-      File applicationProperties;
-      try {
-        String appProperties = config.getString("core", null, "gitmsconfig");
-        applicationProperties = new File(appProperties);
-        // GER-662 NPE thrown if GerritMS is started without a reference to a valid GitMS application.properties file.
-      } catch (NullPointerException exception) {
-        throw new FileNotFoundException("GerritMS cannot continue without a valid GitMS application.properties file referenced in its .gitconfig file.");
-      }
+      localRepublishEnabled = Boolean.parseBoolean(props.getProperty(GERRIT_REPLICATED_EVENTS_LOCAL_REPUBLISH_DISTINCT, "false"));
+      distinctEventPrefix = props.getProperty(GERRIT_REPLICATED_EVENTS_DISTINCT_PREFIX, DEFAULT_DISTINCT_PREFIX);
 
-      if (!applicationProperties.exists() || !applicationProperties.canRead()) {
-        log.warn("Could not find/read (1) " + applicationProperties);
-        applicationProperties = new File(DEFAULT_MS_APPLICATION_PROPERTIES, "application.properties");
-      }
+      logger.atInfo().log("RE Replicated events: receive=%s, original=%s, distinct=%s, send=%s ",
+          replicatedEventsReceive, replicatedEventsReplicateOriginalEvents, replicatedEventsReplicateDistinctEvents, replicatedEventsSend);
+      logger.atInfo().log("RE Replicate local events, prefix=%s, republish=%s ", distinctEventPrefix, localRepublishEnabled);
 
-      if (applicationProperties.exists() && applicationProperties.canRead()) {
-        Properties props = new Properties();
-        try (FileInputStream propsFile = new FileInputStream(applicationProperties)) {
-          props.load(propsFile);
-          replicatedEventsSend = true; // they must be always enabled, not dependant on GERRIT_REPLICATED_EVENTS_ENABLED_SEND
-          replicatedEventsReceive = Boolean.parseBoolean(props.getProperty(GERRIT_REPLICATED_EVENTS_ENABLED_RECEIVE, "true"));
-          replicatedEventsReplicateOriginalEvents = Boolean.parseBoolean(props.getProperty(GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL, "true"));
-          replicatedEventsReplicateDistinctEvents = Boolean.parseBoolean(props.getProperty(GERRIT_REPLICATED_EVENTS_RECEIVE_DISTINCT, "false"));
-
-          receiveReplicatedEventsEnabled = replicatedEventsReceive || replicatedEventsReplicateOriginalEvents || replicatedEventsReplicateDistinctEvents;
-          replicatedEventsEnabled = receiveReplicatedEventsEnabled || replicatedEventsSend;
-          if (replicatedEventsEnabled) {
-            maxSecsToWaitForEventOnQueue = Long.parseLong(Replicator.cleanLforLongAndConvertToMilliseconds(props.getProperty(
-                GERRIT_MAX_SECS_TO_WAIT_FOR_EVENT_ON_QUEUE, DEFAULT_MAX_SECS_TO_WAIT_FOR_EVENT_ON_QUEUE)));
-            log.info("RE Replicated events are enabled, send: {}, receive: {}", new Object[]{replicatedEventsSend, receiveReplicatedEventsEnabled});
-          } else {
-            log.info("RE Replicated events are disabled"); // This could not apppear in the log... cause the log could not yet be ready
-          }
-
-          localRepublishEnabled = Boolean.parseBoolean(props.getProperty(GERRIT_REPLICATED_EVENTS_LOCAL_REPUBLISH_DISTINCT, "false"));
-          distinctEventPrefix = props.getProperty(GERRIT_REPLICATED_EVENTS_DISTINCT_PREFIX, DEFAULT_DISTINCT_PREFIX);
-
-          log.info("RE Replicated events: receive={}, original={}, distinct={}, send={} ",
-              new Object[]{replicatedEventsReceive, replicatedEventsReplicateOriginalEvents, replicatedEventsReplicateDistinctEvents, replicatedEventsSend});
-          log.info("RE Replicate local events, prefix={}, republish={} ", new Object[]{distinctEventPrefix, localRepublishEnabled});
-
-          result = true;
-        } catch (IOException e) {
-          log.error("RE While reading GerritMS properties file", e);
-        }
-      }
-    } catch (IOException ee) {
-      log.error("RE While loading the .gitconfig file", ee);
+      return true;
+    } catch (IOException e) {
+      logger.atSevere().withCause(e).log("RE While reading GerritMS properties file");
     }
-    return result;
+    return false;
   }
 
   @Override

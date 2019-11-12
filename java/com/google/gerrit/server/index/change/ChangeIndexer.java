@@ -41,6 +41,7 @@ import com.google.gerrit.server.plugincontext.PluginSetContext;
 import com.google.gerrit.server.project.NoSuchChangeException;
 import com.google.gerrit.server.query.change.ChangeData;
 import com.google.gerrit.server.replication.ReplicatedIndexEventManager;
+import com.google.gerrit.server.replication.Replicator;
 import com.google.gerrit.server.util.RequestContext;
 import com.google.gerrit.server.util.ThreadLocalRequestContext;
 import com.google.gwtorm.server.OrmException;
@@ -173,6 +174,9 @@ public class ChangeIndexer {
 
   // Call to WANdisco gerrit event replicator init function
   private void initIndexReplicator(SchemaFactory<ReviewDb> schemaFactory, Config cfg) {
+    if (Replicator.isReplicationDisabled()){
+      return;
+    }
     ReplicatedIndexEventManager.initIndexer(schemaFactory, this, cfg);
   }
 
