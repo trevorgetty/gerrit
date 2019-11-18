@@ -26,6 +26,7 @@ import com.google.gerrit.server.logging.TraceContext;
 import com.google.gerrit.server.logging.TraceContext.TraceTimer;
 import com.google.gerrit.server.plugincontext.PluginSetContext;
 import com.google.gerrit.server.replication.ReplicatedAccountIndexManager;
+import com.google.gerrit.server.replication.Replicator;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 
@@ -86,7 +87,7 @@ public class AccountIndexerImpl implements AccountIndexer {
 
   @Override
   public void index(Account.Id id) throws IOException {
-    indexImplementation(id, true);
+    indexImplementation(id, Replicator.isReplicationEnabled());
   }
 
   /**
@@ -135,7 +136,11 @@ public class AccountIndexerImpl implements AccountIndexer {
         }
       }
     }
-    ReplicatedAccountIndexManager.replicateAccountReindex(id);
+
+    if ( replicate ) {
+      ReplicatedAccountIndexManager.replicateAccountReindex(id);
+    }
+
     fireAccountIndexedEvent(id.get());
   }
 
