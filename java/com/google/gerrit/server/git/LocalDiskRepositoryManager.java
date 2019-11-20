@@ -16,7 +16,6 @@ package com.google.gerrit.server.git;
 
 import com.google.common.flogger.FluentLogger;
 import com.google.gerrit.extensions.events.LifecycleListener;
-import com.google.gerrit.extensions.restapi.PreconditionFailedException;
 import com.google.gerrit.lifecycle.LifecycleModule;
 import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.reviewdb.client.RefNames;
@@ -38,7 +37,6 @@ import java.util.EnumSet;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
-import org.eclipse.jgit.errors.RepositoryAlreadyExistsException;
 import org.eclipse.jgit.errors.RepositoryNotFoundException;
 import org.eclipse.jgit.lib.Config;
 import org.eclipse.jgit.lib.ConfigConstants;
