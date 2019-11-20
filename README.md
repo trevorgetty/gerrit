@@ -1,3 +1,11 @@
+# GerritMS Code Fork
+This is the main codebase for GerritMS with replication support.  
+Gerrit Multisite is a fork based on [Gerrit](https://www.gerritcodereview.com) that adds replication
+support and full Read Write Multi Master on Geographically seperate locations.
+
+See https://wandisco.com/scm for more information on LiveCode - replicated SCM products.
+ 
+
 # Gerrit Code Review
 
 [Gerrit](https://www.gerritcodereview.com) is a code review and project
