@@ -5,6 +5,8 @@ support and full Read Write Multi Master on Geographically seperate locations.
 
 See https://wandisco.com/scm for more information on LiveCode - replicated SCM products.
  
+[GerritMS - Builds](https://build-jenkins.wandisco.com/view/Gerrit-MS/job/Gerrit-MS-Verification-Bazel)
+
 
 # Gerrit Code Review
 
