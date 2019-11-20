@@ -866,6 +866,39 @@ maven_jar(
     sha1 = "fd369423346b2f1525c413e33f8cf95b09c92cbd",
 )
 
+#MOCKITO
+
+maven_jar(
+        name = "mockito",
+        artifact = "org.mockito:mockito-core:2.28.2",
+        sha1 = "91110215a8cb9b77a46e045ee758f77d79167cc0",
+        deps = [
+                    "@byte-buddy//jar",
+                    "@byte-buddy-agent//jar",
+                    "@objenesis-2//jar",
+                ],
+)
+
+BYTE_BUDDY_VERSION = "1.9.10"
+
+maven_jar(
+    name = "byte-buddy",
+    artifact = "net.bytebuddy:byte-buddy:" + BYTE_BUDDY_VERSION,
+    sha1 = "211a2b4d3df1eeef2a6cacf78d74a1f725e7a840",
+)
+
+maven_jar(
+    name = "byte-buddy-agent",
+    artifact = "net.bytebuddy:byte-buddy-agent:" + BYTE_BUDDY_VERSION,
+    sha1 = "9674aba5ee793e54b864952b001166848da0f26b",
+)
+
+maven_jar(
+    name = "objenesis-2",
+    artifact = "org.objenesis:objenesis:2.6",
+    sha1 = "639033469776fd37c08358c6b92a4761feb2af4b",
+)
+
 # Note that all of the following org.apache.httpcomponents have newer versions,
 # but 4.4.1 is the only version that is available for all of them.
 # TODO: Check what combination of new versions are compatible.
@@ -1127,8 +1160,8 @@ maven_jar(
 
 maven_jar(
     name = "commons-io",
-    artifact = "commons-io:commons-io:2.2",
-    sha1 = "83b5b8a7ba1c08f9e8c8ff2373724e33d3c1e22a",
+    artifact = "commons-io:commons-io:2.6",
+    sha1 = "815893df5f31da2ece4040fe0a12fd44b577afaf",
 )
 
 maven_jar(

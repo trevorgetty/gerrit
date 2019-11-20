@@ -9,6 +9,7 @@ CORE_PLUGINS = [
 ]
 
 CUSTOM_PLUGINS = [
+    "delete-project",
     # Add custom core plugins here
 ]
 
