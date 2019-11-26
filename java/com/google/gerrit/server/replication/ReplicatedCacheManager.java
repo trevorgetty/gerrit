@@ -26,9 +26,12 @@ import com.google.gson.JsonSyntaxException;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.List;
 
 /**
  * This class is to manage the replication of the cache events happening in
@@ -95,6 +98,7 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
   private static ReplicatedCacheManager instance = null;
 
   public static String projectCache = "ProjectCacheImpl";
+  private static List<String> cacheEvictList = null;
 
   // Used for statistics
   private static final Multiset<String> evictionsPerformed = ConcurrentHashMultiset.create();
@@ -102,6 +106,21 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
   private static final Multiset<String> reloadsPerformed = ConcurrentHashMultiset.create();
 
   private ReplicatedCacheManager() {
+  }
+
+  /**
+   * Lazy initialising the cache eviction list. List
+   * returned if not created already with a list of caches to
+   * be evicted.
+   * @return
+   */
+  public static List<String> getCacheEvictList(){
+    if(cacheEvictList != null) {
+      return cacheEvictList;
+    }
+    cacheEvictList = new ArrayList<>(Arrays.asList("sshkeys", "accounts", "accounts_byname", "accounts_byemail",
+        "groups", "groups_byinclude", "groups_byname", "groups_byuuid", "groups_external", "groups_members"));
+    return cacheEvictList;
   }
 
   public static ImmutableMultiset<String> getEvictionsPerformed() {
@@ -206,8 +225,7 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
     logger.atFiner().log("CACHE About to call replicated cache event: %s,%s", cacheName, key);
 
     //Block to force cache update to the All-Users repo so it is triggered in sequence after event that caused the eviction.
-    if (cacheName.equals("sshkeys") || cacheName.equals("accounts")
-        || cacheName.equals("accounts_byname") || cacheName.equals("accounts_byemail")) {
+    if(getCacheEvictList().contains(cacheName)){
       logger.atFiner().log("CACHE User Cache event setting update against All-Users Project %s,%s", cacheName, key);
       eventWrapper = new EventWrapper("All-Users", cacheKeyWrapper);
     }
