@@ -25,9 +25,12 @@ import com.google.gerrit.server.group.InternalGroup;
 import com.google.gerrit.server.logging.TraceContext;
 import com.google.gerrit.server.logging.TraceContext.TraceTimer;
 import com.google.gerrit.server.plugincontext.PluginSetContext;
+import com.google.gerrit.server.replication.ReplicatedAccountsIndexManager;
+import com.google.gerrit.server.replication.Replicator;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Optional;
@@ -44,6 +47,7 @@ public class GroupIndexerImpl implements GroupIndexer {
   private final GroupCache groupCache;
   private final PluginSetContext<GroupIndexedListener> indexedListener;
   private final StalenessChecker stalenessChecker;
+  @Nullable private final ReplicatedAccountsIndexManager replicatedAccountsIndexManager;
   @Nullable private final GroupIndexCollection indexes;
   @Nullable private final GroupIndex index;
 
@@ -58,6 +62,7 @@ public class GroupIndexerImpl implements GroupIndexer {
     this.stalenessChecker = stalenessChecker;
     this.indexes = indexes;
     this.index = null;
+    this.replicatedAccountsIndexManager = ReplicatedAccountsIndexManager.Factory.create(this);
   }
 
   @AssistedInject
@@ -71,10 +76,29 @@ public class GroupIndexerImpl implements GroupIndexer {
     this.stalenessChecker = stalenessChecker;
     this.indexes = null;
     this.index = index;
+    this.replicatedAccountsIndexManager = ReplicatedAccountsIndexManager.Factory.create(this);
   }
+
 
   @Override
   public void index(AccountGroup.UUID uuid) throws IOException {
+    indexImplementation(uuid, Replicator.isReplicationEnabled());
+  }
+
+
+  /**
+   * To allow an index to take place locally only, usually called by a handler in response to a replicated event,
+   * so as to avoid a cyclic replication of the same event.
+   * @param identifier
+   * @throws IOException
+   */
+  @Override
+  public void indexNoRepl(Serializable identifier) throws IOException {
+    indexImplementation((AccountGroup.UUID) identifier, false);
+  }
+
+
+  public void indexImplementation(AccountGroup.UUID uuid, boolean replicate) throws IOException {
     // Evict the cache to get an up-to-date value for sure.
     groupCache.evict(uuid);
     Optional<InternalGroup> internalGroup = groupCache.get(uuid);
@@ -100,6 +124,11 @@ public class GroupIndexerImpl implements GroupIndexer {
         }
       }
     }
+
+    if ( replicate && replicatedAccountsIndexManager != null) {
+      replicatedAccountsIndexManager.replicateReindex(uuid);
+    }
+
     fireGroupIndexedEvent(uuid.get());
   }
 

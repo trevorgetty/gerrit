@@ -15,9 +15,11 @@
 package com.google.gerrit.server.index.group;
 
 import com.google.gerrit.reviewdb.client.AccountGroup;
+import com.google.gerrit.server.replication.ReplicatedAccountIndexer;
+
 import java.io.IOException;
 
-public interface GroupIndexer {
+public interface GroupIndexer extends ReplicatedAccountIndexer {
 
   /**
    * Synchronously index a group.

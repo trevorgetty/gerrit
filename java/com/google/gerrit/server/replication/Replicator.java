@@ -244,6 +244,21 @@ public class Replicator implements Runnable {
     eventReaderAndPublisherThread = null;
   }
 
+  /**
+   * If the event type is in the eventListeners map already then we are
+   * @param eventType
+   * @return
+   */
+  public boolean isSubscribed(EventWrapper.Originator eventType){
+    boolean subscribed=false;
+    synchronized (eventListeners) {
+        if(eventListeners.containsKey(eventType)){
+          subscribed = true;
+        }
+    }
+    return subscribed;
+  }
+
   public static void subscribeEvent(EventWrapper.Originator eventType, GerritPublishable toCall) {
     synchronized (eventListeners) {
       Set<GerritPublishable> set = eventListeners.get(eventType);

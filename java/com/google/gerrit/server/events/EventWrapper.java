@@ -14,7 +14,7 @@
 package com.google.gerrit.server.events;
 
 import com.google.common.base.Supplier;
-import com.google.gerrit.server.replication.AccountIndexEvent;
+import com.google.gerrit.server.replication.AccountIndexEventBase;
 import com.google.gerrit.server.replication.CacheKeyWrapper;
 import com.google.gerrit.server.replication.DeleteProjectChangeEvent;
 import com.google.gerrit.server.replication.ProjectInfoWrapper;
@@ -45,7 +45,8 @@ public class EventWrapper  {
     PACKFILE_EVENT,
     DELETE_PROJECT_EVENT,
     FOR_REPLICATOR_EVENT,
-    ACCOUNT_INDEX_EVENT
+    ACCOUNT_USER_INDEX_EVENT,
+    ACCOUNT_GROUP_INDEX_EVENT
   }
   public final String event;
   public final String className;
@@ -55,7 +56,6 @@ public class EventWrapper  {
 
   private static final Gson gson = new GsonBuilder()
       .registerTypeAdapter(Supplier.class, new SupplierSerializer())
-      //.registerTypeAdapter(Project.NameKey.class, new ProjectNameKeySerializer())
       .registerTypeAdapter(Event.class, new EventDeserializer())
       .registerTypeAdapter(Supplier.class, new SupplierDeserializer())
       .create();
@@ -136,15 +136,13 @@ public class EventWrapper  {
     this.originator = Originator.DELETE_PROJECT_EVENT;
     this.prefix = null;
   }
-  /**
-   * Event for handling Account Index events
-   * @param accountIndexEvent
-   */
-  public EventWrapper(String projectName, AccountIndexEvent accountIndexEvent) {
-    this.event = gson.toJson(accountIndexEvent);
-    this.className=accountIndexEvent.getClass().getName();
+
+
+  public EventWrapper(String projectName, AccountIndexEventBase accountIndexEventBase, Originator originator) {
+    this.event = gson.toJson(accountIndexEventBase);
+    this.className= accountIndexEventBase.getClass().getName();
     this.projectName = projectName;
-    this.originator = Originator.ACCOUNT_INDEX_EVENT;
+    this.originator = originator;
     this.prefix = null;
   }
 

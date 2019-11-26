@@ -25,18 +25,20 @@ import com.google.gerrit.server.account.AccountState;
 import com.google.gerrit.server.logging.TraceContext;
 import com.google.gerrit.server.logging.TraceContext.TraceTimer;
 import com.google.gerrit.server.plugincontext.PluginSetContext;
-import com.google.gerrit.server.replication.ReplicatedAccountIndexManager;
+import com.google.gerrit.server.replication.ReplicatedAccountsIndexManager;
 import com.google.gerrit.server.replication.Replicator;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Optional;
 
 public class AccountIndexerImpl implements AccountIndexer {
   private static final FluentLogger logger = FluentLogger.forEnclosingClass();
+
 
   public interface Factory {
     AccountIndexerImpl create(AccountIndexCollection indexes);
@@ -47,10 +49,9 @@ public class AccountIndexerImpl implements AccountIndexer {
   private final AccountCache byIdCache;
   private final PluginSetContext<AccountIndexedListener> indexedListener;
   private final StalenessChecker stalenessChecker;
-  @Nullable
-  private final AccountIndexCollection indexes;
-  @Nullable
-  private final AccountIndex index;
+  @Nullable private final ReplicatedAccountsIndexManager replicatedAccountsIndexManager;
+  @Nullable private final AccountIndexCollection indexes;
+  @Nullable private final AccountIndex index;
 
   @AssistedInject
   AccountIndexerImpl(
@@ -63,7 +64,7 @@ public class AccountIndexerImpl implements AccountIndexer {
     this.stalenessChecker = stalenessChecker;
     this.indexes = indexes;
     this.index = null;
-    initAccountIndexReplicator();
+    this.replicatedAccountsIndexManager = ReplicatedAccountsIndexManager.Factory.create(this);
   }
 
   @AssistedInject
@@ -77,12 +78,7 @@ public class AccountIndexerImpl implements AccountIndexer {
     this.stalenessChecker = stalenessChecker;
     this.indexes = null;
     this.index = index;
-    initAccountIndexReplicator();
-  }
-
-  // Call to WANdisco gerrit event replicator init function
-  private void initAccountIndexReplicator() {
-    ReplicatedAccountIndexManager.initAccountIndexer(this);
+    this.replicatedAccountsIndexManager = ReplicatedAccountsIndexManager.Factory.create(this);
   }
 
   @Override
@@ -90,15 +86,10 @@ public class AccountIndexerImpl implements AccountIndexer {
     indexImplementation(id, Replicator.isReplicationEnabled());
   }
 
-  /**
-   * To allow an index to take place locally only, usually called by a handler in response to a replicated event,
-   * so as to avoid a cyclic replication of the same event.
-   *
-   * @param id
-   * @throws IOException
-   */
-  public void indexNoRepl(Account.Id id) throws IOException {
-    indexImplementation(id, false);
+
+  @Override
+  public void indexNoRepl(Serializable identifier) throws IOException {
+    indexImplementation((Account.Id) identifier, false);
   }
 
   /**
@@ -137,8 +128,8 @@ public class AccountIndexerImpl implements AccountIndexer {
       }
     }
 
-    if ( replicate ) {
-      ReplicatedAccountIndexManager.replicateAccountReindex(id);
+    if ( replicate && replicatedAccountsIndexManager != null) {
+      replicatedAccountsIndexManager.replicateReindex(id);
     }
 
     fireAccountIndexedEvent(id.get());
