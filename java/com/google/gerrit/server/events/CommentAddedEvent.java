@@ -10,7 +10,7 @@
  * Apache License, Version 2.0
  *
  ********************************************************************************/
- 
+
 // Copyright (C) 2010 The Android Open Source Project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -42,14 +42,4 @@ public class CommentAddedEvent extends PatchSetEvent {
     super(TYPE, change);
   }
 
-  public CommentAddedEvent(CommentAddedEvent e, String type){
-    this(e, type, false);
-  }
-
-  public CommentAddedEvent(CommentAddedEvent e, String type, boolean replicated){
-    super(e, type, replicated);
-    this.author = e.author;
-    this.approvals = e.approvals;
-    this.comment = e.comment;
-  }
 }

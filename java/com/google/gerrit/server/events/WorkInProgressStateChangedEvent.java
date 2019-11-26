@@ -25,4 +25,5 @@ public class WorkInProgressStateChangedEvent extends PatchSetEvent {
   protected WorkInProgressStateChangedEvent(Change change) {
     super(TYPE, change);
   }
+
 }

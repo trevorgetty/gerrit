@@ -26,4 +26,5 @@ public class AssigneeChangedEvent extends ChangeEvent {
   public AssigneeChangedEvent(Change change) {
     super(TYPE, change);
   }
+
 }

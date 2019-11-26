@@ -35,14 +35,6 @@ public abstract class Event {
   public long eventTimestamp = System.currentTimeMillis();
   public String nodeIdentity;
 
-  /**
-   * WANdisco replication for Gerrit with GitMS
-   * This flag is used to make sure that a replicated event
-   * does not become a new event to be replicated again, producing
-   * this way an infinite loop
-   */
-  public transient boolean replicated = false;
-  
   protected Event(String type) {
     this.type = type;
     this.eventTimestamp = System.currentTimeMillis();

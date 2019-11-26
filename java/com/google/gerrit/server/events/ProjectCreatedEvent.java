@@ -10,7 +10,7 @@
  * Apache License, Version 2.0
  *
  ********************************************************************************/
- 
+
 // Copyright (C) 2015 The Android Open Source Project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -36,13 +36,6 @@ public class ProjectCreatedEvent extends ProjectEvent {
 
   public ProjectCreatedEvent() {
     super(TYPE);
-  }
-  
-  public ProjectCreatedEvent(ProjectCreatedEvent event, String type, boolean replicated) {
-    super(type);
-    this.projectName = event.projectName;
-    this.headName = event.headName;
-    this.replicated = replicated;
   }
 
   @Override

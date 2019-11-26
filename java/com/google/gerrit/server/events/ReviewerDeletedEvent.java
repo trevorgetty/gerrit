@@ -29,4 +29,5 @@ public class ReviewerDeletedEvent extends PatchSetEvent {
   public ReviewerDeletedEvent(Change change) {
     super(TYPE, change);
   }
+
 }

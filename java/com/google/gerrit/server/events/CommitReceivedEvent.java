@@ -36,6 +36,7 @@ public class CommitReceivedEvent extends RefEvent implements AutoCloseable {
     super(TYPE);
   }
 
+
   public CommitReceivedEvent(
       ReceiveCommand command,
       Project project,
@@ -53,6 +54,7 @@ public class CommitReceivedEvent extends RefEvent implements AutoCloseable {
     this.user = user;
     revWalk.parseBody(commit);
   }
+
 
   @Override
   public Project.NameKey getProjectNameKey() {

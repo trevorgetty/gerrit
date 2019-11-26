@@ -10,7 +10,7 @@
  * Apache License, Version 2.0
  *
  ********************************************************************************/
- 
+
 // Copyright (C) 2013 The Android Open Source Project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -40,13 +40,4 @@ public class TopicChangedEvent extends ChangeEvent {
     super(TYPE, change);
   }
 
-  public TopicChangedEvent(TopicChangedEvent e, String type){
-    this(e, type, false);
-  }
-
-  public TopicChangedEvent(TopicChangedEvent e, String type, boolean replicated){
-    super(e, type, replicated);
-    this.changer = e.changer;
-    this.oldTopic = e.oldTopic;
-  }
 }

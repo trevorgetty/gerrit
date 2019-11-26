@@ -10,7 +10,7 @@
  * Apache License, Version 2.0
  *
  ********************************************************************************/
- 
+
 // Copyright (C) 2012 The Android Open Source Project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -39,12 +39,4 @@ public class ReviewerAddedEvent extends PatchSetEvent {
     super(TYPE, change);
   }
 
-  public ReviewerAddedEvent(ReviewerAddedEvent e, String type){
-    this(e, type, false);
-  }
-
-  public ReviewerAddedEvent(ReviewerAddedEvent e, String type, boolean replicated){
-    super(e, type, replicated);
-    this.reviewer = e.reviewer;
-  }
 }

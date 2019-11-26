@@ -10,7 +10,7 @@
  * Apache License, Version 2.0
  *
  ********************************************************************************/
- 
+
 // Copyright (C) 2012 The Android Open Source Project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -39,12 +39,4 @@ public class ChangeDeletedEvent extends ChangeEvent {
     super(TYPE, change);
   }
 
-  public ChangeDeletedEvent(ChangeDeletedEvent e, String type) {
-    this(e, type, false);
-  }
-
-  public ChangeDeletedEvent(ChangeDeletedEvent e, String type, boolean replicated) {
-    super(e, type, replicated);
-    this.deleter = e.deleter;
-  }
 }

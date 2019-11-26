@@ -29,4 +29,5 @@ public class VoteDeletedEvent extends PatchSetEvent {
   public VoteDeletedEvent(Change change) {
     super(TYPE, change);
   }
+
 }

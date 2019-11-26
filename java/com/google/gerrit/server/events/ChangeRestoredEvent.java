@@ -10,7 +10,7 @@
  * Apache License, Version 2.0
  *
  ********************************************************************************/
- 
+
 // Copyright (C) 2010 The Android Open Source Project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -40,13 +40,4 @@ public class ChangeRestoredEvent extends PatchSetEvent {
     super(TYPE, change);
   }
 
-  public ChangeRestoredEvent(ChangeRestoredEvent e, String type){
-    this(e, type, false);
-  }
-
-  public ChangeRestoredEvent(ChangeRestoredEvent e, String type, boolean replicated){
-    super(e, type, replicated);
-    this.restorer = e.restorer;
-    this.reason = e.reason;
-  }
 }

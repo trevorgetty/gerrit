@@ -15,50 +15,6 @@
  * <p>
  * http://www.wandisco.com/
  * <p>
- * Replicated Events Manager to be used with WANdisco GitMS
- * Generated ChangeEvent(s) can be shared with other Gerrit Nodes
- * <p>
- * http://www.wandisco.com/
- * <p>
- * Replicated Events Manager to be used with WANdisco GitMS
- * Generated ChangeEvent(s) can be shared with other Gerrit Nodes
- * <p>
- * http://www.wandisco.com/
- * <p>
- * Replicated Events Manager to be used with WANdisco GitMS
- * Generated ChangeEvent(s) can be shared with other Gerrit Nodes
- * <p>
- * http://www.wandisco.com/
- * <p>
- * Replicated Events Manager to be used with WANdisco GitMS
- * Generated ChangeEvent(s) can be shared with other Gerrit Nodes
- * <p>
- * http://www.wandisco.com/
- * <p>
- * Replicated Events Manager to be used with WANdisco GitMS
- * Generated ChangeEvent(s) can be shared with other Gerrit Nodes
- * <p>
- * http://www.wandisco.com/
- * <p>
- * Replicated Events Manager to be used with WANdisco GitMS
- * Generated ChangeEvent(s) can be shared with other Gerrit Nodes
- * <p>
- * http://www.wandisco.com/
- * <p>
- * Replicated Events Manager to be used with WANdisco GitMS
- * Generated ChangeEvent(s) can be shared with other Gerrit Nodes
- * <p>
- * http://www.wandisco.com/
- * <p>
- * Replicated Events Manager to be used with WANdisco GitMS
- * Generated ChangeEvent(s) can be shared with other Gerrit Nodes
- * <p>
- * http://www.wandisco.com/
- * <p>
- * Replicated Events Manager to be used with WANdisco GitMS
- * Generated ChangeEvent(s) can be shared with other Gerrit Nodes
- * <p>
- * http://www.wandisco.com/
  */
 
 /**
@@ -84,26 +40,20 @@ import com.google.gson.JsonSyntaxException;
 import com.google.gwtorm.server.OrmException;
 
 import com.google.inject.Provider;
-import org.eclipse.jgit.errors.ConfigInvalidException;
+import com.wandisco.gerrit.gitms.shared.properties.GitMsApplicationProperties;
 import org.eclipse.jgit.lib.Config;
-import org.eclipse.jgit.storage.file.FileBasedConfig;
-import org.eclipse.jgit.util.FS;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
-import java.nio.charset.Charset;
 import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.List;
 import java.util.Objects;
-import java.util.Properties;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -126,6 +76,7 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
   private static Thread eventReaderAndPublisherThread = null;
   private static File internalLogFile = null; // used for debug
   private static String distinctEventPrefix = DEFAULT_DISTINCT_PREFIX;
+  private static List<String> eventSkipList = new ArrayList<>();
   private static boolean replicatedEventsReceive = true; // receive and original are synonym
   private static boolean replicatedEventsReplicateOriginalEvents = true; // receive and original are synonym
   private static boolean replicatedEventsReplicateDistinctEvents = false;
@@ -246,7 +197,8 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
 
     @Override
     public void onEvent(Event event) {
-      if (!event.replicated) {
+      //Only offer the event to the queue if it is not a skipped event.
+      if (!isEventToBeSkipped(event)) {
         offer(event);
         if (localRepublishEnabled) {
           try {
@@ -331,7 +283,8 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
     boolean eventGot = false;
     Event newEvent;
     newEvent = queue.poll(maxSecsToWaitForEventOnQueue, TimeUnit.MILLISECONDS);
-    if (newEvent != null && !newEvent.replicated) {
+    //If the newEvent is not a skipped event then we should queue the event for replication.
+    if (newEvent != null && !isEventToBeSkipped(newEvent)) {
       newEvent.setNodeIdentity(replicatorInstance.getThisNodeIdentity());
       replicatorInstance.queueEventForReplication(new EventWrapper(newEvent, getChangeEventInfo(newEvent), distinctEventPrefix));
       eventGot = true;
@@ -360,7 +313,6 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
         }
 
         logger.atFiner().log("RE Original event: %s", originalEvent.toString());
-        originalEvent.replicated = true;
         originalEvent.setNodeIdentity(replicatorInstance.getThisNodeIdentity());
 
         if (replicatedEventsReplicateOriginalEvents) {
@@ -430,6 +382,21 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
   }
 
   /**
+   * This checks against the list of event class names to be skipped
+   * Skippable events are configured by a parameter in the application.properties
+   * as a comma separated list of class names for event types, e.g
+   * TopicChangedEvent, ReviewerDeletedEvent.
+   *
+   * @param event
+   * @return
+   */
+  public boolean isEventToBeSkipped(Event event) {
+    //Doesn't matter if the list is empty, check if the list contains the class name.
+    //All events are stored in the list as lowercase, so we check for our lowercase class name.
+    return eventSkipList.contains(event.getClass().getSimpleName().toLowerCase()); //short name of the class
+    }
+
+  /**
    * Since the event can be of many different types, and since the Gerrit engineers didn't want
    * to put the ChangeAttribute in the main abstract class, we have to analyze every
    * single event type and extract the relevant information
@@ -439,20 +406,21 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
    */
   public ChangeEventInfo getChangeEventInfo(Event newEvent) {
     ChangeEventInfo changeEventInfo = new ChangeEventInfo();
-    if (newEvent instanceof com.google.gerrit.server.events.ChangeAbandonedEvent) {
-      changeEventInfo.setChangeAttribute(((ChangeAbandonedEvent) newEvent).change.get());
-    } else if (newEvent instanceof com.google.gerrit.server.events.ChangeMergedEvent) {
-      changeEventInfo.setChangeAttribute(((ChangeMergedEvent) newEvent).change.get());
-    } else if (newEvent instanceof com.google.gerrit.server.events.ChangeRestoredEvent) {
-      changeEventInfo.setChangeAttribute(((ChangeRestoredEvent) newEvent).change.get());
-    } else if (newEvent instanceof com.google.gerrit.server.events.CommentAddedEvent) {
-      changeEventInfo.setChangeAttribute(((CommentAddedEvent) newEvent).change.get());
-    } else if (newEvent instanceof com.google.gerrit.server.events.CommitReceivedEvent) {
-      CommitReceivedEvent event = (CommitReceivedEvent) newEvent;
-      changeEventInfo.setProjectName(event.project.getName());
-      changeEventInfo.setBranchName(new Branch.NameKey(event.project.getNameKey(), completeRef(event.refName)));
-    } else if (newEvent instanceof com.google.gerrit.server.events.PatchSetCreatedEvent) {
-      changeEventInfo.setChangeAttribute(((PatchSetCreatedEvent) newEvent).change.get());
+
+    //When we call a setter on the ChangeEventInfo instance, it sets the member value of
+    //supported to true. There are four different categories of supported events below, namely
+    //PatchSetEvents, ChangeEvents, RefEvents and ProjectEvents.
+
+    //PatchSetEvents and ChangeEvents. Note a PatchSetEvent is a subclass of a ChangeEvent
+    if(newEvent instanceof PatchSetEvent || newEvent instanceof ChangeEvent){
+      changeEventInfo.setChangeAttribute(((ChangeEvent) newEvent).change.get());
+      //RefEvents
+    } else if (newEvent instanceof RefEvent) {
+      RefEvent refEvent = (RefEvent) newEvent;
+      changeEventInfo.setProjectName(refEvent.getProjectNameKey().get());
+      changeEventInfo.setBranchName(new Branch.NameKey(refEvent.getProjectNameKey().get(), completeRef(refEvent.getRefName())));
+      //RefUpdatedEvent is a RefEvent but has a specific check on if the refUpdate field is null, therefore cannot
+      // be grouped with the rest of the RefEvents
     } else if (newEvent instanceof com.google.gerrit.server.events.RefUpdatedEvent) {
       RefUpdatedEvent event = (RefUpdatedEvent) newEvent;
       if (event.refUpdate != null) {
@@ -462,12 +430,10 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
         logger.atInfo().log("RE %s is not supported, project name or refupdate is null!", newEvent.getClass().getName());
         changeEventInfo.supported = false;
       }
-    } else if (newEvent instanceof com.google.gerrit.server.events.ReviewerAddedEvent) {
-      changeEventInfo.setChangeAttribute(((ReviewerAddedEvent) newEvent).change.get());
-    } else if (newEvent instanceof com.google.gerrit.server.events.TopicChangedEvent) {
-      changeEventInfo.setChangeAttribute(((TopicChangedEvent) newEvent).change.get());
-    } else if (newEvent instanceof com.google.gerrit.server.events.ProjectCreatedEvent) {
-      changeEventInfo.setProjectName(((ProjectCreatedEvent) newEvent).projectName);
+      //ProjectEvents
+    } else if (newEvent instanceof ProjectEvent) {
+      ProjectEvent projectEvent = (ProjectEvent) newEvent;
+      changeEventInfo.setProjectName(projectEvent.getProjectNameKey().get());
     } else {
       logger.atInfo().log("RE %s is not supported!", newEvent.getClass().getName());
       changeEventInfo.supported = false;
@@ -491,9 +457,11 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
     Class<? extends Event> actualClass = changeEvent.getClass();
 
     try {
-      Constructor<? extends Event> constructor = actualClass.getConstructor(actualClass, String.class, boolean.class);
-      result = constructor.newInstance(changeEvent, prefix + changeEvent.getType(), true);
+      Constructor<? extends Event> constructor = actualClass.getConstructor(actualClass, String.class);
+      //Constructor prefix example: (TopicChangedEvent.class, prefix + TopicChangedEvent)
+      result = constructor.newInstance(changeEvent, prefix + changeEvent.getType());
       result.setNodeIdentity(replicatorInstance.getThisNodeIdentity());
+
     } catch (NoSuchMethodException | IllegalAccessException | InstantiationException | InvocationTargetException e) {
       // this is likely a non replicated event
       logger.atFiner().withCause(e).log(nonReplicatedEventMessage);
@@ -563,7 +531,7 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
   private static boolean readConfiguration() {
     boolean result = false;
     try {
-      Properties props = Replicator.getApplicationProperties();
+      GitMsApplicationProperties props = Replicator.getApplicationProperties();
 
       // we allow no properties to be returned when the replication is disabled in an override
       if (props == null) {
@@ -571,9 +539,9 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
       }
 
       replicatedEventsSend = true; // they must be always enabled, not dependant on GERRIT_REPLICATED_EVENTS_ENABLED_SEND
-      replicatedEventsReceive = Boolean.parseBoolean(props.getProperty(GERRIT_REPLICATED_EVENTS_ENABLED_RECEIVE, "true"));
-      replicatedEventsReplicateOriginalEvents = Boolean.parseBoolean(props.getProperty(GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL, "true"));
-      replicatedEventsReplicateDistinctEvents = Boolean.parseBoolean(props.getProperty(GERRIT_REPLICATED_EVENTS_RECEIVE_DISTINCT, "false"));
+      replicatedEventsReceive = props.getPropertyAsBoolean(GERRIT_REPLICATED_EVENTS_ENABLED_RECEIVE, "true");
+      replicatedEventsReplicateOriginalEvents = props.getPropertyAsBoolean(GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL, "true");
+      replicatedEventsReplicateDistinctEvents = props.getPropertyAsBoolean(GERRIT_REPLICATED_EVENTS_RECEIVE_DISTINCT, "false");
 
       receiveReplicatedEventsEnabled = replicatedEventsReceive || replicatedEventsReplicateOriginalEvents || replicatedEventsReplicateDistinctEvents;
       replicatedEventsEnabled = receiveReplicatedEventsEnabled || replicatedEventsSend;
@@ -585,8 +553,13 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
         logger.atInfo().log("RE Replicated events are disabled"); // This could not apppear in the log... cause the log could not yet be ready
       }
 
-      localRepublishEnabled = Boolean.parseBoolean(props.getProperty(GERRIT_REPLICATED_EVENTS_LOCAL_REPUBLISH_DISTINCT, "false"));
+      localRepublishEnabled = props.getPropertyAsBoolean(GERRIT_REPLICATED_EVENTS_LOCAL_REPUBLISH_DISTINCT, "false");
       distinctEventPrefix = props.getProperty(GERRIT_REPLICATED_EVENTS_DISTINCT_PREFIX, DEFAULT_DISTINCT_PREFIX);
+
+      //Read in a comma separated list of events that should be skipped.
+      eventSkipList = props.getPropertyAsList(GERRIT_EVENT_TYPES_TO_BE_SKIPPED, DEFAULT_GERRIT_EVENT_TYPES_TO_BE_SKIPPED);
+      //Setting all to lowercase so user doesn't have to worry about correct casing.
+      eventSkipList.replaceAll(String::toLowerCase);
 
       logger.atInfo().log("RE Replicated events: receive=%s, original=%s, distinct=%s, send=%s ",
           replicatedEventsReceive, replicatedEventsReplicateOriginalEvents, replicatedEventsReplicateDistinctEvents, replicatedEventsSend);

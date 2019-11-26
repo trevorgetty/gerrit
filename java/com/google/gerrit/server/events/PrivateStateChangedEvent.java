@@ -25,4 +25,5 @@ public class PrivateStateChangedEvent extends PatchSetEvent {
   protected PrivateStateChangedEvent(Change change) {
     super(TYPE, change);
   }
+
 }

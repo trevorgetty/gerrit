@@ -52,6 +52,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
 
+import com.wandisco.gerrit.gitms.shared.properties.GitMsApplicationProperties;
 import net.minidev.json.JSONObject;
 import net.minidev.json.JSONValue;
 
@@ -113,7 +114,7 @@ public class Replicator implements Runnable {
   private static Boolean replicationDisabled = null;
   public static boolean internalLogEnabled = false;
 
-  private static Properties applicationProperties = null;
+  private static GitMsApplicationProperties applicationProperties = null;
   private static final Object applicationPropertiesLocking = new Object();
 
   private static volatile Replicator instance = null;
@@ -917,7 +918,7 @@ public class Replicator implements Runnable {
    * @return
    * @throws IOException
    */
-  public static Properties getApplicationProperties() throws IOException {
+  public static GitMsApplicationProperties getApplicationProperties() throws IOException {
     if (applicationProperties != null) {
       return applicationProperties;
     }
@@ -925,20 +926,6 @@ public class Replicator implements Runnable {
     synchronized (applicationPropertiesLocking) {
       if (applicationProperties != null) {
         return applicationProperties;
-      }
-
-      // Used for internal integration tests at WANdisco
-      String gitConfigLoc = System.getProperty("GIT_CONFIG", System.getenv("GIT_CONFIG"));
-      if (Strings.isNullOrEmpty(gitConfigLoc) && System.getenv("GIT_CONFIG") == null) {
-        gitConfigLoc = System.getProperty("user.home") + "/.gitconfig";
-      }
-
-      FileBasedConfig config = new FileBasedConfig(new File(gitConfigLoc), FS.DETECTED);
-      try {
-        config.load();
-      } catch (ConfigInvalidException e) {
-        // Configuration file is not in the valid format, throw exception back.
-        throw new IOException(e);
       }
 
       // N.B. This is for DEBUG use only.
@@ -950,64 +937,21 @@ public class Replicator implements Runnable {
         internalLogFile = new File(new File(DEFAULT_BASE_DIR), "replEvents.log"); // used for debug
       }
 
-      File fileAppProps;
-      try {
-        String appProperties = config.getString("core", null, "gitmsconfig");
-
-        if (Strings.isNullOrEmpty(appProperties)) {
-          // there is no application properties location, just before we blow up, check a debug setting
-          // which allows the gerrit instance to behave like a normal instance so we can run all the default gerrit
-          // tests like a vanilla system could.
-          if (isReplicationDisabled()) {
-            logger.atWarning().log("GitMS integration has been disabled allowing Gerrit to work non-replicated.");
-            return null;
-          }
-
-          throw new NullPointerException("Missing required core.gitmsconfig configuration value.");
-        }
-        fileAppProps = new File(appProperties);
-        // GER-662 NPE thrown if GerritMS is started without a reference to a valid GitMS application.properties file.
-      } catch (NullPointerException exception) {
-        throw new FileNotFoundException("GerritMS cannot continue in replication mode without a valid GitMS application.properties file referenced in its .gitconfig file.");
-      }
-
-      // If application properties can't be found or read using the gitconfig setting,
-      // try default location 1. "/opt/wandisco/xxx
-      if (!fileAppProps.exists() || !fileAppProps.canRead()) {
-        logger.atWarning().log("Could not find/read (1) %s", fileAppProps);
-        fileAppProps = new File(DEFAULT_MS_APPLICATION_PROPERTIES, "application.properties");
-      }
-
-      // if it still can't be found or read, get out.
-      if (!fileAppProps.exists() || !fileAppProps.canRead()) {
-        logger.atWarning().log("Could not find/read (2) %s ", fileAppProps);
-        throw new FileNotFoundException("GerritMS cannot continue in replication mode without a valid GitMS application.properties file.");
-      }
-
-      Properties props = new Properties();
-      try (FileInputStream propsFile = new FileInputStream(fileAppProps)) {
-        props.load(propsFile);
-
-        // if it loaded we can now assign to the real app properties
-        applicationProperties = props;
-        return applicationProperties;
-      } catch (IOException e) {
-        logger.atSevere().withCause(e).log("Failed to load application properties from location: ", fileAppProps);
-        throw new FileNotFoundException("GerritMS cannot continue in replication mode without a valid GitMS application.properties file.");
-      }
+      applicationProperties = new GitMsApplicationProperties();
+      return applicationProperties;
     }
   }
 
   public static boolean readConfiguration() {
     boolean result = false;
     try {
-      Properties props = getApplicationProperties();
+      GitMsApplicationProperties props = getApplicationProperties();
       if (props == null) {
         // replication is probably disabled otherwise it would have thrown an exception get out.
         return false;
       }
 
-      syncFiles = Boolean.parseBoolean(props.getProperty(GERRIT_REPLICATED_EVENTS_ENABLED_SYNC_FILES, "false"));
+      syncFiles = props.getPropertyAsBoolean(GERRIT_REPLICATED_EVENTS_ENABLED_SYNC_FILES, "false");
 
       // The user can set a different path specific for the replicated events. If it's not there
       // then the usual GERRIT_EVENT_BASEPATH will be taken.
@@ -1020,7 +964,7 @@ public class Replicator implements Runnable {
         defaultBaseDir += File.separator + REPLICATED_EVENTS_DIRECTORY_NAME;
       }
 
-      incomingEventsAreGZipped = Boolean.parseBoolean(props.getProperty(GERRIT_REPLICATED_EVENTS_INCOMING_ARE_GZIPPED, "false"));
+      incomingEventsAreGZipped = props.getPropertyAsBoolean(GERRIT_REPLICATED_EVENTS_INCOMING_ARE_GZIPPED, "false");
 
       //Getting the node identity that will be used to determine the originating node for each instance.
       thisNodeIdentity = props.getProperty("node.id");
