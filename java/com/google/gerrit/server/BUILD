@@ -123,6 +123,7 @@ java_library(
         "//lib/ow2:ow2-asm-tree",
         "//lib/ow2:ow2-asm-util",
         "//lib/prolog:runtime",
+        "//lib/wandisco:gerrit-gitms-interface",
         "//proto:cache_java_proto",
     ],
 )

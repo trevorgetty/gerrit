@@ -43,7 +43,6 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
-import java.util.Properties;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.Map;
 import java.util.HashMap;
@@ -51,15 +50,10 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
-
 import com.wandisco.gerrit.gitms.shared.properties.GitMsApplicationProperties;
 import net.minidev.json.JSONObject;
 import net.minidev.json.JSONValue;
-
-import org.eclipse.jgit.errors.ConfigInvalidException;
 import org.eclipse.jgit.lib.Config;
-import org.eclipse.jgit.storage.file.FileBasedConfig;
-import org.eclipse.jgit.util.FS;
 
 import static com.google.gerrit.server.replication.ReplicationConstants.*;
 import static java.nio.charset.StandardCharsets.UTF_8;

@@ -869,14 +869,14 @@ maven_jar(
 #MOCKITO
 
 maven_jar(
-        name = "mockito",
-        artifact = "org.mockito:mockito-core:2.28.2",
-        sha1 = "91110215a8cb9b77a46e045ee758f77d79167cc0",
-        deps = [
-                    "@byte-buddy//jar",
-                    "@byte-buddy-agent//jar",
-                    "@objenesis-2//jar",
-                ],
+    name = "mockito",
+    artifact = "org.mockito:mockito-core:2.28.2",
+    sha1 = "91110215a8cb9b77a46e045ee758f77d79167cc0",
+    deps = [
+        "@byte-buddy-agent//jar",
+        "@byte-buddy//jar",
+        "@objenesis-2//jar",
+    ],
 )
 
 BYTE_BUDDY_VERSION = "1.9.10"
@@ -1249,8 +1249,7 @@ maven_jar(
 )
 
 # WANdisco maven assets
-# TREV TODO consider do we need to download this - test this for running the gerrit-console-api jar direct from IDE run command to verify!!
-_GERRIT_GITMS_VERSION = "1.1.0.1-TC1"
+_GERRIT_GITMS_VERSION = "1.1.0.1-TC2"
 
 maven_jar(
     name = "gerrit-gitms-interface",
