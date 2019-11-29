@@ -51,7 +51,7 @@ public final class ReplicationConstants {
    * instead uses System.getProperty(x, System.getenv(x)).
    */
   public static final String GERRITMS_INTERNAL_LOGGING = "gerritms_internal_logging";
-  public static final String REPLICATION_DISABLED = "replication_disabled";
+  public static final String REPLICATION_DISABLED = "gerritms_replication_disabled";
 
   /**********************************
    * Replicated event directories

@@ -1023,8 +1023,16 @@ public class Replicator implements Runnable {
    * @return
    */
   private static boolean getOverrideBehaviour(String overrideName) {
-    return Boolean.parseBoolean(
-        System.getProperty(overrideName, System.getenv(overrideName)));
+
+    // work out system env value first... Note as env is case sensitive and properties usually lower case, we will
+    // use what the client has passed in, but also request toUpper for the environment option JIC.
+    // e.g. 'replication_disabled' the property would be 'REPLICATION_DISABLED' the environment var.
+    String env = System.getenv(overrideName);
+    if ( Strings.isNullOrEmpty(env)){
+      // retry with uppercase
+      env = System.getenv(overrideName.toUpperCase());
+    }
+    return Boolean.parseBoolean(System.getProperty(overrideName, env));
   }
 
   /**
