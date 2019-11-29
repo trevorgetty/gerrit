@@ -22,7 +22,7 @@ GERRIT_ROOT= $(mkfile_path)
 
 # Works on OSX.
 VERSION := $(shell $(GERRIT_ROOT)/build-tools/get_version_number.sh $(GERRIT_ROOT))
-GITMS_VERSION := GITMS_VERSION
+GITMS_VERSION := ${GITMS_VERSION}
 GERRIT_BAZEL_OUT := $(GERRIT_ROOT)/bazel-bin
 RELEASE_WAR_PATH := $(GERRIT_BAZEL_OUT)
 CONSOLE_API_JAR_PATH := $(GERRIT_BAZEL_OUT)/gerrit-console-api
@@ -46,18 +46,22 @@ GERRIT_TEST_LOCATION=$(JENKINS_TMP_TEST_LOCATION)
 BUILD_USER=$USER
 git_username=Testme
 
-all: display_version fast-assembly installer run-integration-tests
+all: display_version clean fast-assembly installer run-integration-tests
+.PHONY:all
 
 all-skip-tests: display_version fast-assembly installer skip-tests
+.PHONY:all-skip-tests
 
 display_version:
 	@echo "About to use the following version information."
 	@./tools/workspace-status.sh
+.PHONY:display_version
 
 # Do an assembly without doing unit tests, of all our builds
 #
 fast-assembly: fast-assembly-gerrit fast-assembly-console
-
+	@echo "Finished building assemblies"
+.PHONY:fast-assembly
 #
 # Build just gerritMS
 #
@@ -66,7 +70,7 @@ fast-assembly-gerrit:
 	@echo "Building GerritMS"
 	bazelisk build release
 	@echo "\n************ Compile Gerrit Finished **************"
-
+.PHONY:fast-assembly-gerrit
 #
 # Build just the console-api
 #
@@ -75,6 +79,7 @@ fast-assembly-console:
 	@echo "Building console-api"
 	bazelisk build //gerrit-console-api:console-api
 	@echo "\n************ Compile Console-API Finished **************"
+.PHONY:fast-assembly-console
 
 clean: | $(JENKINS_DIRECTORY)
 	@echo "\n************ Clean Phase Starting **************"
@@ -83,6 +88,7 @@ clean: | $(JENKINS_DIRECTORY)
 	rm -rf $(GERRIT_TEST_LOCATION)/jgit-update-service
 	rm -f $(GERRIT_ROOT)/env.properties
 	@echo "\n************ Clean Phase Finished **************"
+.PHONY:clean
 
 check_build_assets:
 	# check that our release.war and console-api.jar items have been built and are available
@@ -95,9 +101,9 @@ check_build_assets:
 	@echo "CONSOLE_API_JAR_PATH=$(CONSOLE_API_JAR_PATH)" >> $(GERRIT_ROOT)/env.properties
 	@echo "Env.properties is saved to: $(GERRIT_ROOT)/env.properties)"
 
-	@[ -f $(RELEASE_WAR_PATH)/release.war ] && echo release.war exists || ( echo releaes.war not exists && exit 1;)
+	@[ -f $(RELEASE_WAR_PATH)/release.war ] && echo release.war exists || ( echo release.war not exists && exit 1;)
 	@[ -f $(CONSOLE_API_JAR_PATH)/console-api.jar ] && echo console-api.jar exists || ( echo console-api.jar not exists && exit 1;)
-
+.PHONY:check_build_assets
 
 installer: check_build_assets
 	@echo "\n************ Installer Phase Starting **************"
@@ -106,10 +112,11 @@ installer: check_build_assets
 	$(GERRIT_ROOT)/gerrit-installer/create_installer.sh $(RELEASE_WAR_PATH)/release.war $(CONSOLE_API_JAR_PATH)/console-api.jar
 
 	@echo "\n************ Installer Phase Finished **************"
-
+.PHONY:installer
 
 skip-tests:
 	@echo "Skipping integration tests."
+.PHONY:skip-tests
 
 # Target used to check if the jenkins tmp directory exists, and if not to use
 # /tmp on a users dev box.
@@ -126,18 +133,26 @@ run-integration-tests: check_build_assets | $(JENKINS_DIRECTORY)
 	@echo "\n************ Integration Tests Starting **************"
 	@echo "About to run integration tests -> resetting environment"
 
+	@echo "Integration test location will be in: $(GERRIT_TEST_LOCATION)"
 	@echo "Release war path in makefile is: $(RELEASE_WAR_PATH)"
+	@echo "ConsoleApi jar path in makefile is: $(CONSOLE_API_JAR_PATH)"
+	@echo "GITMS_VERSION is: $(GITMS_VERSION)"
+
+	$(if $(GITMS_VERSION),,$(error GITMS_VERSION is not set))
+
 	./build-tools/run-integration-tests.sh $(RELEASE_WAR_PATH) $(GERRIT_TEST_LOCATION) $(CONSOLE_API_JAR_PATH) $(GITMS_VERSION)
 
 	@echo "\n************ Integration Tests Finished **************"
+.PHONY:run-integration-tests
 
 deploy: deploy-console deploy-gerrit
+.PHONY:deploy
 
 deploy-gerrit:
 	@echo "\n************ Deploy GerritMS Starting **************"
 	@echo "TODO: For now skipping the deploy of GerritMS to artifactory."
 	@echo "\n************ Deploy  GerritMS Finished **************"
-
+.PHONY:deploy-gerrit
 
 deploy-console:
 	@echo "\n************ Deploy Console-API Phase Starting **************"
@@ -154,6 +169,7 @@ deploy-console:
 	-DrepositoryId=releases \
 	-Durl=http://artifacts.wandisco.com:8081/artifactory/libs-release-local
 	@echo "\n************ Deploy Console-API Phase Finished **************"
+.PHONY:deploy-console
 
 help:
 	@echo
@@ -173,4 +189,6 @@ help:
 	@echo "   make deploy-gerrit                -> will deploy the installer package of GerritMS"
 	@echo "   make deploy-console               -> will deploy the installer package of GerritMS Console API"
 	@echo "   make help                         -> Display available targets"
+.PHONY:help
+
 

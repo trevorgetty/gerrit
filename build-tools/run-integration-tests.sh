@@ -56,17 +56,32 @@ echo Here is the new gituser: $git_username
 if [ -d $GERRIT_TEST_LOCATION/jgit-update-service/.git ]; then
   # directory is here already, run a pull instead.
   cd $GERRIT_TEST_LOCATION/jgit-update-service
-  git pull
+  git pull || {
+    echo "Failed to pull the and update GitMS branch"
+    exit 1;
+  }
 else
   # clone a fresh repo
-  git clone --branch "$GITMS_VERSION" --depth 1 ssh://$git_username@gerrit-uk.wandisco.com:29418/jgit-update-service $GERRIT_TEST_LOCATION/jgit-update-service
-  cd $GERRIT_TEST_LOCATION/jgit-update-service
+  git clone --branch "$GITMS_VERSION" --depth 1 ssh://$git_username@gerrit-uk.wandisco.com:29418/jgit-update-service $GERRIT_TEST_LOCATION/jgit-update-service || {
+    echo "Failed to clone the correct branch of GitMS dictated by GITMS_VERSION: $GITMS_VERSION"
+    exit 1;
+  }
+  cd $GERRIT_TEST_LOCATION/jgit-update-service || {
+    echo "Failed to change location to the GitMS test site."
+    exit 1;
+  }
 fi
 
 # Copy over the gerritMS build assets.  Really we should use the real installer package, but this is what it uses
 # for now.....
-cp -a $RELEASE_WAR_PATH/release.war $GERRIT_TEST_LOCATION/jgit-update-service/gerrit.war
-cp -a $CONSOLE_API_JAR_PATH/console-api.jar $GERRIT_TEST_LOCATION/jgit-update-service/console-api.jar
+cp -a "$RELEASE_WAR_PATH/release.war" "$GERRIT_TEST_LOCATION/jgit-update-service/gerrit.war" || {
+  echo "Failed to copy release.war - exiting."
+  exit 1;
+}
+cp -a "$CONSOLE_API_JAR_PATH/console-api.jar" "$GERRIT_TEST_LOCATION/jgit-update-service/console-api.jar" || {
+  echo "Failed to copy console-api - exiting."
+  exit 1;
+}
 
 #MySQL Setup
 echo "About to update the local mysql instance, to allow our testing user access"
@@ -77,7 +92,11 @@ mysql -uroot -e "CREATE USER 'jenkins'@'localhost' IDENTIFIED BY 'password';" ||
 echo "Testing environment cloned, and configured -> start test run."
 
 # Move to the testing directory and start using its commands.
-cd $GERRIT_TEST_LOCATION/jgit-update-service
+cd $GERRIT_TEST_LOCATION/jgit-update-service || {
+  echo "Failed to move into test location."
+  exit 1;
+}
+
 make clean fast-assembly
 
 #echo "Starting integration tests"
