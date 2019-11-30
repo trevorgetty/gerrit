@@ -24,8 +24,8 @@ GERRIT_ROOT= $(mkfile_path)
 VERSION := $(shell $(GERRIT_ROOT)/build-tools/get_version_number.sh $(GERRIT_ROOT))
 GITMS_VERSION := ${GITMS_VERSION}
 GERRIT_BAZEL_OUT := $(GERRIT_ROOT)/bazel-bin
-RELEASE_WAR_PATH := $(GERRIT_BAZEL_OUT)
-CONSOLE_API_JAR_PATH := $(GERRIT_BAZEL_OUT)/gerrit-console-api
+RELEASE_WAR_PATH := $(GERRIT_BAZEL_OUT)/release.war
+CONSOLE_API_JAR_PATH := $(GERRIT_BAZEL_OUT)/gerrit-console-api/console-api.jar
 
 CONSOLE_ARTIFACTID   := gerrit-console-api
 CONSOLE_GROUPID := com.google.gerrit
@@ -42,7 +42,13 @@ SKIP_TESTS :=
 JENKINS_DIRECTORY := /var/lib/jenkins
 JENKINS_TMP_TEST_LOCATION := $(JENKINS_DIRECTORY)/tmp
 DEV_BOX_TMP_TEST_LOCATION := /tmp/builds/gerritms
-GERRIT_TEST_LOCATION=$(JENKINS_TMP_TEST_LOCATION)
+
+# Gerrit test location can be override by env option or makefile arg, e.g.
+# By direct arg:
+#		make GERRIT_TEST_LOCATION=/tmp
+# By environment:
+#		GERRIT_TEST_LOCATION=/tmp2 make
+
 BUILD_USER=$USER
 git_username=Testme
 
@@ -81,7 +87,7 @@ fast-assembly-console:
 	@echo "\n************ Compile Console-API Finished **************"
 .PHONY:fast-assembly-console
 
-clean: | $(JENKINS_DIRECTORY)
+clean: | $(testing_location)
 	@echo "\n************ Clean Phase Starting **************"
 	bazelisk clean
 	rm -rf $(GERRIT_BAZEL_OUT)
@@ -89,6 +95,20 @@ clean: | $(JENKINS_DIRECTORY)
 	rm -f $(GERRIT_ROOT)/env.properties
 	@echo "\n************ Clean Phase Finished **************"
 .PHONY:clean
+
+setup_environment: | $(testing_location)
+
+	@echo "\n************ Setup environment - starting *********"
+	@echo "Running environmental scripts from: $(GERRIT_TEST_LOCATION)"
+
+	$(if $(GERRIT_TEST_LOCATION),,$(error GERRIT_TEST_LOCATION is not set))
+
+	$(GERRIT_ROOT)/build-tools/setup-environment.sh
+
+	@echo "\n************ Setup environment - finished *********"
+
+.PHONY:setup_environment
+
 
 check_build_assets:
 	# check that our release.war and console-api.jar items have been built and are available
@@ -101,15 +121,15 @@ check_build_assets:
 	@echo "CONSOLE_API_JAR_PATH=$(CONSOLE_API_JAR_PATH)" >> $(GERRIT_ROOT)/env.properties
 	@echo "Env.properties is saved to: $(GERRIT_ROOT)/env.properties)"
 
-	@[ -f $(RELEASE_WAR_PATH)/release.war ] && echo release.war exists || ( echo release.war not exists && exit 1;)
-	@[ -f $(CONSOLE_API_JAR_PATH)/console-api.jar ] && echo console-api.jar exists || ( echo console-api.jar not exists && exit 1;)
+	@[ -f $(RELEASE_WAR_PATH) ] && echo release.war exists || ( echo release.war not exists && exit 1;)
+	@[ -f $(CONSOLE_API_JAR_PATH) ] && echo console-api.jar exists || ( echo console-api.jar not exists && exit 1;)
 .PHONY:check_build_assets
 
 installer: check_build_assets
 	@echo "\n************ Installer Phase Starting **************"
 
 	@echo "Building Gerrit Installer..."
-	$(GERRIT_ROOT)/gerrit-installer/create_installer.sh $(RELEASE_WAR_PATH)/release.war $(CONSOLE_API_JAR_PATH)/console-api.jar
+	$(GERRIT_ROOT)/gerrit-installer/create_installer.sh $(RELEASE_WAR_PATH) $(CONSOLE_API_JAR_PATH)
 
 	@echo "\n************ Installer Phase Finished **************"
 .PHONY:installer
@@ -120,16 +140,14 @@ skip-tests:
 
 # Target used to check if the jenkins tmp directory exists, and if not to use
 # /tmp on a users dev box.
-$(JENKINS_DIRECTORY):
+testing_location:
 
-	@echo "Jenkins directory does not exist, fallback to /tmp on dev boxes"
-	$(eval GERRIT_TEST_LOCATION = $(DEV_BOX_TMP_TEST_LOCATION))
+	./build-tools/setup-environment.sh
+	@echo "Testing location for temp assets is now: $GERRIT_TEST_LOCATION"
 
-	@echo Test directory is now: $(GERRIT_TEST_LOCATION)
+.PHONY:testing_location
 
-	mkdir -p $(GERRIT_TEST_LOCATION)
-
-run-integration-tests: check_build_assets | $(JENKINS_DIRECTORY)
+run-integration-tests: check_build_assets | $(testing_location)
 	@echo "\n************ Integration Tests Starting **************"
 	@echo "About to run integration tests -> resetting environment"
 
@@ -137,6 +155,7 @@ run-integration-tests: check_build_assets | $(JENKINS_DIRECTORY)
 	@echo "Release war path in makefile is: $(RELEASE_WAR_PATH)"
 	@echo "ConsoleApi jar path in makefile is: $(CONSOLE_API_JAR_PATH)"
 	@echo "GITMS_VERSION is: $(GITMS_VERSION)"
+
 
 	$(if $(GITMS_VERSION),,$(error GITMS_VERSION is not set))
 
@@ -151,7 +170,13 @@ deploy: deploy-console deploy-gerrit
 deploy-gerrit:
 	@echo "\n************ Deploy GerritMS Starting **************"
 	@echo "TODO: For now skipping the deploy of GerritMS to artifactory."
+	@echo "Consider looking at deploying these assets though..."
+
+	./build-tools/list_asset_locations.sh
+
+	@echo
 	@echo "\n************ Deploy  GerritMS Finished **************"
+
 .PHONY:deploy-gerrit
 
 deploy-console:
@@ -165,7 +190,7 @@ deploy-console:
 	-DartifactId=$(CONSOLE_ARTIFACTID) \
 	-Dversion="$(VERSION)" \
 	-Dpackaging=jar \
-	-Dfile=$(CONSOLE_API_JAR_PATH)/console-api.jar \
+	-Dfile=$(CONSOLE_API_JAR_PATH) \
 	-DrepositoryId=releases \
 	-Durl=http://artifacts.wandisco.com:8081/artifactory/libs-release-local
 	@echo "\n************ Deploy Console-API Phase Finished **************"
