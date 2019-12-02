@@ -2,12 +2,34 @@
 
 declare SCRIPT_DIR=`dirname "$BASH_SOURCE"`
 declare GERRIT_REPO_ROOT=$(realpath "$SCRIPT_DIR/../")
-declare FINAL_ASSETS_PATH="$GERRIT_REPO_ROOT/bazel-bin"
+declare ASSETS_PATH="$GERRIT_REPO_ROOT/bazel-bin"
 declare ENV_PROPERTIES_FILE="$GERRIT_REPO_ROOT/env.properties"
+declare WORKSPACE_PATH=${1}
 declare -r TRUE="true"
 declare -r FALSE="false"
+declare WORKSPACE_PATH_LEN
 
 declare ASSETS_FOUND=""
+
+if [[ -z $WORKSPACE_PATH ]]; then
+  # default to be gerrit repo root for the workspace location.
+  echo "Defaulting workspace to gerrit repository root."
+  WORKSPACE_PATH=$GERRIT_REPO_ROOT
+fi
+
+WORKSPACE_PATH_LEN=${#WORKSPACE_PATH}
+echo "WORKSPACE_PATH: $WORKSPACE_PATH"
+
+# Function to simply add the asset to a list of assets for jenkins to consume.
+# Currently it requires a command seperated list.
+function addAssetToList() {
+  echo "adding asset relative path: $suffixLocation"
+  if [[ -z $ASSETS_FOUND ]]; then
+    ASSETS_FOUND="$suffixLocation"
+  else
+    ASSETS_FOUND="$ASSETS_FOUND,$suffixLocation"
+  fi
+}
 
 # Function checks to see if a file (asset) exists and if it does it records it in the list
 # of items to deploy.
@@ -24,12 +46,10 @@ function check_for_asset(){
 
   if [[ -f "$assetLocation" ]]; then
     echo "Found asset: $assetLocation"
-  # Get length of gerrit project root path inc end slash, we will substring using this len.
-  local projectRootLen=${#GERRIT_REPO_ROOT}
+
   # Trim off gerrit_root, as the plugins only use relative paths.
-    local suffixLocation=${assetLocation:$projectRootLen+1}
-    echo "adding asset relative path: $suffixLocation"
-    ASSETS_FOUND="$ASSETS_FOUND $suffixLocation"
+    local suffixLocation=${assetLocation:$WORKSPACE_PATH_LEN+1}
+    addAssetToList "$suffixLocation"
   else
 	  echo "Unable to locate asset: $assetLocation"
 
@@ -41,11 +61,11 @@ function check_for_asset(){
   fi
 }
 
-check_for_asset "$FINAL_ASSETS_PATH/plugins/delete-project/delete-project.jar" $TRUE
+check_for_asset "$ASSETS_PATH/plugins/delete-project/delete-project.jar" $TRUE
 # TODO: for moment during 2.16 dev lfs is optional, put back to required.
-check_for_asset "$FINAL_ASSETS_PATH/plugins/lfs/lfs.jar" $FALSE
-check_for_asset "$FINAL_ASSETS_PATH/release.war" $TRUE
-check_for_asset "$FINAL_ASSETS_PATH/gerrit-console-api/console-api.jar" $TRUE
+check_for_asset "$ASSETS_PATH/plugins/lfs/lfs.jar" $FALSE
+check_for_asset "$ASSETS_PATH/release.war" $TRUE
+check_for_asset "$ASSETS_PATH/gerrit-console-api/console-api.jar" $TRUE
 check_for_asset "$GERRIT_REPO_ROOT/target/gerritms-installer.sh" $TRUE
 
 # Export all the items / assets now.
