@@ -21,9 +21,15 @@ function check_for_asset(){
   local assetLocation=$1
   local isRequiredAsset=${2:-$FALSE}
 
+
   if [[ -f "$assetLocation" ]]; then
     echo "Found asset: $assetLocation"
-    ASSETS_FOUND="$ASSETS_FOUND $assetLocation"
+  # Get length of gerrit project root path inc end slash, we will substring using this len.
+  local projectRootLen=${#GERRIT_REPO_ROOT}
+  # Trim off gerrit_root, as the plugins only use relative paths.
+    local suffixLocation=${assetLocation:$projectRootLen+1}
+    echo "adding asset relative path: $suffixLocation"
+    ASSETS_FOUND="$ASSETS_FOUND $suffixLocation"
   else
 	  echo "Unable to locate asset: $assetLocation"
 
@@ -44,7 +50,7 @@ check_for_asset "$GERRIT_REPO_ROOT/target/gerritms-installer.sh" $TRUE
 
 # Export all the items / assets now.
 export ASSETS_FOUND
-echo "ASSETS_FOUND: $ASSETS_FOUND"
+echo "Recorded all ASSETS_FOUND: $ASSETS_FOUND"
 
 # Finally write the items to be deployed into the environment information to be supplied
 # out of this shell and to the artifactory plugin.
