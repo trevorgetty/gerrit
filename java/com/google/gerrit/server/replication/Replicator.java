@@ -201,6 +201,11 @@ public class Replicator implements Runnable {
       synchronized (replicatorLock) {
         // using double checked locking JIC somone created while we waited on the lock!
         if (instance == null) {
+          if (isReplicationDisabled()){
+            logger.atInfo().log("Ignoring request for Replicator Instance - replication is disabled." );
+            return null;
+          }
+
           boolean configOk = readConfiguration();
           logger.atInfo().log("RE Configuration read: ok? %s", configOk);
 
