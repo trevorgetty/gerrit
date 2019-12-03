@@ -20,6 +20,10 @@ current_dir := $PWD
 # Gerrit repo root can be set to the mkfile path location
 GERRIT_ROOT= $(mkfile_path)
 
+# JENKINS_WORKSPACE is the location where the job puts work by default, and we need to have assets paths relative
+# to the workspace in some occasions.
+JENKINS_WORKSPACE ?= $(GERRIT_ROOT)
+
 # Works on OSX.
 VERSION := $(shell $(GERRIT_ROOT)/build-tools/get_version_number.sh $(GERRIT_ROOT))
 GITMS_VERSION := ${GITMS_VERSION}
@@ -81,20 +85,32 @@ fast-assembly-gerrit:
 # Build just the console-api
 #
 fast-assembly-console:
-	@echo "\n************ Compile Console-API Starting **************"
+	@echo "************ Compile Console-API Starting **************"
 	@echo "Building console-api"
 	bazelisk build //gerrit-console-api:console-api
-	@echo "\n************ Compile Console-API Finished **************"
+	@echo "************ Compile Console-API Finished **************"
 .PHONY:fast-assembly-console
 
 clean: | $(testing_location)
-	@echo "\n************ Clean Phase Starting **************"
+	@echo "************ Clean Phase Starting **************"
 	bazelisk clean
 	rm -rf $(GERRIT_BAZEL_OUT)
 	rm -rf $(GERRIT_TEST_LOCATION)/jgit-update-service
 	rm -f $(GERRIT_ROOT)/env.properties
-	@echo "\n************ Clean Phase Finished **************"
+	@echo "************ Clean Phase Finished **************"
 .PHONY:clean
+
+list-assets:
+	@echo "************ List Assets Starting **************"
+	@echo  "Jenkins workspace is: $(JENKINS_WORKSPACE)"
+
+	./build-tools/list_asset_locations.sh $(JENKINS_WORKSPACE) true
+
+	#$(eval ASSETS_FOUND=$(./build-tools/list_asset_locations.sh $(JENKINS_WORKSPACE) "false"))
+	#@echo "ASSETS_FOUND: $(ASSETS_FOUND)"
+
+	@echo "************ List Assets Finished **************"
+.PHONY:list-assets
 
 setup_environment: | $(testing_location)
 
@@ -171,9 +187,8 @@ deploy-gerrit:
 	@echo "\n************ Deploy GerritMS Starting **************"
 	@echo "TODO: For now skipping the deploy of GerritMS to artifactory."
 	@echo "Consider looking at deploying these assets though..."
-
-	./build-tools/list_asset_locations.sh
-
+	@echo
+	@./build-tools/list_asset_locations.sh $(JENKINS_WORKSPACE) false
 	@echo
 	@echo "\n************ Deploy  GerritMS Finished **************"
 
@@ -209,7 +224,7 @@ help:
 	@echo "   make clean fast-assembly installer  -> will build the packages and installer asset"
 	@echo "   make installer                    -> will build the installer asset using already built packages"
 	@echo "   make run-integration-tests        -> will run the integration tests, against the already built packages"
-
+	@echo "   make list-assets					-> Will list all assets from a built project, and return them in env var: ASSETS_FOUND"
 	@echo "   make deploy                       -> will deploy the installer packages of GerritMS and ConsoleAPI to artifactory"
 	@echo "   make deploy-gerrit                -> will deploy the installer package of GerritMS"
 	@echo "   make deploy-console               -> will deploy the installer package of GerritMS Console API"

@@ -4,7 +4,7 @@ _JGIT_VANILLA_VERS = "5.1.12"
 _DOC_VERS = _JGIT_VANILLA_VERS  # Set to _JGIT_VANILA_VERS unless using a snapshot
 
 # Defines the WD postfix
-_POSTFIX_WD = "-WDv1-TC1"
+_POSTFIX_WD = "-WDv1-TC2"
 
 # Defines the version of jgit, even the replicated version of jgit, should be no external use of the vanilla version.
 JGIT_VERS = _JGIT_VANILLA_VERS + _POSTFIX_WD
@@ -21,25 +21,24 @@ def jgit_repos():
     if LOCAL_JGIT_REPO:
         native.local_repository(
             name = "jgit",
-            path = LOCAL_JGIT_REPO
+            path = LOCAL_JGIT_REPO,
         )
         jgit_maven_repos_dev()
     else:
         jgit_maven_repos()
-
 
 def jgit_maven_repos_dev():
     # Transitive dependencies from JGit's WORKSPACE.
     maven_jar(
         name = "hamcrest-library",
         artifact = "org.hamcrest:hamcrest-library:1.3",
-        sha1 = "4785a3c21320980282f9f33d0d1264a69040538f"
+        sha1 = "4785a3c21320980282f9f33d0d1264a69040538f",
     )
 
     maven_jar(
         name = "jzlib",
         artifact = "com.jcraft:jzlib:1.1.1",
-        sha1 = "a1551373315ffc2f96130a0e5704f74e151777ba"
+        sha1 = "a1551373315ffc2f96130a0e5704f74e151777ba",
     )
 
 def jgit_maven_repos():

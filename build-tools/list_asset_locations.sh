@@ -4,26 +4,41 @@ declare SCRIPT_DIR=`dirname "$BASH_SOURCE"`
 declare GERRIT_REPO_ROOT=$(realpath "$SCRIPT_DIR/../")
 declare ASSETS_PATH="$GERRIT_REPO_ROOT/bazel-bin"
 declare ENV_PROPERTIES_FILE="$GERRIT_REPO_ROOT/env.properties"
-declare WORKSPACE_PATH=${1}
 declare -r TRUE="true"
 declare -r FALSE="false"
 declare WORKSPACE_PATH_LEN
-
 declare ASSETS_FOUND=""
+
+# Obtain supplied args.
+#  list_assets_locations.sh <workspace> <debug_enabled>
+#  e.g. list_assets_locations.sh /path/xyz true
+
+declare WORKSPACE_PATH=${1}
+declare DEBUG_ENABLED=${2:$TRUE}
+
+# Only output message if DEBUG_ENABLED flag is true.
+function debug(){
+  local msg=$1
+  if [[ -z $DEBUG_ENABLED ]]; then
+    echo "$msg"
+  elif [[ "$DEBUG_ENABLED" == "$TRUE" ]]; then
+    echo "$msg"
+  fi
+}
 
 if [[ -z $WORKSPACE_PATH ]]; then
   # default to be gerrit repo root for the workspace location.
-  echo "Defaulting workspace to gerrit repository root."
+  debug "Defaulting workspace to gerrit repository root."
   WORKSPACE_PATH=$GERRIT_REPO_ROOT
 fi
 
 WORKSPACE_PATH_LEN=${#WORKSPACE_PATH}
-echo "WORKSPACE_PATH: $WORKSPACE_PATH"
+debug "WORKSPACE_PATH: $WORKSPACE_PATH"
 
 # Function to simply add the asset to a list of assets for jenkins to consume.
 # Currently it requires a command seperated list.
 function addAssetToList() {
-  echo "adding asset relative path: $suffixLocation"
+  debug "adding asset relative path: $suffixLocation"
   if [[ -z $ASSETS_FOUND ]]; then
     ASSETS_FOUND="$suffixLocation"
   else
@@ -45,13 +60,13 @@ function check_for_asset(){
 
 
   if [[ -f "$assetLocation" ]]; then
-    echo "Found asset: $assetLocation"
+    debug "Found asset: $assetLocation"
 
   # Trim off gerrit_root, as the plugins only use relative paths.
     local suffixLocation=${assetLocation:$WORKSPACE_PATH_LEN+1}
     addAssetToList "$suffixLocation"
   else
-	  echo "Unable to locate asset: $assetLocation"
+	  debug "Unable to locate asset: $assetLocation"
 
 	  # We only need to exit here hard, if the isRequiredAsset is set to true.
 	  if [[ $isRequiredAsset == $TRUE ]]; then
@@ -70,8 +85,9 @@ check_for_asset "$GERRIT_REPO_ROOT/target/gerritms-installer.sh" $TRUE
 
 # Export all the items / assets now.
 export ASSETS_FOUND
-echo "Recorded all ASSETS_FOUND: $ASSETS_FOUND"
+debug "Recorded all ASSETS_FOUND: $ASSETS_FOUND"
 
 # Finally write the items to be deployed into the environment information to be supplied
 # out of this shell and to the artifactory plugin.
+echo "$ASSETS_FOUND"
 echo "ASSETS_FOUND=$ASSETS_FOUND" >> $ENV_PROPERTIES_FILE
