@@ -21,7 +21,7 @@ function check_in_repo_root
 	  if [[ -f "$PWD/get_version_number.sh" ]]; then
 	    # Ok we are in the build directory, use the parent.
 	    GERRIT_REPO_ROOT_TMP="$PWD/../"
-	  elif [[ -f "$PWD/build/get_version_number.sh" ]]; then
+	  elif [[ -f "$PWD/build-tools/get_version_number.sh" ]]; then
 	    GERRIT_REPO_ROOT_TMP="$PWD"
 	  else
 	    # leave as current folder, and let it complain if they are off somewhere silly.
@@ -36,7 +36,7 @@ function check_in_repo_root
 	# Perform checks listed above. 
 	
 	# Start by checking the build sub directory.
-	if [[ -d "$GERRIT_REPO_ROOT_TMP/build" && "$GERRIT_REPO_ROOT_TMP/build" ]]; then
+	if [[ -d "$GERRIT_REPO_ROOT_TMP/build-tools" && "$GERRIT_REPO_ROOT_TMP/build-tools" ]]; then
 	  # Check if version file is in root.
 	  check_file_exists $GERRIT_REPO_ROOT_TMP/version.bzl
 
