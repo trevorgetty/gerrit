@@ -57,13 +57,12 @@ public class ReplicatedAccountsIndexManager implements Replicator.GerritPublisha
     originator = event;
     //Only subscribe for the instance if not already subscribed
     if(!replicatorInstance.isSubscribed(originator)) {
-      replicatorInstance.subscribeEvent(originator, instance);
+      replicatorInstance.subscribeEvent(originator, this);
     }
   }
 
-  private static ReplicatedAccountsIndexManager instance = null;
-  private static Replicator replicatorInstance = null;
-
+  // Using instance variables, to avoid contention / thread issues now this is a non-singleton class.
+  private Replicator replicatorInstance = null;
 
   public interface Factory {
 
@@ -111,6 +110,7 @@ public class ReplicatedAccountsIndexManager implements Replicator.GerritPublisha
   }
 
   public ReplicatedAccountsIndexManager() {
+    replicatorInstance = Replicator.getInstance(true);
     logger.atInfo().log("Created ReplicatedAccountsIndexManager");
   }
 
