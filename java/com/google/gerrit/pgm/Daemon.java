@@ -290,6 +290,10 @@ public class Daemon extends SiteProgram {
           });
 
       logger.atInfo().log("Gerrit Code Review %s ready", myVersion());
+
+      // Signal all waiting contexts that we are up and running
+      LifecycleManager.started();
+
       if (runId != null) {
         try {
           Files.write(runFile, (runId + "\n").getBytes(UTF_8));

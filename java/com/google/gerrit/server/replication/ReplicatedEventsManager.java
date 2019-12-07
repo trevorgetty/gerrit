@@ -75,15 +75,13 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
   private static long maxSecsToWaitForEventOnQueue;
   private static Thread eventReaderAndPublisherThread = null;
   private static File internalLogFile = null; // used for debug
-  private static String distinctEventPrefix = DEFAULT_DISTINCT_PREFIX;
   private static List<String> eventSkipList = new ArrayList<>();
   private static boolean replicatedEventsReceive = true; // receive and original are synonym
   private static boolean replicatedEventsReplicateOriginalEvents = true; // receive and original are synonym
-  private static boolean replicatedEventsReplicateDistinctEvents = false;
   private static boolean receiveReplicatedEventsEnabled = true;
   private static boolean replicatedEventsEnabled = true;
   private static boolean replicatedEventsSend = true;
-  private static boolean localRepublishEnabled = false;
+
   private static ReplicatedEventsManager instance = null;
   private static final Gson gson = new GsonBuilder()
       .registerTypeAdapter(Supplier.class, new SupplierSerializer())
@@ -102,7 +100,7 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
   private final Object replicationLock = new Object();
   private static Replicator replicatorInstance = null;
   private Config cfg;
-  private static final String nonReplicatedEventMessage = "Error while creating distinct event, this is likely a non replicated event, skipping.";
+  private static final String errorReplicatedEventMessage = "Error while trying to replicate event: %s";
 
   public static synchronized ReplicatedEventsManager hookOnListeners(EventBroker changeHookRunner, Config config) {
 
@@ -200,21 +198,6 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
       //Only offer the event to the queue if it is not a skipped event.
       if (!isEventToBeSkipped(event)) {
         offer(event);
-        if (localRepublishEnabled) {
-          try {
-            publishIncomingReplicatedEvents(makeDistinct(event, distinctEventPrefix));
-          } // Just log info level with no stack trace so we don't spam the logs for
-          // the following catch blocks
-          catch (NoSuchMethodException | IllegalAccessException | InstantiationException | InvocationTargetException e) {
-            // log out full stacktrace in debug mode, but leave rest as info, user friendly,
-            // although I hope we do not hit this any longer as we could have failed the local event somehow?
-            logger.atInfo().log("%s : %s : %s", e.getClass().getName(), e.getMessage(), nonReplicatedEventMessage);
-            logger.atFiner().withCause(e).log("publicIncomingReplicatedEvents failure details: ");
-          } catch (RuntimeException e) {
-            logger.atInfo().log("%s : %s : %s", e.getClass().getName(), e.getMessage(), nonReplicatedEventMessage);
-            logger.atFiner().withCause(e).log("publicIncomingReplicatedEvents failure details: ");
-          }
-        }
       }
     }
   };
@@ -285,8 +268,7 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
     newEvent = queue.poll(maxSecsToWaitForEventOnQueue, TimeUnit.MILLISECONDS);
     //If the newEvent is not a skipped event then we should queue the event for replication.
     if (newEvent != null && !isEventToBeSkipped(newEvent)) {
-      newEvent.setNodeIdentity(replicatorInstance.getThisNodeIdentity());
-      replicatorInstance.queueEventForReplication(new EventWrapper(newEvent, getChangeEventInfo(newEvent), distinctEventPrefix));
+      replicatorInstance.queueEventForReplication(new EventWrapper(newEvent, getChangeEventInfo(newEvent)));
       eventGot = true;
     }
     return eventGot;
@@ -313,7 +295,6 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
         }
 
         logger.atFiner().log("RE Original event: %s", originalEvent.toString());
-        originalEvent.setNodeIdentity(replicatorInstance.getThisNodeIdentity());
 
         if (replicatedEventsReplicateOriginalEvents) {
           if (!publishIncomingReplicatedEvents(originalEvent)) {
@@ -321,24 +302,24 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
             result = false;
           }
         }
-
-        if (replicatedEventsReplicateDistinctEvents) {
-          if (!publishIncomingReplicatedEvents(makeDistinct(originalEvent, newEvent.prefix))) {
-            logger.atSevere().log("RE distinct event has been lost, not supported");
-            result = false;
-          }
-        }
+//
+//        if (replicatedEventsReplicateDistinctEvents) {
+//          if (!publishIncomingReplicatedEvents(makeDistinct(originalEvent))) {
+//            logger.atSevere().log("RE distinct event has been lost, not supported");
+//            result = false;
+//          }
+//        }
 
       } catch (JsonSyntaxException e) {
         logger.atSevere().withCause(e).log("PR Could not decode json event %s", newEvent.toString());
         return result;
-      } // Just log info level with no stack trace so we don't spam the logs for
-      // the following catch blocks
-      catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InstantiationException | InvocationTargetException e) {
-        logger.atInfo().log("%s : %s : %s", e.getClass().getName(), e.getMessage(), nonReplicatedEventMessage);
+      }
+      catch (ClassNotFoundException e) {
+        logger.atInfo().log(errorReplicatedEventMessage,  newEvent.event);
+        logger.atFiner().withCause(e).log(errorReplicatedEventMessage,  newEvent.event);
         result = false;
       } catch (RuntimeException e) {
-        logger.atInfo().log("%s : %s : %s", e.getClass().getName(), e.getMessage(), nonReplicatedEventMessage);
+        logger.atSevere().withCause(e).log(errorReplicatedEventMessage,  newEvent.event);
         result = false;
       }
 
@@ -412,6 +393,7 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
     //PatchSetEvents, ChangeEvents, RefEvents and ProjectEvents.
 
     //PatchSetEvents and ChangeEvents. Note a PatchSetEvent is a subclass of a ChangeEvent
+    // TODO: Ask why do we not need to wrap the patchset of patchsetevent???
     if(newEvent instanceof PatchSetEvent || newEvent instanceof ChangeEvent){
       changeEventInfo.setChangeAttribute(((ChangeEvent) newEvent).change.get());
       //RefEvents
@@ -439,40 +421,6 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
       changeEventInfo.supported = false;
     }
     return changeEventInfo;
-  }
-
-  /**
-   * Creates a new ChangeEvent based on an original ChangeEvent, but with a new type which is
-   * derived from the original type, with a new prefix.
-   *
-   * @param changeEvent
-   * @param prefix
-   * @return result
-   * @throws NoSuchMethodException, InstantiationException, InvocationTargetException, RuntimeException, IllegalAccessException
-   */
-  private Event makeDistinct(Event changeEvent, String prefix) throws NoSuchMethodException, InstantiationException,
-      InvocationTargetException, RuntimeException, IllegalAccessException {
-
-    Event result = null;
-    Class<? extends Event> actualClass = changeEvent.getClass();
-
-    try {
-      Constructor<? extends Event> constructor = actualClass.getConstructor(actualClass, String.class);
-      //Constructor prefix example: (TopicChangedEvent.class, prefix + TopicChangedEvent)
-      result = constructor.newInstance(changeEvent, prefix + changeEvent.getType());
-      result.setNodeIdentity(replicatorInstance.getThisNodeIdentity());
-
-    } catch (NoSuchMethodException | IllegalAccessException | InstantiationException | InvocationTargetException e) {
-      // this is likely a non replicated event
-      logger.atFiner().withCause(e).log(nonReplicatedEventMessage);
-      throw e;
-    } catch (RuntimeException e) {
-      // this is likely a non replicated event
-      logger.atFiner().withCause(e).log(nonReplicatedEventMessage);
-      throw e;
-    }
-
-    return result;
   }
 
   // for the authentication in Gerrit
@@ -541,9 +489,8 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
       replicatedEventsSend = true; // they must be always enabled, not dependant on GERRIT_REPLICATED_EVENTS_ENABLED_SEND
       replicatedEventsReceive = props.getPropertyAsBoolean(GERRIT_REPLICATED_EVENTS_ENABLED_RECEIVE, "true");
       replicatedEventsReplicateOriginalEvents = props.getPropertyAsBoolean(GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL, "true");
-      replicatedEventsReplicateDistinctEvents = props.getPropertyAsBoolean(GERRIT_REPLICATED_EVENTS_RECEIVE_DISTINCT, "false");
 
-      receiveReplicatedEventsEnabled = replicatedEventsReceive || replicatedEventsReplicateOriginalEvents || replicatedEventsReplicateDistinctEvents;
+      receiveReplicatedEventsEnabled = replicatedEventsReceive || replicatedEventsReplicateOriginalEvents;
       replicatedEventsEnabled = receiveReplicatedEventsEnabled || replicatedEventsSend;
       if (replicatedEventsEnabled) {
         maxSecsToWaitForEventOnQueue = Long.parseLong(Replicator.cleanLforLongAndConvertToMilliseconds(props.getProperty(
@@ -553,17 +500,13 @@ public final class ReplicatedEventsManager implements Runnable, Replicator.Gerri
         logger.atInfo().log("RE Replicated events are disabled"); // This could not apppear in the log... cause the log could not yet be ready
       }
 
-      localRepublishEnabled = props.getPropertyAsBoolean(GERRIT_REPLICATED_EVENTS_LOCAL_REPUBLISH_DISTINCT, "false");
-      distinctEventPrefix = props.getProperty(GERRIT_REPLICATED_EVENTS_DISTINCT_PREFIX, DEFAULT_DISTINCT_PREFIX);
-
       //Read in a comma separated list of events that should be skipped.
       eventSkipList = props.getPropertyAsList(GERRIT_EVENT_TYPES_TO_BE_SKIPPED, DEFAULT_GERRIT_EVENT_TYPES_TO_BE_SKIPPED);
       //Setting all to lowercase so user doesn't have to worry about correct casing.
       eventSkipList.replaceAll(String::toLowerCase);
 
-      logger.atInfo().log("RE Replicated events: receive=%s, original=%s, distinct=%s, send=%s ",
-          replicatedEventsReceive, replicatedEventsReplicateOriginalEvents, replicatedEventsReplicateDistinctEvents, replicatedEventsSend);
-      logger.atInfo().log("RE Replicate local events, prefix=%s, republish=%s ", distinctEventPrefix, localRepublishEnabled);
+      logger.atInfo().log("RE Replicated events: receive=%s, original=%s, send=%s ",
+          replicatedEventsReceive, replicatedEventsReplicateOriginalEvents, replicatedEventsSend);
 
       return true;
     } catch (IOException e) {

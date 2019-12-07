@@ -52,6 +52,10 @@ public class EventWrapper  {
   public final String className;
   public final String projectName;
   public final Originator originator;
+  /**
+   * No longer in use as all events are now replicated events by default.
+   */
+  @Deprecated()
   public final String prefix;
 
   private static final Gson gson = new GsonBuilder()
@@ -68,28 +72,12 @@ public class EventWrapper  {
     this.prefix = null;
   }
 
-  public EventWrapper(Event changeEvent, String prefix) {
-    this.event = gson.toJson(changeEvent);
-    this.className=changeEvent.getClass().getName();
-    this.projectName = null;
-    this.originator = Originator.GERRIT_EVENT;
-    this.prefix = prefix;
-  }
-
   public EventWrapper(Event changeEvent, ReplicatedEventsManager.ChangeEventInfo info) {
     this.event = gson.toJson(changeEvent);
     this.className=changeEvent.getClass().getName();
     this.projectName = info.getProjectName();
     this.originator = Originator.GERRIT_EVENT;
     this.prefix = null;
-  }
-
-  public EventWrapper(Event changeEvent, ReplicatedEventsManager.ChangeEventInfo info, String prefix) {
-    this.event = gson.toJson(changeEvent);
-    this.className=changeEvent.getClass().getName();
-    this.projectName = info.getProjectName();
-    this.originator = Originator.GERRIT_EVENT;
-    this.prefix = prefix;
   }
 
   public EventWrapper(String projectName, CacheKeyWrapper cacheNameAndKey) {
@@ -118,7 +106,7 @@ public class EventWrapper  {
 
   @Override
   public String toString() {
-    return "EventWrapper{" + "event=" + event + ", className=" + className + ", projectName=" + projectName + ", originator=" + originator + ", prefix=" + prefix + '}';
+    return String.format("EventWrapper{ event=%s, className=%s, projectName=%s, originator=%s }", event, className, projectName, originator );
   }
 
   public EventWrapper(ProjectInfoWrapper projectInfoWrapper) {

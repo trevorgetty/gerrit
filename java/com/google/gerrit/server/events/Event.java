@@ -27,6 +27,7 @@
 
 package com.google.gerrit.server.events;
 
+import com.google.gerrit.server.replication.Replicator;
 import com.google.gerrit.server.util.time.TimeUtil;
 
 public abstract class Event {
@@ -38,8 +39,10 @@ public abstract class Event {
   protected Event(String type) {
     this.type = type;
     this.eventTimestamp = System.currentTimeMillis();
+    this.nodeIdentity = Replicator.getInstance().getThisNodeIdentity();
   }
 
+  @Deprecated
   public void setNodeIdentity(String nodeIdentity) {
     this.nodeIdentity = nodeIdentity;
   }
