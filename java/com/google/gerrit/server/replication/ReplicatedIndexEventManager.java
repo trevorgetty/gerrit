@@ -520,7 +520,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
   private boolean unwrapAndReadPackFile(EventWrapper newPackFileEvent) {
     boolean success = false;
 
-    // TODO: Create proper event type for this, currently serializes into event the path,
+    // TODO: (trevorg) GER-943 Create proper event type for this, currently serializes into event the path,
     // and name into gitdir -> BAD BAD BAD, use something more specific here.
     // We are doing away with PREFIX now as we dont not use distinct events to look in detail..
     File packFilePath = new File(newPackFileEvent.event); // we use the event member to store the path to the packfile

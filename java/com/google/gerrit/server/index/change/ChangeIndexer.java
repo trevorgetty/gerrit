@@ -430,9 +430,6 @@ public class ChangeIndexer {
    */
   @SuppressWarnings("deprecation")
   public com.google.common.util.concurrent.CheckedFuture<?, IOException> deleteAsync(Change.Id id) {
-    // TODO: Trev, I would expect the DeleteTask to be like the index task and have replicated and non replicated routes.
-    // Currently we take every update at the batchupdate level and call delete on it.  Come back and add this in, check if we get a duplicate
-    // event!!!
     return submit(new DeleteTask(id));
   }
 
@@ -628,7 +625,8 @@ public class ChangeIndexer {
     }
   }
 
-  // TODO Raise this task and check it correctly only indexes on other nodes if it is stale.  Now we may wish to consider
+  // TODO: (trevorg) GER-945 Raise this task and check it correctly only indexes on other nodes if it is stale.
+  //  Now we may wish to consider...
   // Replicating this directly and letting each node decide if its own content is stale locally or not!!
   private class ReindexIfStaleTask extends AbstractIndexTask<Boolean> {
     private ReindexIfStaleTask(Project.NameKey project, Change.Id id) {
@@ -639,8 +637,6 @@ public class ChangeIndexer {
     public Boolean callImpl(Provider<ReviewDb> db) throws Exception {
       remove();
       try {
-        // TODO: Trev we really need to decide to replicate this task and let it be worked out whether to update if stale
-        // on each seperate node.  And not only replicate it out if stale on this local node!
         if (stalenessChecker.isStale(id)) {
           indexImpl(newChangeData(db.get(), project, id), true);
           return true;

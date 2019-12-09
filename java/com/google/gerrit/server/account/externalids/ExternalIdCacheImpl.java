@@ -70,8 +70,8 @@ class ExternalIdCacheImpl implements ExternalIdCache {
     ReplicatedCacheManager.watchCache(CACHE_NAME, this.extIdsByAccount);
   }
 
-  // TODO: Trev consider is ths onReplace doing any deletions that we need to convey a eviction?  Is it an update
-  // and ok through normal listener???
+  // TODO: (trevorg) GER-944 consider is ths onReplace doing any deletions that we need to convey a eviction?
+  //  Is it an update, picked up via our listener already, or is it being ignored leading to stale data in remote index.?
   @Override
   public void onReplace(
       ObjectId oldNotesRev,

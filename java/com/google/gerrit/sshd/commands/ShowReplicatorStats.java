@@ -74,7 +74,6 @@ final class ShowReplicatorStats extends SshCommand {
   protected void run() throws Failure {
 
     try {
-      // TODO: Trev! Check that administrator priv still allows access here
       permissionBackend.user(currentUser).check(VIEW_REPLICATOR_STATS);
     } catch (AuthException | PermissionBackendException ex) {
       String msg = String.format("fatal: %s does not have \"View Replicator Stats\" capability.",

@@ -369,9 +369,10 @@ public class ProjectCacheImpl implements ProjectCache {
   @VisibleForTesting
   public void evictAllByName() {
     if (Replicator.isReplicationEnabled()) {
+      // replicate the invalidation.
       for (String name : byName.asMap().keySet()) {
-        // replicate the invalidation.  I think it would be better to add a new evict All, instead of a single eviction request per item...
-        // TODO: TREV we are turning a one request into many for no benefit, and what happens if this cache has 2 members and the remote cache has 3 members, we evict
+        // TODO: (trevorg) GER-931 we are turning a one request into many for no benefit.
+        //  What happens if this cache has 2 members and the remote cache has 3 members, we evict
         // all here but not all remotely.... So I think this needs to be changed long term!
         ReplicatedCacheManager.replicateEvictionFromCache(CACHE_PROJECTS_BYNAME, name);
       }
