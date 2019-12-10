@@ -137,9 +137,6 @@ public class ChangeIndexer {
     this.autoReindexIfStale = autoReindexIfStale(cfg);
     this.index = index;
     this.indexes = null;
-
-    // Call to WANdisco gerrit event replicator init function
-    initIndexReplicator(schemaFactory, cfg);
   }
 
   @AssistedInject
@@ -167,17 +164,6 @@ public class ChangeIndexer {
     this.autoReindexIfStale = autoReindexIfStale(cfg);
     this.index = null;
     this.indexes = indexes;
-
-    // Call to WANdisco gerrit event replicator init function
-    initIndexReplicator(schemaFactory, cfg);
-  }
-
-  // Call to WANdisco gerrit event replicator init function
-  private void initIndexReplicator(SchemaFactory<ReviewDb> schemaFactory, Config cfg) {
-    if (Replicator.isReplicationDisabled()){
-      return;
-    }
-    ReplicatedIndexEventManager.initIndexer(schemaFactory, this, cfg);
   }
 
   private static boolean autoReindexIfStale(Config cfg) {
@@ -195,7 +181,7 @@ public class ChangeIndexer {
       Project.NameKey project, Change.Id id) {
 
     // Default behaviour is to call with replication enabled
-    return indexAsyncImpl(project, id, true);
+    return indexAsyncImpl(project, id, Replicator.isReplicationEnabled());
   }
 
   /**
@@ -243,7 +229,7 @@ public class ChangeIndexer {
   @SuppressWarnings("deprecation")
   public com.google.common.util.concurrent.CheckedFuture<?, IOException> indexAsync(
       Project.NameKey project, Collection<Change.Id> ids) {
-    return indexAsyncImpl(project, ids, true);
+    return indexAsyncImpl(project, ids, Replicator.isReplicationEnabled());
   }
 
   /**
@@ -301,7 +287,7 @@ public class ChangeIndexer {
    * @param cd change to index.
    */
   public void index(ChangeData cd) throws IOException {
-    index(cd, true);
+    index(cd, Replicator.isReplicationEnabled());
   }
 
   /**
@@ -357,7 +343,12 @@ public class ChangeIndexer {
     }
     fireChangeIndexedEvent(cd.project().get(), cd.getId().get());
 
-    if (replicationEnabled == false) {
+    // If we have disabled replication either because:
+    // 1) Its not a replicated call, so its supplied as false.
+    // 2) replication is disabled systemwide by the disable env flag - again we will get replicationEnabled=false
+    // 3) We are not called from the main Daemon context ( ReplicatedIndexEventManager will be null )
+    // either way go no further and Dont replicate these changes.
+    if (replicationEnabled == false || ( ReplicatedIndexEventManager.getInstance() == null )) {
       return;
     }
 

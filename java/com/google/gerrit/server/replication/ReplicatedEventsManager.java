@@ -25,10 +25,13 @@ import com.google.gerrit.lifecycle.LifecycleModule;
 import com.google.gerrit.reviewdb.server.ReviewDb;
 import com.google.gerrit.server.config.GerritServerConfig;
 import com.google.gerrit.server.events.*;
+import com.google.gwtorm.server.OrmException;
 import com.google.gwtorm.server.SchemaFactory;
 
 import com.google.inject.Inject;
+import com.google.inject.Provider;
 import com.google.inject.Singleton;
+import com.google.inject.util.Providers;
 import com.wandisco.gerrit.gitms.shared.properties.GitMsApplicationProperties;
 import org.eclipse.jgit.lib.Config;
 
@@ -61,7 +64,7 @@ public final class ReplicatedEventsManager implements LifecycleListener {
     logger.atInfo().log("Create the rep event listener now!");
 
     ReplicatedEventsWorker worker =
-        new ReplicatedEventsWorker(this, changeHookRunner, schemaFactory);
+        new ReplicatedEventsWorker(this, changeHookRunner);
     worker.startReplicationThread();
   }
 
@@ -125,10 +128,20 @@ public final class ReplicatedEventsManager implements LifecycleListener {
     return maxSecsToWaitForEventOnQueue;
   }
 
-
   private EventBroker changeHookRunner;
   // Use schemaFactory directly as we can't use Request Scoped Providers
   private final SchemaFactory<ReviewDb> schemaFactory;
+
+  /**
+   * Please note as this returns a Provider of a ReviewDB.  As such the instance of the DB isn't really open until
+   * the provider.get() is used.  Allowing tidy try( ReviewDb db = provider.get() ) blocks to be used.
+   *
+   * @return Provider<ReviewDB> instance
+   * @throws OrmException
+   */
+  public Provider<ReviewDb> getReviewDbProvider() throws OrmException {
+    return Providers.of(schemaFactory.open());
+  }
 
   @Inject
   public ReplicatedEventsManager(

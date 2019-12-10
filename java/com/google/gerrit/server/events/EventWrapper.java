@@ -90,7 +90,7 @@ public class EventWrapper  {
     this.prefix = null;
   }
 
-  public EventWrapper(ReplicatedIndexEventManager.IndexToReplicate indexToReplicate) {
+  public EventWrapper(ReplicatedIndexEventsWorker.IndexToReplicate indexToReplicate) {
     this.event = gson.toJson(indexToReplicate);
     this.className=indexToReplicate.getClass().getName();
     this.projectName = indexToReplicate.projectName;

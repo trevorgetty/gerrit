@@ -24,7 +24,6 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
 import com.google.gwtorm.server.OrmException;
-import com.google.gwtorm.server.SchemaFactory;
 
 import javax.inject.Singleton;
 import java.io.IOException;
@@ -49,8 +48,6 @@ public class ReplicatedEventsWorker implements Runnable, Replicator.GerritPublis
   // us to run.
   private boolean finished = true;
   private EventBroker changeHookRunner;
-  private SchemaFactory<ReviewDb> schemaFactory;
-
 
   // Maximum number of events that may be queued up
   private static final int MAX_EVENTS = 1024;
@@ -71,12 +68,10 @@ public class ReplicatedEventsWorker implements Runnable, Replicator.GerritPublis
 
   public ReplicatedEventsWorker(
       ReplicatedEventsManager replicatedEventsManager,
-      EventBroker eventBroker,
-      SchemaFactory<ReviewDb> schemaFactory
+      EventBroker eventBroker
   ) {
     this.replicatedEventsManager = replicatedEventsManager;
     this.changeHookRunner = eventBroker;
-    this.schemaFactory = schemaFactory;
   }
 
   public synchronized void startReplicationThread() {
@@ -288,7 +283,7 @@ public class ReplicatedEventsWorker implements Runnable, Replicator.GerritPublis
     if (changeEventInfo.isSupported()) {
       logger.atFiner().log("RE going to fire event...");
 
-      try (ReviewDb db = schemaFactory.open()) {
+      try (ReviewDb db = replicatedEventsManager.getReviewDbProvider().get()) {
         if (changeEventInfo.getChangeAttr() != null) {
           logger.atFiner().log("RE using changeAttr: %s...", changeEventInfo.getChangeAttr());
           Change change = db.changes().get(new Change.Id(changeEventInfo.getChangeAttr().number));
