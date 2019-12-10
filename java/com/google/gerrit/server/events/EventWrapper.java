@@ -14,13 +14,7 @@
 package com.google.gerrit.server.events;
 
 import com.google.common.base.Supplier;
-import com.google.gerrit.server.replication.AccountIndexEventBase;
-import com.google.gerrit.server.replication.CacheKeyWrapper;
-import com.google.gerrit.server.replication.DeleteProjectChangeEvent;
-import com.google.gerrit.server.replication.ProjectInfoWrapper;
-import com.google.gerrit.server.replication.ReplicatedEventsManager;
-import com.google.gerrit.server.replication.ReplicatedIndexEventManager;
-import com.google.gerrit.server.replication.ReplicatorMessageEvent;
+import com.google.gerrit.server.replication.*;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
@@ -72,7 +66,7 @@ public class EventWrapper  {
     this.prefix = null;
   }
 
-  public EventWrapper(Event changeEvent, ReplicatedEventsManager.ChangeEventInfo info) {
+  public EventWrapper(Event changeEvent, ReplicatedChangeEventInfo info) {
     this.event = gson.toJson(changeEvent);
     this.className=changeEvent.getClass().getName();
     this.projectName = info.getProjectName();

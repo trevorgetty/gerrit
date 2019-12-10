@@ -36,7 +36,6 @@ import com.google.gerrit.server.plugincontext.PluginSetEntryContext;
 import com.google.gerrit.server.project.NoSuchChangeException;
 import com.google.gerrit.server.project.ProjectCache;
 import com.google.gerrit.server.project.ProjectState;
-import com.google.gerrit.server.replication.ReplicatedEventsManager;
 import com.google.gwtorm.server.OrmException;
 import com.google.inject.Inject;
 import com.google.inject.Provider;
@@ -81,18 +80,14 @@ public class EventBroker implements EventDispatcher {
       ProjectCache projectCache,
       ChangeNotes.Factory notesFactory,
       Provider<ReviewDb> dbProvider,
-      @GerritServerConfig Config config ) {
+      @GerritServerConfig Config config
+  ) {
     this.listeners = listeners;
     this.unrestrictedListeners = unrestrictedListeners;
     this.permissionBackend = permissionBackend;
     this.projectCache = projectCache;
     this.notesFactory = notesFactory;
     this.dbProvider = dbProvider;
-    ReplicatedEventsManager.hookOnListeners(this, config );
-  }
-
-  public Provider<ReviewDb> getDbProvider() {
-    return dbProvider;
   }
 
   @Override
@@ -239,19 +234,12 @@ public class EventBroker implements EventDispatcher {
     return true;
   }
 
-  /**
-   * All the update of the DynamicSets which are the eventlisteners for the plugin events.
-   * This method updates the restricted set (by user context) of listeners.
-   * @param name
-   * @param listener
-   */
-  public void registerEventListener(String name, UserScopedEventListener listener) {
-    this.listeners.registerImplementation(name, listener);
-  }
 
   /**
-   * All the update of the DynamicSets which are the eventlisteners for the plugin events.
    * This method updates the unrestricted set of listeners.
+   *
+   * We use this method, to add listeners without having them really be plugin contexts....
+   * TODO: (trevorg) Move ReplicationEventManager listener to be a plugin context and this can disappear.
    * @param name
    * @param unrestrictedListener
    */
