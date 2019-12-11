@@ -180,6 +180,10 @@ public class ReplicatedIndexEventManager implements LifecycleListener {
     this.schemaFactory = schemaFactory;
     this.indexer = indexer;
 
+    // I know this is HACK but until we drop the 3 use cases that aren't using injection to use injection we still
+    // need this instance. then we can move over to instance method for deleteChanges etc.
+    instance = this;
+
     // setup any configuration, saves us messing around later
     if (INCOMING_PERSISTED_LINGER_TIME_VALUE == 0) {
       if (config != null) {
@@ -189,6 +193,7 @@ public class ReplicatedIndexEventManager implements LifecycleListener {
         INCOMING_PERSISTED_LINGER_TIME_VALUE = INCOMING_PERSISTED_LINGER_TIME_DEFAULT;
       }
     }
+    logger.atInfo().log("Created ReplicatedIndexEventManager");
   }
 
   /**
@@ -237,7 +242,7 @@ public class ReplicatedIndexEventManager implements LifecycleListener {
       // This happens when we dont register the ReplicatedIndexEventsManager which we only do for main Daemon currently!!
       return;
     }
-    
+
     worker.addIndexEventToUnfilteredReplicationQueue(indexNumber, projectName, lastUpdatedOn, deleteIndex);
   }
 

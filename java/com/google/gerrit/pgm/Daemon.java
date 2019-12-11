@@ -110,6 +110,7 @@ import com.google.gerrit.server.plugins.PluginGuiceEnvironment;
 import com.google.gerrit.server.plugins.PluginModule;
 import com.google.gerrit.server.project.DefaultProjectNameLockManager;
 import com.google.gerrit.server.replication.ReplicatedEventsManager;
+import com.google.gerrit.server.replication.ReplicatedIndexEventManager;
 import com.google.gerrit.server.restapi.RestApiModule;
 import com.google.gerrit.server.schema.DataSourceProvider;
 import com.google.gerrit.server.schema.InMemoryAccountPatchReviewStore;
@@ -442,6 +443,7 @@ public class Daemon extends SiteProgram {
 
     // WANdisco replication modules
     modules.add(new ReplicatedEventsManager.Module());
+    modules.add(new ReplicatedIndexEventManager.Module());
 
     modules.add(
         inMemoryTest
