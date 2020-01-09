@@ -13,6 +13,9 @@
  
 package com.google.gerrit.common;
 
+import static com.wandisco.gerrit.gitms.shared.util.StringUtils.getProjectNameSha1;
+
+import com.google.common.base.Strings;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 
@@ -51,16 +54,14 @@ import org.slf4j.LoggerFactory;
 public class Persister<T extends Persistable> {
 
   private static final Logger log = LoggerFactory.getLogger(Persister.class);
-  private final PersisterFileFilter fileFilter = new PersisterFileFilter();
+  // These values are just to do a minimal filtering
+  private static final String FIRST_PART = "persisted_";
+  private static final String LAST_PART = ".json";
+  private static final String TMP_PART = ".tmp";
+  private static final String PERSIST_FILE=FIRST_PART + "%s_%s_%s" + LAST_PART;
+  private static final ReplicatedEventsFileFilter fileFilter = new ReplicatedEventsFileFilter(FIRST_PART);
   private static final Gson gson = new Gson();
   private final File baseDir;
-  // These values are just to do a minimal filtering
-  public static final String FIRST_PART = "Pers-";
-  public static final String LAST_PART = ".json";
-  public static final String TMP_PART = ".tmp";
-
-  public static final String PERSIST_FILE="persisted-%s-%s-%02d.json";
-  public static String persistEventsFileName="";
 
   public Persister(File baseDir) throws IOException {
     this.baseDir = baseDir;
@@ -75,6 +76,8 @@ public class Persister<T extends Persistable> {
     }
   }
 
+  //NOTE: This method is called only once upon Persister object instance creation
+  //in ReplicatedIndexEventManager.
   public <T extends Persistable> List<T> getObjectsFromPath(Class<T> clazz) {
     File[] listFiles = baseDir.listFiles(fileFilter);
     List<T> result = new ArrayList<>();
@@ -82,6 +85,7 @@ public class Persister<T extends Persistable> {
     if (listFiles != null) {
       Arrays.sort(listFiles);
       for (File file : listFiles) {
+
         try (InputStreamReader fileToRead = new InputStreamReader(new FileInputStream(file),StandardCharsets.UTF_8)) {
           T fromJson = gson.fromJson(fileToRead,clazz);
          if (fromJson == null) {
@@ -91,11 +95,8 @@ public class Persister<T extends Persistable> {
 
           fromJson.setPersistFile(file);
           result.add(fromJson);
-        } catch (IOException e) {
+        } catch (IOException | JsonSyntaxException e) {
           log.error("PR Could not decode json file {}", file, e);
-          moveFileToFailed(baseDir, file);
-        } catch (JsonSyntaxException je) {
-          log.error("PR Could not decode json file {}", file, je);
           moveFileToFailed(baseDir, file);
         }
       }
@@ -103,26 +104,25 @@ public class Persister<T extends Persistable> {
     return result;
   }
 
-  public static boolean moveFileToFailed(final File directory, final File file) {
-    boolean result = false;
+  static void moveFileToFailed(final File directory, final File file) {
     File failedDir = new File(directory,"failed");
     if (!failedDir.exists()) {
       boolean mkdirs = failedDir.mkdirs();
       if (!mkdirs) {
         log.error("Could not create directory for failed directory: " + failedDir.getAbsolutePath());
+        return;
       }
     }
 
-    result = file.renameTo(new File(failedDir,file.getName()));
+    boolean renameOp = file.renameTo(new File(failedDir,file.getName()));
 
-    if (!result) {
+    if (!renameOp) {
         log.error("Could not move file in failed directory: " + file);
-      }
+    }
 
-    return result;
   }
 
-  public boolean deleteFileIfPresentFor(Persistable p) {
+  boolean deleteFileIfPresentFor(Persistable p) {
     File persistFile = p.getPersistFile();
     if (persistFile != null) {
       return persistFile.delete();
@@ -130,7 +130,7 @@ public class Persister<T extends Persistable> {
     return false;
   }
 
-  public boolean deleteFileFor(Persistable p) {
+  boolean deleteFileFor(Persistable p) {
     File persistFile = p.getPersistFile();
     if (persistFile == null) {
       throw new IllegalStateException("Cannot delete file of not-yet persisted object");
@@ -138,47 +138,44 @@ public class Persister<T extends Persistable> {
     return persistFile.delete();
   }
 
-  public void persistIfNotAlready(T obj) throws IOException {
+  void persistIfNotAlready(T obj, String projectName) throws IOException {
     if (!obj.hasBeenPersisted()) {
-      persist(obj);
+      persist(obj, projectName);
     }
   }
 
-  public void persist(T obj) throws IOException {
+  public void persist(T obj, String projectNameSha) throws IOException {
     final String msg = gson.toJson(obj)+'\n';
 
     File tempFile = File.createTempFile(FIRST_PART, TMP_PART, baseDir);
     try (FileOutputStream writer = new FileOutputStream(tempFile,true)) {
+      //writing event to .tmp file
       writer.write(msg.getBytes(StandardCharsets.UTF_8));
     }
 
     String [] jsonData = Replicator.ParseEventJson.jsonEventParse(msg);
-    persistEventsFileName = String.format(PERSIST_FILE, jsonData[0], jsonData[1], 0);
-    File persistFile = new File(baseDir, persistEventsFileName);
 
+    //If there is a problem with the events within the event file for any reason then get out early
+    if(jsonData == null || jsonData.length <= 0){
+      log.error("jsonData was null or empty. Could not persist events file as it contained no events!");
+      //Note: if we get in here then the temp file will be left behind.
+      return;
+    }
+
+    //The persisted events file is the same as an event file except it starts with persisted instead
+    //of event. The format of the file will be persisted_timestamp_nodeId_projectNameSha1.json
+    File persistFile = new File(baseDir, String.format(PERSIST_FILE,
+        jsonData[0], jsonData[1], getProjectNameSha1(projectNameSha)));
+
+    //We then rename the file from persisted_<randomDigit>.tmp to the persisted event file
     boolean done = tempFile.renameTo(persistFile);
-    if (done) {
-      obj.setPersistFile(persistFile);
-    } else {
-      IOException e = new IOException(String.format("PR Unable to rename file %s to %s", tempFile, persistFile));
-      log.error("Unable to rename file", e);
-      throw e;
+
+    if(!done){
+      log.error("Unable to rename file {} to {}", tempFile, persistFile);
+      throw new IOException(String.format("PR Unable to rename file %s to %s", tempFile, persistFile));
     }
+    //We have renamed the file so we can now set the persist file.
+    obj.setPersistFile(persistFile);
   }
 
-  final static class PersisterFileFilter implements FileFilter {
-
-    @Override
-    public boolean accept(File pathname) {
-      String name = pathname.getName();
-      try {
-        if (name.startsWith(FIRST_PART) && name.endsWith(LAST_PART)) {
-          return true;
-        }
-      } catch (Exception e) {
-        log.error("PR File {} is not allowed here, remove it please ",pathname,e);
-      }
-      return false;
-    }
-  }
 }

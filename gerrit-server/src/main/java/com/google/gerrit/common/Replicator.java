@@ -27,6 +27,7 @@ import com.google.gerrit.server.events.EventWrapper;
 import com.google.gerrit.server.events.SupplierDeserializer;
 import com.google.gerrit.server.events.SupplierSerializer;
 import com.google.gson.GsonBuilder;
+import static com.wandisco.gerrit.gitms.shared.util.StringUtils.getProjectNameSha1;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -98,7 +99,8 @@ public class Replicator implements Runnable {
   public static final String DEFAULT_MINUTES_SINCE_CHANGE_LAST_INDEXED_CHECK_PERIOD = "60";
 
   public static final String CURRENT_EVENTS_FILE = "current-events.json";
-  public static final String NEXT_EVENTS_FILE = "events-%s-%s-%02d.json";
+  private static final String FIRST_PART="events_";
+  public static final String NEXT_EVENTS_FILE = FIRST_PART+"%s_%s_%s.json";
   public static String eventsFileName = "";
 
   public static final String GERRIT_REPLICATION_THREAD_NAME = "ReplicatorStreamReplication";
@@ -128,7 +130,7 @@ public class Replicator implements Runnable {
   public static long minutesSinceChangeLastIndexedCheckPeriod;
 
   private static final ArrayList<String> cacheNamesNotToReload = new ArrayList<>();
-  private static final IncomingEventsToReplicateFileFilter incomingEventsToReplicateFileFilter = new IncomingEventsToReplicateFileFilter();
+  private static final ReplicatedEventsFileFilter incomingEventsToReplicateFileFilter = new ReplicatedEventsFileFilter(FIRST_PART);
   private static boolean incomingEventsAreGZipped = false; // on the landing node the text maybe already unzipped by the replicator
   private static Thread eventReaderAndPublisherThread = null;
   private static File internalLogFile = null; // used for debug
@@ -585,21 +587,34 @@ public class Replicator implements Runnable {
   /**
    * Parse the timestamp and nodeIdentity from which the event originated
    * and label the events file them.
+   *
    * @param originalEvent
    */
-  private void setEventsFileName(final EventWrapper originalEvent){
-    String [] jsonData = ParseEventJson.jsonEventParse(originalEvent.event);
-    if(jsonData == null || jsonData.length == 0){
-        log.error("Unable to set event filename as there was a JSON parsing error "
-            + originalEvent.event);
-        return;
+  private void setEventsFileName(final EventWrapper originalEvent) {
+
+    String[] jsonData = ParseEventJson.jsonEventParse(originalEvent.event);
+
+    if (jsonData == null || jsonData.length == 0) {
+      log.error("Unable to set event filename as there was a JSON parsing error {}", originalEvent.event);
+      return;
     }
-    if(jsonData[0] != null && jsonData[0].matches("[0-9]+")){
-      eventsFileName = String.format(NEXT_EVENTS_FILE, jsonData[0], jsonData[1], 0);
-    } else {
-      eventsFileName = String.format(NEXT_EVENTS_FILE, System.currentTimeMillis(), getThisNodeIdentity(), 0);
-      log.error("RE Could not parse JSON from events file correctly, " +
-          "events file will be labeled with current system time and this NodeIdentity {}", eventsFileName);
+    //We need to label the event file with a unique identifier. As there can be multiple events in a file
+    //then we cannot take the identifier we need from the event itself. Therefore we use a SHA1 of the project
+    //name that the event is for.
+
+    if (jsonData[0] != null && jsonData[0].matches("[0-9]+")) {
+
+      //If there are event types added in future that do not support the projectName member
+      //then we should generate an error. The default sha1 will be used.
+      if(originalEvent.projectName == null){
+        log.error(String.format("The following Event Type %s has a Null project name. "
+            + "Unable to set the event filename using the sha1 of the project name. Using default sha1", originalEvent.event));
+      }
+      //The NEXT_EVENTS_FILE variable is formatted with the timestamp and nodeId of the event and
+      //a sha1 of the project name. This ensures that it will remain unique under heavy load across projects.
+      //Note that a project name includes everything below the root so for example /path/subpath/repo01 is a valid project name.
+      eventsFileName = String.format(NEXT_EVENTS_FILE, jsonData[0], jsonData[1],
+          getProjectNameSha1(originalEvent.projectName));
     }
   }
 
@@ -640,16 +655,30 @@ public class Replicator implements Runnable {
    * Rename the current-events.json file to a unique filename
    * Resetting the lastWriter and count of the writtenMessageCount
    */
-  private void renameAndReset(){
-    File newFile = getNewFile();
+  private void renameAndReset() {
+
+    //eventsFileName should not be null or empty at this point as it should have been set by
+    //the setEventsFileName() method
+    if(Strings.isNullOrEmpty(eventsFileName)) {
+      log.error("RE eventsFileName was not set correctly, losing events!");
+      return;
+    }
+
+    File newFile = new File(outgoingReplEventsDirectory, eventsFileName);
+
+    //This is not an atomic rename. This needs to be revised in future.
     boolean renamed = lastWriterFile.renameTo(newFile);
+
     if (!renamed) {
       log.error("RE Could not rename file to be picked up, losing events! {}",
           lastWriterFile.getAbsolutePath());
-    } else {
-      log.debug("RE Created new file {} to be proposed",
-          newFile.getAbsolutePath());
     }
+
+    //The rename was successful
+    log.info("RE Created new file {} to be proposed",
+        newFile.getAbsolutePath());
+
+
     lastWriter = null;
     lastWriterFile = null;
     lastWriteTime = 0;
@@ -658,49 +687,6 @@ public class Replicator implements Runnable {
     Stats.totalPublishedLocalEventsProsals++;
   }
 
-  /**
-   * Return a unique events filename that takes the format
-   * events-<milliseconds-since-epoch-timestamp>-<node.identity>-<non-zero-if-not-unique-bit>.json
-   * @return
-   */
-  private File getNewFile(){
-
-    File uniqueFile = new File(outgoingReplEventsDirectory, eventsFileName);
-
-    if(!eventsFileName.isEmpty()) {
-      String[] jsonData = eventsFileName.split("-");
-      //If for some reason the file is not set correctly, log an error
-      if(!jsonData[1].matches("[0-9]+")) {
-        log.error("RE, Event filename does not contain a timestamp.");
-      }
-      // Check the outgoing events.
-      File outgoingEventFile = new File(outgoingReplEventsDirectory, eventsFileName);
-      //In the unlikely event the file already exists in the dir, increment the 0 bit at the end of the filename.
-      int nonUniqueIdentifier = 0;
-      while (outgoingEventFile.exists()) {
-
-        log.info("RE, Event file with name {} already exists, incrementing the nonUniqueIdentifier",
-            outgoingEventFile.getAbsolutePath());
-
-        //An outgoing events file with the same name already exists, so we need to create a
-        //unique file. We increment, then use the nonUniqueIdentifier to create a new unique
-        //file.
-        //Example: events-1533899416153-node_id_Node1-00.json -> events-1533899416153-node_id_Node1-01.json
-
-        uniqueFile = new File(outgoingReplEventsDirectory, String.format(NEXT_EVENTS_FILE,
-            jsonData[1], thisNodeIdentity, ++nonUniqueIdentifier));
-
-        //Check that the newly created file also doesn't exist. If it does exist we will continue
-        //round the loop. If it doesn't exist, we break out of the loop and return the uniqueFile.
-        if (!uniqueFile.exists()) {
-          break;
-        }
-      }
-    } else{
-      log.error("RE Something has gone wrong, Events file name was not set correctly");
-    }
-    return uniqueFile;
-  }
 
   /**
    * Look for files written by the replicator in the right directory
@@ -849,24 +835,6 @@ public class Replicator implements Runnable {
     return failedEvents;
   }
 
-  final static class IncomingEventsToReplicateFileFilter implements FileFilter {
-    // These values are just to do a minimal filtering
-    static final String FIRST_PART = "events-";
-    static final String LAST_PART = ".json";
-
-    @Override
-    public boolean accept(File pathname) {
-      String name = pathname.getName();
-      try {
-        if (name.startsWith(FIRST_PART) && name.endsWith(LAST_PART)) {
-          return true;
-        }
-      } catch (Exception e) {
-        log.error("File {} is not allowed here, remove it please ",pathname,e);
-      }
-      return false;
-    }
-  }
 
   /**
    * If in the Gerrit Configuration file the cache value for memoryLimit is 0 then

@@ -38,7 +38,7 @@ public class EventWrapper  {
   /*****
    * Are you changing this class? Then you need to change also EventWrapper in com.wandisco.gitms.repository.handlers.gerrit.GerritReplicatedEventStreamProposer
    */
-  public static enum Originator {
+  public enum Originator {
     GERRIT_EVENT,
     CACHE_EVENT,
     INDEX_EVENT,
@@ -60,30 +60,6 @@ public class EventWrapper  {
       .registerTypeAdapter(Supplier.class, new SupplierDeserializer())
       .create();
 
-  public EventWrapper(Event changeEvent) {
-    this.event = gson.toJson(changeEvent);
-    this.className=changeEvent.getClass().getName();
-    this.projectName = null;
-    this.originator = Originator.GERRIT_EVENT;
-    this.prefix = null;
-  }
-
-  public EventWrapper(Event changeEvent, String prefix) {
-    this.event = gson.toJson(changeEvent);
-    this.className=changeEvent.getClass().getName();
-    this.projectName = null;
-    this.originator = Originator.GERRIT_EVENT;
-    this.prefix = prefix;
-  }
-
-  public EventWrapper(Event changeEvent, ReplicatedEventsManager.ChangeEventInfo info) {
-    this.event = gson.toJson(changeEvent);
-    this.className=changeEvent.getClass().getName();
-    this.projectName = info.getProjectName();
-    this.originator = Originator.GERRIT_EVENT;
-    this.prefix = null;
-  }
-
   public EventWrapper(Event changeEvent, ReplicatedEventsManager.ChangeEventInfo info, String prefix) {
     this.event = gson.toJson(changeEvent);
     this.className=changeEvent.getClass().getName();
@@ -103,7 +79,7 @@ public class EventWrapper  {
   public EventWrapper(CacheKeyWrapper cacheNameAndKey) {
     this.event = gson.toJson(cacheNameAndKey);
     this.className=cacheNameAndKey.getClass().getName();
-    this.projectName = null;
+    this.projectName = cacheNameAndKey.key.toString();
     this.originator = Originator.CACHE_EVENT;
     this.prefix = null;
   }

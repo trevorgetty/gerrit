@@ -58,7 +58,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.NavigableMap;
 import java.util.Objects;
-import java.util.Random;
 import java.util.Set;
 import java.util.TimeZone;
 import java.util.TreeMap;
@@ -473,7 +472,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
       // add the data to index the change
       incomingChangeEventsToIndex.add(originalEvent);
       try {
-        persister.persistIfNotAlready(originalEvent);
+        persister.persistIfNotAlready(originalEvent, originalEvent.projectName);
       } catch (IOException e) {
         log.error("RC Could not persist event {}",originalEvent,e);
       }
