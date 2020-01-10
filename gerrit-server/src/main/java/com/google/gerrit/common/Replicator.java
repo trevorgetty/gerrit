@@ -608,7 +608,8 @@ public class Replicator implements Runnable {
       //then we should generate an error. The default sha1 will be used.
       if(originalEvent.projectName == null){
         log.error(String.format("The following Event Type %s has a Null project name. "
-            + "Unable to set the event filename using the sha1 of the project name. Using default sha1", originalEvent.event));
+            + "Unable to set the event filename using the sha1 of the project name. "
+            + "Using All-Projects as the default project", originalEvent.event));
       }
       //The NEXT_EVENTS_FILE variable is formatted with the timestamp and nodeId of the event and
       //a sha1 of the project name. This ensures that it will remain unique under heavy load across projects.
