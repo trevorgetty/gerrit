@@ -99,8 +99,8 @@ public class Replicator implements Runnable {
   public static final String DEFAULT_MINUTES_SINCE_CHANGE_LAST_INDEXED_CHECK_PERIOD = "60";
 
   public static final String CURRENT_EVENTS_FILE = "current-events.json";
-  private static final String FIRST_PART="events_";
-  public static final String NEXT_EVENTS_FILE = FIRST_PART+"%s_%s_%s.json";
+  private static final String FIRST_PART="events";
+  public static final String NEXT_EVENTS_FILE = FIRST_PART+"_%s_%s_%s.json";
   public static String eventsFileName = "";
 
   public static final String GERRIT_REPLICATION_THREAD_NAME = "ReplicatorStreamReplication";
