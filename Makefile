@@ -29,9 +29,11 @@ VERSION := $(shell $(GERRIT_ROOT)/build-tools/get_version_number.sh $(GERRIT_ROO
 GITMS_VERSION := ${GITMS_VERSION}
 GERRIT_BAZEL_OUT := $(GERRIT_ROOT)/bazel-bin
 RELEASE_WAR_PATH := $(GERRIT_BAZEL_OUT)/release.war
-CONSOLE_API_JAR_PATH := $(GERRIT_BAZEL_OUT)/gerrit-console-api/console-api.jar
+CONSOLE_API_NAME := console-api
+CONSOLE_API_BUILD_JAR_PATH := $(GERRIT_BAZEL_OUT)/gerrit-console-api/$(CONSOLE_API_NAME)_deploy.jar
+CONSOLE_API_RELEASE_JAR_PATH := $(GERRIT_BAZEL_OUT)/gerrit-console-api/$(CONSOLE_API_NAME).jar
 
-CONSOLE_ARTIFACTID   := gerrit-console-api
+CONSOLE_ARTIFACTID := gerrit-console-api
 CONSOLE_GROUPID := com.google.gerrit
 CONSOLE_PREFIX := $(CONSOLE_GROUPID).$(CONSOLE_ARTIFACTID)
 
@@ -87,7 +89,8 @@ fast-assembly-gerrit:
 fast-assembly-console:
 	@echo "************ Compile Console-API Starting **************"
 	@echo "Building console-api"
-	bazelisk build //gerrit-console-api:console-api
+	bazelisk build //gerrit-console-api:$(CONSOLE_API_NAME)_deploy.jar
+	cp -f $(CONSOLE_API_BUILD_JAR_PATH) $(CONSOLE_API_RELEASE_JAR_PATH)
 	@echo "************ Compile Console-API Finished **************"
 .PHONY:fast-assembly-console
 
@@ -129,23 +132,23 @@ setup_environment: | $(testing_location)
 check_build_assets:
 	# check that our release.war and console-api.jar items have been built and are available
 	$(eval RELEASE_WAR_PATH=$(RELEASE_WAR_PATH))
-	$(eval CONSOLE_API_JAR_PATH=$(CONSOLE_API_JAR_PATH))
+	$(eval CONSOLE_API_RELEASE_JAR_PATH=$(CONSOLE_API_RELEASE_JAR_PATH))
 
 	# Writing out a new file, so create new one.
 	@echo "RELEASE_WAR_PATH=$(RELEASE_WAR_PATH)" > "$(GERRIT_ROOT)/env.properties"
 	@echo "INSTALLER_PATH=target" >> $(GERRIT_ROOT)/env.properties
-	@echo "CONSOLE_API_JAR_PATH=$(CONSOLE_API_JAR_PATH)" >> $(GERRIT_ROOT)/env.properties
+	@echo "CONSOLE_API_RELEASE_JAR_PATH=$(CONSOLE_API_RELEASE_JAR_PATH)" >> $(GERRIT_ROOT)/env.properties
 	@echo "Env.properties is saved to: $(GERRIT_ROOT)/env.properties)"
 
 	@[ -f $(RELEASE_WAR_PATH) ] && echo release.war exists || ( echo release.war not exists && exit 1;)
-	@[ -f $(CONSOLE_API_JAR_PATH) ] && echo console-api.jar exists || ( echo console-api.jar not exists && exit 1;)
+	@[ -f $(CONSOLE_API_RELEASE_JAR_PATH) ] && echo console-api.jar exists || ( echo console-api.jar not exists && exit 1;)
 .PHONY:check_build_assets
 
 installer: check_build_assets
 	@echo "\n************ Installer Phase Starting **************"
 
 	@echo "Building Gerrit Installer..."
-	$(GERRIT_ROOT)/gerrit-installer/create_installer.sh $(RELEASE_WAR_PATH) $(CONSOLE_API_JAR_PATH)
+	$(GERRIT_ROOT)/gerrit-installer/create_installer.sh $(RELEASE_WAR_PATH) $(CONSOLE_API_RELEASE_JAR_PATH)
 
 	@echo "\n************ Installer Phase Finished **************"
 .PHONY:installer
@@ -169,13 +172,13 @@ run-integration-tests: check_build_assets | $(testing_location)
 
 	@echo "Integration test location will be in: $(GERRIT_TEST_LOCATION)"
 	@echo "Release war path in makefile is: $(RELEASE_WAR_PATH)"
-	@echo "ConsoleApi jar path in makefile is: $(CONSOLE_API_JAR_PATH)"
+	@echo "ConsoleApi jar path in makefile is: $(CONSOLE_API_RELEASE_JAR_PATH).jar"
 	@echo "GITMS_VERSION is: $(GITMS_VERSION)"
 
 
 	$(if $(GITMS_VERSION),,$(error GITMS_VERSION is not set))
 
-	./build-tools/run-integration-tests.sh $(RELEASE_WAR_PATH) $(GERRIT_TEST_LOCATION) $(CONSOLE_API_JAR_PATH) $(GITMS_VERSION)
+	./build-tools/run-integration-tests.sh $(RELEASE_WAR_PATH) $(GERRIT_TEST_LOCATION) $(CONSOLE_API_RELEASE_JAR_PATH) $(GITMS_VERSION)
 
 	@echo "\n************ Integration Tests Finished **************"
 .PHONY:run-integration-tests
@@ -205,7 +208,7 @@ deploy-console:
 	-DartifactId=$(CONSOLE_ARTIFACTID) \
 	-Dversion="$(VERSION)" \
 	-Dpackaging=jar \
-	-Dfile=$(CONSOLE_API_JAR_PATH) \
+	-Dfile=$(CONSOLE_API_RELEASE_JAR_PATH) \
 	-DrepositoryId=releases \
 	-Durl=http://artifacts.wandisco.com:8081/artifactory/libs-release-local
 	@echo "\n************ Deploy Console-API Phase Finished **************"

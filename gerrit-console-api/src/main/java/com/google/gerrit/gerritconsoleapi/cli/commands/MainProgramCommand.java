@@ -122,7 +122,7 @@ public class MainProgramCommand implements CommandItem {
       CommandItem cmdItemBean = getCommandContextForHelp(commandTypeBean, arguments);
       cmdItemBean.displayHelp();
 
-      System.err.println("\nPlease use 'java -jar consoleapi.jar help <command>' for more specific context information.\n");
+      System.err.println("\nPlease use 'java -jar console-api.jar help <command>' for more specific context information.\n");
       return;
     }
 

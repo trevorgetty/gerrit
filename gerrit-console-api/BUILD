@@ -54,7 +54,7 @@ java_library2(
 
 java_binary(
     name = "console-api",
-    main_class = "com.google.gerrit.gerrit-console-api.CLI_Launcher",
+    main_class = "com.google.gerrit.gerritconsoleapi.CLI_Launcher",
     visibility = ["//visibility:public"],
     runtime_deps = [
         ":gerrit-console-api-module",
