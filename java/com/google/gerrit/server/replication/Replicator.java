@@ -24,7 +24,6 @@ import com.google.gerrit.server.events.Event;
 import com.google.gerrit.server.events.EventDeserializer;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
-import com.google.gerrit.server.events.EventWrapper;
 import com.google.gerrit.server.events.SupplierDeserializer;
 import com.google.gerrit.server.events.SupplierSerializer;
 import com.google.gson.GsonBuilder;
@@ -50,6 +49,11 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
+
+import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
+import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator;
+import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.DELETE_PROJECT_MESSAGE_EVENT;
+
 import com.wandisco.gerrit.gitms.shared.properties.GitMsApplicationProperties;
 import net.minidev.json.JSONObject;
 import net.minidev.json.JSONValue;
@@ -136,14 +140,14 @@ public class Replicator implements Runnable {
     private static long totalPublishedForeignGoodEvents = 0;
     private static long totalPublishedForeignGoodEventsBytes = 0;
     private static long totalPublishedForeignEventsBytes = 0;
-    private static final Multiset<EventWrapper.Originator> totalPublishedForeignEventsByType = HashMultiset.create();
+    private static final Multiset<Originator> totalPublishedForeignEventsByType = HashMultiset.create();
 
     private static long totalPublishedLocalEventsProsals = 0;
     private static long totalPublishedLocalEvents = 0;
     private static long totalPublishedLocalGoodEvents = 0;
     private static long totalPublishedLocalGoodEventsBytes = 0;
     private static long totalPublishedLocalEventsBytes = 0;
-    private static final Multiset<EventWrapper.Originator> totalPublishedLocalEventsByType = HashMultiset.create();
+    private static final Multiset<Originator> totalPublishedLocalEventsByType = HashMultiset.create();
 
     private static long lastCheckedIncomingDirTime = 0;
     private static long lastCheckedOutgoingDirTime = 0;
@@ -183,7 +187,7 @@ public class Replicator implements Runnable {
     boolean publishIncomingReplicatedEvents(EventWrapper newEvent);
   }
 
-  private final static Map<EventWrapper.Originator, Set<GerritPublishable>> eventListeners = new HashMap<>();
+  private final static Map<Originator, Set<GerritPublishable>> eventListeners = new HashMap<>();
 
   // Queue of events to replicate
   private final ConcurrentLinkedQueue<EventWrapper> queue = new ConcurrentLinkedQueue<>();
@@ -254,7 +258,7 @@ public class Replicator implements Runnable {
    * @param eventType
    * @return
    */
-  public boolean isSubscribed(EventWrapper.Originator eventType){
+  public boolean isSubscribed(Originator eventType){
     boolean subscribed=false;
     synchronized (eventListeners) {
         if(eventListeners.containsKey(eventType)){
@@ -264,7 +268,7 @@ public class Replicator implements Runnable {
     return subscribed;
   }
 
-  public static void subscribeEvent(EventWrapper.Originator eventType, GerritPublishable toCall) {
+  public static void subscribeEvent(Originator eventType, GerritPublishable toCall) {
     synchronized (eventListeners) {
       Set<GerritPublishable> set = eventListeners.get(eventType);
       if (set == null) {
@@ -276,7 +280,7 @@ public class Replicator implements Runnable {
     }
   }
 
-  public static void unsubscribeEvent(EventWrapper.Originator eventType, GerritPublishable toCall) {
+  public static void unsubscribeEvent(Originator eventType, GerritPublishable toCall) {
     synchronized (eventListeners) {
       Set<GerritPublishable> set = eventListeners.get(eventType);
       if (set != null) {
@@ -396,7 +400,7 @@ public class Replicator implements Runnable {
     return Stats.totalPublishedForeignGoodEventsBytes;
   }
 
-  public ImmutableMultiset<EventWrapper.Originator> getTotalPublishedForeignEventsByType() {
+  public ImmutableMultiset<Originator> getTotalPublishedForeignEventsByType() {
     return ImmutableMultiset.copyOf(Stats.totalPublishedForeignEventsByType);
   }
 
@@ -420,7 +424,7 @@ public class Replicator implements Runnable {
     return Stats.totalPublishedLocalGoodEventsBytes;
   }
 
-  public ImmutableMultiset<EventWrapper.Originator> getTotalPublishedLocalEventsByType() {
+  public ImmutableMultiset<Originator> getTotalPublishedLocalEventsByType() {
     return ImmutableMultiset.copyOf(Stats.totalPublishedLocalEventsByType);
   }
 
@@ -493,7 +497,7 @@ public class Replicator implements Runnable {
     setCurrentEventsFile();
 
     if (lastWriter != null) {
-      if (lastProjectName != null && !lastProjectName.equals(originalEvent.projectName)) {
+      if (lastProjectName != null && !lastProjectName.equals(originalEvent.getProjectName())) {
         //If the project is different, set a new current-events.json file and set the file ready
         setFileReady();
         setCurrentEventsFile();
@@ -506,7 +510,7 @@ public class Replicator implements Runnable {
       Stats.totalPublishedLocalEventsBytes += bytes.length;
       Stats.totalPublishedLocalGoodEventsBytes += bytes.length;
       Stats.totalPublishedLocalGoodEvents++;
-      Stats.totalPublishedLocalEventsByType.add(originalEvent.originator);
+      Stats.totalPublishedLocalEventsByType.add(originalEvent.getEventOrigin());
 
       writeEventsToFile(originalEvent, bytes);
       result = true;
@@ -581,7 +585,7 @@ public class Replicator implements Runnable {
       lastWriteTime = System.currentTimeMillis();
       writtenMessageCount++;
       //Set projectName upon writing the file
-      lastProjectName = originalEvent.projectName;
+      lastProjectName = originalEvent.getProjectName();
       setEventsFileName(originalEvent);
     }
   }
@@ -619,9 +623,9 @@ public class Replicator implements Runnable {
    * @param originalEvent
    */
   private void setEventsFileName(final EventWrapper originalEvent) {
-    String[] jsonData = ParseEventJson.jsonEventParse(originalEvent.event);
+    String[] jsonData = ParseEventJson.jsonEventParse(originalEvent.getEvent());
     if (jsonData == null || jsonData.length == 0) {
-      logger.atSevere().log("Unable to set event filename as there was a JSON parsing error %s", originalEvent.event);
+      logger.atSevere().log("Unable to set event filename as there was a JSON parsing error %s", originalEvent.getEvent());
       return;
     }
     if (jsonData[0] != null && jsonData[0].matches("[0-9]+")) {
@@ -849,10 +853,10 @@ public class Replicator implements Runnable {
           Stats.totalPublishedForeignGoodEventsBytes += eventsBytes.length;
           Stats.totalPublishedForeignGoodEvents++;
           synchronized (eventListeners) {
-            Stats.totalPublishedForeignEventsByType.add(changeEventWrapper.originator);
-            Set<GerritPublishable> clients = eventListeners.get(changeEventWrapper.originator);
+            Stats.totalPublishedForeignEventsByType.add(changeEventWrapper.getEventOrigin());
+            Set<GerritPublishable> clients = eventListeners.get(changeEventWrapper.getEventOrigin());
             if (clients != null) {
-              if (changeEventWrapper.originator == EventWrapper.Originator.FOR_REPLICATOR_EVENT) {
+              if (changeEventWrapper.getEventOrigin() == DELETE_PROJECT_MESSAGE_EVENT) {
                 continue;
               }
               for (GerritPublishable gp : clients) {

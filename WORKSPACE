@@ -1249,7 +1249,7 @@ maven_jar(
 )
 
 # WANdisco maven assets
-_GERRIT_GITMS_VERSION = "1.1.0.1-TC2"
+_GERRIT_GITMS_VERSION = "1.1.0.1-TC9"
 
 maven_jar(
     name = "gerrit-gitms-interface",

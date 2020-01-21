@@ -197,7 +197,7 @@ public final class ReplicatedEventsManager implements LifecycleListener {
       }
 
       //Read in a comma separated list of events that should be skipped.
-      eventSkipList = props.getPropertyAsList(GERRIT_EVENT_TYPES_TO_BE_SKIPPED, DEFAULT_GERRIT_EVENT_TYPES_TO_BE_SKIPPED);
+      eventSkipList = props.getPropertyAsList(GERRIT_EVENT_TYPES_TO_BE_SKIPPED);
       //Setting all to lowercase so user doesn't have to worry about correct casing.
       eventSkipList.replaceAll(String::toLowerCase);
 

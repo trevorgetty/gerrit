@@ -15,17 +15,18 @@ package com.google.gerrit.server.replication;
 import com.google.common.flogger.FluentLogger;
 import com.google.gerrit.reviewdb.client.Account;
 import com.google.gerrit.reviewdb.client.AccountGroup;
-import com.google.gerrit.server.events.EventWrapper;
 import com.google.gerrit.server.index.account.AccountIndexerImpl;
 import com.google.gerrit.server.index.group.GroupIndexerImpl;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
+import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
 
 import java.io.IOException;
 import java.io.Serializable;
 
-import static com.google.gerrit.server.events.EventWrapper.Originator.ACCOUNT_GROUP_INDEX_EVENT;
-import static com.google.gerrit.server.events.EventWrapper.Originator.ACCOUNT_USER_INDEX_EVENT;
+import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator;
+import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.ACCOUNT_GROUP_INDEX_EVENT;
+import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.ACCOUNT_USER_INDEX_EVENT;
 
 /**
  * This class is for replication of Group Index events
@@ -43,7 +44,7 @@ public class ReplicatedAccountsIndexManager implements Replicator.GerritPublisha
   private static final Gson gson = new Gson();
 
   private ReplicatedAccountIndexer indexer = null;
-  private EventWrapper.Originator originator = null;
+  private Originator originator = null;
 
   /**
    * Both AccountIndexerImpl and GroupIndexerImpl inherit our
@@ -52,7 +53,7 @@ public class ReplicatedAccountsIndexManager implements Replicator.GerritPublisha
    * @param indexer
    * @param event
    */
-  public void setIndexer(ReplicatedAccountIndexer indexer, EventWrapper.Originator event) {
+  public void setIndexer(ReplicatedAccountIndexer indexer, Originator event) {
     this.indexer = indexer;
     originator = event;
     //Only subscribe for the instance if not already subscribed
@@ -132,7 +133,8 @@ public class ReplicatedAccountsIndexManager implements Replicator.GerritPublisha
       accountIndexEventBase = new AccountGroupIndexEvent((AccountGroup.UUID) identifier, replicatorInstance.getThisNodeIdentity());
       logger.atFiner().log("RC Account Group reindex being replicated for UUID: %s ", identifier);
     }
-    replicatorInstance.queueEventForReplication(new EventWrapper("All-Users", accountIndexEventBase, originator));
+    replicatorInstance.queueEventForReplication(
+        GerritEventFactory.createReplicatedAccountIndexEvent("All-Users", accountIndexEventBase, originator));
   }
 
 
@@ -145,15 +147,15 @@ public class ReplicatedAccountsIndexManager implements Replicator.GerritPublisha
       return false;
     }
     //If originator is a ACCOUNT_GROUP_INDEX_EVENT or ACCOUNT_USER_INDEX_EVENT.
-    if (newEvent.originator == originator) {
+    if (newEvent.getEventOrigin() == originator) {
       try {
-        Class<?> eventClass = Class.forName(newEvent.className);
+        Class<?> eventClass = Class.forName(newEvent.getClassName());
         //Making the call to reindexAccountGroup for the local site.
         //i.e we don't need to make a replicated reindex now as we are receiving the
         //incoming replicated event to reindex.
         result = reindexAccount(newEvent, eventClass);
       } catch (ClassNotFoundException e) {
-        logger.atSevere().withCause(e).log("RC Account event reindex has been lost. Could not find %s", newEvent.className);
+        logger.atSevere().withCause(e).log("RC Account event reindex has been lost. Could not find %s", newEvent.getClassName());
       }
     }
     return result;
@@ -168,7 +170,7 @@ public class ReplicatedAccountsIndexManager implements Replicator.GerritPublisha
    */
   private boolean reindexAccount(EventWrapper newEvent, Class<?> eventClass) {
     try {
-      AccountIndexEventBase indexEventBase = (AccountIndexEventBase) gson.fromJson(newEvent.event, eventClass);
+      AccountIndexEventBase indexEventBase = (AccountIndexEventBase) gson.fromJson(newEvent.getEvent(), eventClass);
       indexer.indexNoRepl(indexEventBase.getIdentifier());
       return true;
     } catch (JsonSyntaxException | IOException e) {

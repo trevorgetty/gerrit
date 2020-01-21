@@ -19,10 +19,11 @@ import com.google.common.collect.ConcurrentHashMultiset;
 import com.google.common.collect.ImmutableMultiset;
 import com.google.common.collect.Multiset;
 import com.google.common.flogger.FluentLogger;
-import com.google.gerrit.server.events.EventWrapper;
 import com.google.gerrit.server.project.ProjectCache;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
+import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
+import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.CACHE_EVENT;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -206,7 +207,7 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
     logger.atInfo().log("CACHE New cache named %s inserted", cacheName);
     if (instance == null) {
       instance = new ReplicatedCacheManager();
-      Replicator.subscribeEvent(EventWrapper.Originator.CACHE_EVENT, instance);
+      Replicator.subscribeEvent(CACHE_EVENT, instance);
     }
     return instance;
   }
@@ -221,13 +222,13 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
     }
 
     CacheKeyWrapper cacheKeyWrapper = new CacheKeyWrapper(cacheName, key, Replicator.getInstance().getThisNodeIdentity());
-    EventWrapper eventWrapper = new EventWrapper(cacheKeyWrapper);
+    EventWrapper eventWrapper = GerritEventFactory.createReplicatedAllProjectsCacheEvent(cacheKeyWrapper);
     logger.atFiner().log("CACHE About to call replicated cache event: %s,%s", cacheName, key);
 
     //Block to force cache update to the All-Users repo so it is triggered in sequence after event that caused the eviction.
     if(getCacheEvictList().contains(cacheName)){
       logger.atFiner().log("CACHE User Cache event setting update against All-Users Project %s,%s", cacheName, key);
-      eventWrapper = new EventWrapper("All-Users", cacheKeyWrapper);
+      eventWrapper = GerritEventFactory.createReplicatedCacheEvent("All-Users", cacheKeyWrapper);
     }
     Replicator.getInstance().queueEventForReplication(eventWrapper);
     evictionsSent.add(cacheName);
@@ -247,7 +248,8 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
     }
     CacheObjectCallWrapper cacheMehodCall = new CacheObjectCallWrapper(cacheName, methodName, key);
     logger.atInfo().log("CACHE About to call replicated cache method: %s,%s,%s", cacheName, methodName, key);
-    Replicator.getInstance().queueEventForReplication(new EventWrapper(cacheMehodCall));
+    Replicator.getInstance().queueEventForReplication(
+        GerritEventFactory.createReplicatedAllProjectsCacheEvent(cacheMehodCall));
     evictionsSent.add(cacheName);
   }
 
@@ -299,13 +301,13 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
   @Override
   public boolean publishIncomingReplicatedEvents(EventWrapper newEvent) {
     boolean result = false;
-    if (newEvent != null && newEvent.originator == EventWrapper.Originator.CACHE_EVENT) {
+    if (newEvent != null && newEvent.getEventOrigin() == CACHE_EVENT) {
       try {
-        Class<?> eventClass = Class.forName(newEvent.className);
+        Class<?> eventClass = Class.forName(newEvent.getClassName());
         CacheKeyWrapper originalEvent = null;
 
         try {
-          originalEvent = (CacheKeyWrapper) gson.fromJson(newEvent.event, eventClass);
+          originalEvent = (CacheKeyWrapper) gson.fromJson(newEvent.getEvent(), eventClass);
         } catch (JsonSyntaxException e) {
           logger.atSevere().withCause(e).log("PR Could not decode json event {}", newEvent.toString());
           return result;
@@ -329,10 +331,10 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
           result = true;
         }
       } catch (ClassNotFoundException e) {
-        logger.atSevere().withCause(e).log("CACHE event has been lost. Could not find {}", newEvent.className);
+        logger.atSevere().withCause(e).log("CACHE event has been lost. Could not find {}", newEvent.getClassName());
       }
-    } else if (newEvent != null && newEvent.originator != EventWrapper.Originator.CACHE_EVENT) {
-      logger.atSevere().log("CACHE event has been sent here but originartor is not the right one (%s)", newEvent.originator);
+    } else if (newEvent != null && newEvent.getEventOrigin() != CACHE_EVENT) {
+      logger.atSevere().log("CACHE event has been sent here but originartor is not the right one (%s)", newEvent.getEventOrigin());
     }
     return result;
   }

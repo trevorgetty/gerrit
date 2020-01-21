@@ -24,6 +24,8 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
 import com.google.gwtorm.server.OrmException;
+import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
+import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.GERRIT_EVENT;
 
 import javax.inject.Singleton;
 import java.io.IOException;
@@ -84,7 +86,7 @@ public class ReplicatedEventsWorker implements Runnable, Replicator.GerritPublis
 
     if (eventReaderAndPublisherThread == null) {
       replicatorInstance = Replicator.getInstance();
-      replicatorInstance.subscribeEvent(EventWrapper.Originator.GERRIT_EVENT, this);
+      replicatorInstance.subscribeEvent(GERRIT_EVENT, this);
       // initialize our state, so we can use this to signal shutdown / finish.
       finished = false;
       // Passed in via lifecycle manager, to avoid a cyclic dependency in eventbroker->repEventManager->eventBroker
@@ -102,7 +104,7 @@ public class ReplicatedEventsWorker implements Runnable, Replicator.GerritPublis
   public synchronized void stopReplicationThread() {
     if (!finished) {
       finished = true;
-      Replicator.unsubscribeEvent(EventWrapper.Originator.GERRIT_EVENT, this);
+      Replicator.unsubscribeEvent(GERRIT_EVENT, this);
     }
   }
 
@@ -217,7 +219,7 @@ public class ReplicatedEventsWorker implements Runnable, Replicator.GerritPublis
     //If the newEvent is not a skipped event then we should queue the event for replication.
     if (newEvent != null && !isEventToBeSkipped(newEvent)) {
       replicatorInstance.queueEventForReplication(
-          new EventWrapper(newEvent, getChangeEventInfo(newEvent)));
+          GerritEventFactory.createReplicatedChangeEvent(newEvent, getChangeEventInfo(newEvent)));
       eventGot = true;
     }
     return eventGot;
@@ -235,8 +237,8 @@ public class ReplicatedEventsWorker implements Runnable, Replicator.GerritPublis
     boolean result = true;
     if (replicatedEventsManager.isReplicatedEventsEnabled()) {
       try {
-        Class<?> eventClass = Class.forName(newEvent.className);
-        Event originalEvent = (Event) gson.fromJson(newEvent.event, eventClass);
+        Class<?> eventClass = Class.forName(newEvent.getClassName());
+        Event originalEvent = (Event) gson.fromJson(newEvent.getEvent(), eventClass);
 
         if (originalEvent == null) {
           logger.atSevere().log("fromJson method returned null for %s", newEvent.toString());
@@ -258,11 +260,11 @@ public class ReplicatedEventsWorker implements Runnable, Replicator.GerritPublis
         logger.atSevere().withCause(e).log("PR Could not decode json event %s", newEvent.toString());
         return result;
       } catch (ClassNotFoundException e) {
-        logger.atInfo().log(errorReplicatedEventMessage, newEvent.event);
-        logger.atFiner().withCause(e).log(errorReplicatedEventMessage, newEvent.event);
+        logger.atInfo().log(errorReplicatedEventMessage, newEvent.getEvent());
+        logger.atFiner().withCause(e).log(errorReplicatedEventMessage, newEvent.getEvent());
         result = false;
       } catch (RuntimeException e) {
-        logger.atSevere().withCause(e).log(errorReplicatedEventMessage, newEvent.event);
+        logger.atSevere().withCause(e).log(errorReplicatedEventMessage, newEvent.getEvent());
         result = false;
       }
 
