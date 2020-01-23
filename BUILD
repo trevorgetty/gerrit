@@ -75,6 +75,8 @@ API_DEPS = [
     "//gerrit-plugin-gwtui:gwtui-api_deploy.jar",
     "//gerrit-plugin-gwtui:gwtui-api-source_deploy.jar",
     "//gerrit-plugin-gwtui:gwtui-api-javadoc",
+    "//gerrit-console-api:console-api_deploy.jar",
+    "//gerrit-console-api:libgerrit-console-api-module-src.jar",
 ]
 
 genrule2(

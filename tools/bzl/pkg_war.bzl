@@ -31,8 +31,14 @@ PGMLIBS = [
     "//java/com/google/gerrit/pgm",
 ]
 
+# Remove the concept of additional dependencies after we test LFS plugin.
+# This was used when I had the console-api module as an inprocess component in Gerrit LFS plugin.
+# To avoid memory leaks etc, we have sgit ince moved to use the console-api external standalone jar.
+# If we were ever to re-use the module part, it should just be added to gerrit-server:common target or something which would
+# define it as a runtime dependency instead of this hack! as this doesn't put it into the release.war WEB-INF/lib it just
+# means it gets built via back door inclusion.
 ADDITIONAL_DEPS = [
-    "//gerritconsoleapi:console-api",
+    #    "//gerritconsoleapi:console-api",
 ]
 
 def _add_context(in_file, output):

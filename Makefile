@@ -30,8 +30,12 @@ GITMS_VERSION := ${GITMS_VERSION}
 GERRIT_BAZEL_OUT := $(GERRIT_ROOT)/bazel-bin
 RELEASE_WAR_PATH := $(GERRIT_BAZEL_OUT)/release.war
 CONSOLE_API_NAME := console-api
-CONSOLE_API_BUILD_JAR_PATH := $(GERRIT_BAZEL_OUT)/gerrit-console-api/$(CONSOLE_API_NAME)_deploy.jar
-CONSOLE_API_RELEASE_JAR_PATH := $(GERRIT_BAZEL_OUT)/gerrit-console-api/$(CONSOLE_API_NAME).jar
+CONSOLE_API_DIR := $(GERRIT_BAZEL_OUT)/gerrit-console-api
+# Please note the _deploy jar is the standalone one with the manifest included for running with java -jar xxx.jar
+# The console-api.jar without deploy is a version for use in debugging locally with src files included for class path inclusion,
+# it can be run using "./console-api" wrapper script.
+CONSOLE_API_STANDALONE_JAR_PATH := $(CONSOLE_API_DIR)/$(CONSOLE_API_NAME)_deploy.jar
+CONSOLE_API_RELEASE_JAR_PATH := $(CONSOLE_API_DIR)/$(CONSOLE_API_NAME).jar
 
 CONSOLE_ARTIFACTID := gerrit-console-api
 CONSOLE_GROUPID := com.google.gerrit
@@ -88,9 +92,15 @@ fast-assembly-gerrit:
 #
 fast-assembly-console:
 	@echo "************ Compile Console-API Starting **************"
-	@echo "Building console-api"
-	bazelisk build //gerrit-console-api:$(CONSOLE_API_NAME)_deploy.jar
-	cp -f $(CONSOLE_API_BUILD_JAR_PATH) $(CONSOLE_API_RELEASE_JAR_PATH)
+	@echo "Building console-api and rest of API components"
+#	you could call bazelisk build //gerrit-console-api:console-api, or console-api_deploy
+# if you are just debugging locally but best to get the full scan of API dependencies build and put into the api.zip.
+	bazelisk build api
+
+# In the same way we build release.war and rename later to be gerrit.war we DO NOT overwrite the gerrit.war as this
+# is a completely different thing in bazel-bin ( i.e. gerrit without plugins ).  In the same way console-api.jar is a
+# version of the console-api for locally debugging which can be run from the console-api script.
+	@echo "Ready to pick up your console-api from bazel-bin/gerrit-console-api/console-api_deploy.jar"
 	@echo "************ Compile Console-API Finished **************"
 .PHONY:fast-assembly-console
 
@@ -133,22 +143,23 @@ check_build_assets:
 	# check that our release.war and console-api.jar items have been built and are available
 	$(eval RELEASE_WAR_PATH=$(RELEASE_WAR_PATH))
 	$(eval CONSOLE_API_RELEASE_JAR_PATH=$(CONSOLE_API_RELEASE_JAR_PATH))
+	$(eval CONSOLE_API_STANDALONE_JAR_PATH=$(CONSOLE_API_STANDALONE_JAR_PATH))
 
 	# Writing out a new file, so create new one.
 	@echo "RELEASE_WAR_PATH=$(RELEASE_WAR_PATH)" > "$(GERRIT_ROOT)/env.properties"
 	@echo "INSTALLER_PATH=target" >> $(GERRIT_ROOT)/env.properties
-	@echo "CONSOLE_API_RELEASE_JAR_PATH=$(CONSOLE_API_RELEASE_JAR_PATH)" >> $(GERRIT_ROOT)/env.properties
+	@echo "CONSOLE_API_STANDALONE_JAR_PATH=$(CONSOLE_API_STANDALONE_JAR_PATH)" >> $(GERRIT_ROOT)/env.properties
 	@echo "Env.properties is saved to: $(GERRIT_ROOT)/env.properties)"
 
 	@[ -f $(RELEASE_WAR_PATH) ] && echo release.war exists || ( echo release.war not exists && exit 1;)
-	@[ -f $(CONSOLE_API_RELEASE_JAR_PATH) ] && echo console-api.jar exists || ( echo console-api.jar not exists && exit 1;)
+	@[ -f $(CONSOLE_API_STANDALONE_JAR_PATH) ] && echo console-api exeutable exists || ( echo console-api exeutable does not exist && exit 1;)
 .PHONY:check_build_assets
 
 installer: check_build_assets
 	@echo "\n************ Installer Phase Starting **************"
 
 	@echo "Building Gerrit Installer..."
-	$(GERRIT_ROOT)/gerrit-installer/create_installer.sh $(RELEASE_WAR_PATH) $(CONSOLE_API_RELEASE_JAR_PATH)
+	$(GERRIT_ROOT)/gerrit-installer/create_installer.sh $(RELEASE_WAR_PATH) $(CONSOLE_API_STANDALONE_JAR_PATH)
 
 	@echo "\n************ Installer Phase Finished **************"
 .PHONY:installer

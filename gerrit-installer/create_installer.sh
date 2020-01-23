@@ -13,19 +13,18 @@ if [ ! -f "${RELEASE_WAR}" ]; then
   exit 1
 fi
 
-#skipping this and not exiting because we want this backward compatible.
 if [ ! -f "${CONSOLE_API_JAR}" ]; then
   echo "Error: ${CONSOLE_API_JAR} not found"
   exit 1
 else
-  install -m 0640 ${CONSOLE_API_JAR} target/tmp
+  install -p -m 0640 ${CONSOLE_API_JAR} target/tmp/console-api.jar
 fi
 
-install -m 0550 gerrit-installer/installer.sh target/tmp
-install -m 0550 gerrit-installer/sync_repo.sh target/tmp
-install -m 0550 gerrit-installer/reindex.sh target/tmp
-install -m 0640 gerrit-installer/resources/logo.txt target/tmp/resources
-install -m 0640 ${RELEASE_WAR} target/tmp
+install -p -m 0550 gerrit-installer/installer.sh target/tmp
+install -p -m 0550 gerrit-installer/sync_repo.sh target/tmp
+install -p -m 0550 gerrit-installer/reindex.sh target/tmp
+install -p -m 0640 gerrit-installer/resources/logo.txt target/tmp/resources
+install -p -m 0640 ${RELEASE_WAR} target/tmp
 
 
 makeself target/tmp gerritms-installer.sh "GerritMS Installer" ./installer.sh
