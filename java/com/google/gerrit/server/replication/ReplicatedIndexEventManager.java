@@ -67,6 +67,12 @@ public class ReplicatedIndexEventManager implements LifecycleListener {
   public static class Module extends LifecycleModule {
     @Override
     protected void configure() {
+      // If replication is disabled, do not bring these classes.
+      if (Replicator.isReplicationDisabled()) {
+        logger.atInfo().log("Not binding these classes as replication is disabled.");
+        return;
+      }
+
       bind(ReplicatedIndexEventManager.class);
       listener().to(ReplicatedIndexEventManager.class);
     }
@@ -80,7 +86,7 @@ public class ReplicatedIndexEventManager implements LifecycleListener {
   public void start() {
     logger.atInfo().log("Create the rep event listener now!");
 
-    if ( worker != null ){
+    if (worker != null) {
       // we should never overwrite our worker part way through - throw as this is invalid!!
       throw new RuntimeException("Invalid state - lifecycle start called on already running ReplicatedIndexEventManager");
     }
@@ -197,8 +203,7 @@ public class ReplicatedIndexEventManager implements LifecycleListener {
    */
   private static void queueReplicationIndexEvent(int indexNumber, String projectName, Timestamp lastUpdatedOn, boolean deleteIndex) {
 
-    if ( worker == null )
-    {
+    if (worker == null) {
       // someone is trying to queue a replication event - when we have no replication worker.
       // This happens when we dont register the ReplicatedIndexEventsManager which we only do for main Daemon currently!!
       return;

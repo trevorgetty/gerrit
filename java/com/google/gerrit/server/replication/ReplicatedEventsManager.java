@@ -54,6 +54,12 @@ public final class ReplicatedEventsManager implements LifecycleListener {
   public static class Module extends LifecycleModule {
     @Override
     protected void configure() {
+      // If replication is disabled, do not bring these classes.
+      if ( Replicator.isReplicationDisabled() ) {
+        logger.atInfo().log("Not binding these classes as replication is disabled.");
+        return;
+      }
+
       bind(ReplicatedEventsManager.class);
       listener().to(ReplicatedEventsManager.class);
     }
