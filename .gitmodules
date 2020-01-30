@@ -40,3 +40,4 @@
 [submodule "plugins/delete-project"]
 	path = plugins/delete-project
 	url = ../gerrit-delete-project-plugin
+        branch = .
