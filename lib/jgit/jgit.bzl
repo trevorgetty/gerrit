@@ -71,6 +71,43 @@ def jgit_maven_repos():
         unsign = True,
     )
 
+    # Added to support lfs as core plugin from gerrit workspace
+    maven_jar(
+        name = "jgit-http-apache",
+        artifact = "org.eclipse.jgit:org.eclipse.jgit.http.apache:" + JGIT_VERS,
+        #        sha1 = "e52f857da16f4aeaf4861d736f3fc8a2eb6b031f",
+        repository = JGIT_REPO,
+        unsign = True,
+        exclude = [
+            "about.html",
+            "plugin.properties",
+        ],
+    )
+
+    maven_jar(
+        name = "jgit-lfs",
+        artifact = "org.eclipse.jgit:org.eclipse.jgit.lfs:" + JGIT_VERS,
+        #        sha1 = "772535caadb63866039acf6cd149939838c1d663",
+        repository = JGIT_REPO,
+        unsign = True,
+        exclude = [
+            "about.html",
+            "plugin.properties",
+        ],
+    )
+
+    maven_jar(
+        name = "jgit-lfs-server",
+        artifact = "org.eclipse.jgit:org.eclipse.jgit.lfs.server:" + JGIT_VERS,
+        #        sha1 = "a3344e68b00ef8a79859eebd07adf945197ba1e6",
+        repository = JGIT_REPO,
+        unsign = True,
+        exclude = [
+            "about.html",
+            "plugin.properties",
+        ],
+    )
+
 def jgit_dep(name):
     mapping = {
         "@jgit-archive//jar": "@jgit//org.eclipse.jgit.archive:jgit-archive",
@@ -78,6 +115,9 @@ def jgit_dep(name):
         "@jgit-lib//jar": "@jgit//org.eclipse.jgit:jgit",
         "@jgit-lib//jar:src": "@jgit//org.eclipse.jgit:libjgit-src.jar",
         "@jgit-servlet//jar": "@jgit//org.eclipse.jgit.http.server:jgit-servlet",
+        "@jgit-http-apache//jar": "@jgit//org.eclipse.jgit.http.apache:jgit-http-apache",
+        "@jgit-lfs//jar": "@jgit//org.eclipse.jgit.lfs:jgit-lfs",
+        "@jgit-lfs-server//jar": "@jgit//org.eclipse.jgit.lfs.server:jgit-lfs-server",
     }
 
     if LOCAL_JGIT_REPO:
