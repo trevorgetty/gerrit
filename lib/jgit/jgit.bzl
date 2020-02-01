@@ -4,7 +4,7 @@ _JGIT_VANILLA_VERS = "5.1.12"
 _DOC_VERS = _JGIT_VANILLA_VERS  # Set to _JGIT_VANILA_VERS unless using a snapshot
 
 # Defines the WD postfix
-_POSTFIX_WD = "-WDv1-TC2"
+_POSTFIX_WD = "-WDv1-TC4-SNAPSHOT"
 
 # Defines the version of jgit, even the replicated version of jgit, should be no external use of the vanilla version.
 JGIT_VERS = _JGIT_VANILLA_VERS + _POSTFIX_WD
