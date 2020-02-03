@@ -1,7 +1,7 @@
 load("//tools/bzl:maven_jar.bzl", "MAVEN_CENTRAL", "WANDISCO_ASSETS", "maven_jar")
 
 _JGIT_VANILLA_VERS = "5.1.12"
-_DOC_VERS = _JGIT_VANILLA_VERS  # Set to _JGIT_VANILA_VERS unless using a snapshot
+_DOC_VERS = "5.1.12.201910011832-r"  # Set to _JGIT_VANILA_VERS unless using a snapshot
 
 # Defines the WD postfix
 _POSTFIX_WD = "-WDv1-TC4-SNAPSHOT"
