@@ -23,6 +23,8 @@ GERRIT_ROOT= $(mkfile_path)
 # JENKINS_WORKSPACE is the location where the job puts work by default, and we need to have assets paths relative
 # to the workspace in some occasions.
 JENKINS_WORKSPACE ?= $(GERRIT_ROOT)
+ARTIFACT_REPO := libs-staging-local
+
 
 # Works on OSX.
 VERSION := $(shell $(GERRIT_ROOT)/build-tools/get_version_number.sh $(GERRIT_ROOT))
@@ -37,9 +39,13 @@ CONSOLE_API_DIR := $(GERRIT_BAZEL_OUT)/gerrit-console-api
 CONSOLE_API_STANDALONE_JAR_PATH := $(CONSOLE_API_DIR)/$(CONSOLE_API_NAME)_deploy.jar
 CONSOLE_API_RELEASE_JAR_PATH := $(CONSOLE_API_DIR)/$(CONSOLE_API_NAME).jar
 
+GERRITMS_GROUPID := com.google.gerrit
+
 CONSOLE_ARTIFACTID := gerrit-console-api
-CONSOLE_GROUPID := com.google.gerrit
-CONSOLE_PREFIX := $(CONSOLE_GROUPID).$(CONSOLE_ARTIFACTID)
+CONSOLE_PREFIX := $(GERRITMS_GROUPID).$(CONSOLE_ARTIFACTID)
+
+GERRITMS_ARTIFACTID := gerritms
+GERRITMS_INSTALLER_ARTIFACTID := gerritms-installer
 
 PKG_NAME   := gerritms
 RPM_PREFIX := com.google.gerrit
@@ -199,11 +205,34 @@ deploy: deploy-console deploy-gerrit
 
 deploy-gerrit:
 	@echo "\n************ Deploy GerritMS Starting **************"
-	@echo "TODO: For now skipping the deploy of GerritMS to artifactory."
-	@echo "Consider looking at deploying these assets though..."
-	@echo
-	@./build-tools/list_asset_locations.sh $(JENKINS_WORKSPACE) false
-	@echo
+	@echo "The gerrit release.war and the gerrit-installer.sh will be deployed"
+
+	@echo "\nChecking for the required assets."
+	./build-tools/list_asset_locations.sh $(JENKINS_WORKSPACE) true
+
+	@echo "Running mvn deploy:deploy-file to deploy the GerritMS artifacts to Artifactory..."
+	@echo "Deploying as version: $(VERSION)"
+
+	#Deploying the release.war to com.google.gerrit/gerritms
+	mvn -X deploy:deploy-file \
+		-DgroupId=$(GERRITMS_GROUPID) \
+		-DartifactId=$(GERRITMS_ARTIFACTID) \
+		-Dversion=$(VERSION) \
+		-Dpackaging=war \
+		-Dfile=$(RELEASE_WAR_PATH) \
+		-DrepositoryId=artifacts \
+		-Durl=http://artifacts.wandisco.com:8081/artifactory/$(ARTIFACT_REPO)
+
+	#Deploying the gerritms-installer.sh to com.google.gerrit/gerritms-installer
+	mvn -X deploy:deploy-file \
+		-DgroupId=$(GERRITMS_GROUPID) \
+		-DartifactId=$(GERRITMS_INSTALLER_ARTIFACTID) \
+		-Dversion=$(VERSION) \
+		-Dpackaging=sh \
+		-Dfile=$(INSTALLER_PATH) \
+		-DrepositoryId=artifacts \
+		-Durl=http://artifacts.wandisco.com:8081/artifactory/$(ARTIFACT_REPO)
+
 	@echo "\n************ Deploy  GerritMS Finished **************"
 
 .PHONY:deploy-gerrit
@@ -215,13 +244,13 @@ deploy-console:
 
 	# use mvn deploy-file target, to deploy any file, and we will give it the pom properties to deploy as...
 	mvn deploy:deploy-file \
-	-DgroupId=$(CONSOLE_GROUPID) \
+	-DgroupId=$(GERRITMS_GROUPID) \
 	-DartifactId=$(CONSOLE_ARTIFACTID) \
 	-Dversion="$(VERSION)" \
 	-Dpackaging=jar \
 	-Dfile=$(CONSOLE_API_RELEASE_JAR_PATH) \
-	-DrepositoryId=releases \
-	-Durl=http://artifacts.wandisco.com:8081/artifactory/libs-release-local
+	-DrepositoryId=artifacts \
+	-Durl=http://artifacts.wandisco.com:8081/artifactory/$(ARTIFACT_REPO)
 	@echo "\n************ Deploy Console-API Phase Finished **************"
 .PHONY:deploy-console
 

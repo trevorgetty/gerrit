@@ -66,19 +66,19 @@ function check_for_asset(){
     local suffixLocation=${assetLocation:$WORKSPACE_PATH_LEN+1}
     addAssetToList "$suffixLocation"
   else
-	  debug "Unable to locate asset: $assetLocation"
+    debug "Unable to locate asset: $assetLocation"
 
-	  # We only need to exit here hard, if the isRequiredAsset is set to true.
-	  if [[ $isRequiredAsset == $TRUE ]]; then
-	    echo "Item was a required asset - exiting now."
-	    exit 1;
-	  fi
+    # We only need to exit here hard, if the isRequiredAsset is set to true.
+    if [[ $isRequiredAsset == $TRUE ]]; then
+      echo "Item was a required asset - exiting now."
+      exit 1;
+    fi
   fi
 }
 
 check_for_asset "$ASSETS_PATH/plugins/delete-project/delete-project.jar" $TRUE
 # TODO: for moment during 2.16 dev lfs is optional, put back to required.
-check_for_asset "$ASSETS_PATH/plugins/lfs/lfs.jar" $FALSE
+check_for_asset "$ASSETS_PATH/plugins/lfs/lfs.jar" $TRUE
 check_for_asset "$ASSETS_PATH/release.war" $TRUE
 check_for_asset "$ASSETS_PATH/gerrit-console-api/console-api.jar" $TRUE
 check_for_asset "$GERRIT_REPO_ROOT/target/gerritms-installer.sh" $TRUE
