@@ -11,7 +11,6 @@ declare GERRITMS_INSTALLER_OUT=$GERRIT_REPO_ROOT/target
 #  Common two use cases will be:
 #  deploy-gerrit-assets.sh 2.16.12_WDv1-SNAPSHOT libs-release-local releases
 #  deploy-gerrit-assets.sh 2.16.12_WDv1-SNAPSHOT libs-staging-local artifacts
-}
 
 # Obtaining script arguments
 declare VERSION=${1}
