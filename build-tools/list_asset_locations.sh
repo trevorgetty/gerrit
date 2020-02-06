@@ -1,9 +1,8 @@
 #!/bin/bash --noprofile
 
-declare SCRIPT_DIR=`dirname "$BASH_SOURCE"`
-declare GERRIT_REPO_ROOT=$(realpath "$SCRIPT_DIR/../")
-declare ASSETS_PATH="$GERRIT_REPO_ROOT/bazel-bin"
-declare ENV_PROPERTIES_FILE="$GERRIT_REPO_ROOT/env.properties"
+build_tool_dir="$(dirname "$0")"
+source "$build_tool_dir/build-tools-base.sh"
+
 declare -r TRUE="true"
 declare -r FALSE="false"
 declare WORKSPACE_PATH_LEN

@@ -30,6 +30,8 @@ ARTIFACT_REPO := libs-staging-local
 VERSION := $(shell $(GERRIT_ROOT)/build-tools/get_version_number.sh $(GERRIT_ROOT))
 GITMS_VERSION := ${GITMS_VERSION}
 GERRIT_BAZEL_OUT := $(GERRIT_ROOT)/bazel-bin
+
+GERRITMS_INSTALLER_OUT := target/gerritms-installer.sh
 RELEASE_WAR_PATH := $(GERRIT_BAZEL_OUT)/release.war
 CONSOLE_API_NAME := console-api
 CONSOLE_API_DIR := $(GERRIT_BAZEL_OUT)/gerrit-console-api
@@ -203,6 +205,23 @@ run-integration-tests: check_build_assets | $(testing_location)
 deploy: deploy-console deploy-gerrit
 .PHONY:deploy
 
+# Deploys all gerritms assets
+deploy-all-gerrit:
+	@echo "\n************ Deploying All GerritMS Assets **************"
+	@echo "All GerritMS assets will be deployed."
+	@echo "[ release.war, gerritms-installer.sh, lfs.jar, delete-project.jar, console-api.jar ]"
+	@echo "Checking for available built assets"
+	@echo "***********************************************************"
+	./build-tools/list_asset_locations.sh $(JENKINS_WORKSPACE) true
+	@echo "***********************************************************"
+	@echo "Beginning deployment of all assets"
+	# NOTE that the repositoryId is currently 'artifacts'. There will be a check in future whereby we
+	# may want to deploy to libs-release-local in which case the repositoryId would be 'releases'
+	./build-tools/deploy-gerrit-assets.sh $(VERSION) $(ARTIFACT_REPO) artifacts
+
+.PHONY:deploy-all-gerrit
+
+#Still available to use but considered deprecated in favour of deploy-all-gerrit
 deploy-gerrit:
 	@echo "\n************ Deploy GerritMS Starting **************"
 	@echo "The gerrit release.war and the gerrit-installer.sh will be deployed"
@@ -228,8 +247,7 @@ deploy-gerrit:
 		-DgroupId=$(GERRITMS_GROUPID) \
 		-DartifactId=$(GERRITMS_INSTALLER_ARTIFACTID) \
 		-Dversion=$(VERSION) \
-		-Dpackaging=sh \
-		-Dfile=$(INSTALLER_PATH) \
+		-Dfile=$(GERRITMS_INSTALLER_OUT) \
 		-DrepositoryId=artifacts \
 		-Durl=http://artifacts.wandisco.com:8081/artifactory/$(ARTIFACT_REPO)
 
@@ -237,6 +255,7 @@ deploy-gerrit:
 
 .PHONY:deploy-gerrit
 
+#Still available to use but considered deprecated in favour of deploy-all-gerrit
 deploy-console:
 	@echo "\n************ Deploy Console-API Phase Starting **************"
 	@echo "Running mvn deploy:deploy-file to deploy the console-api.jar to Artifactory..."
@@ -270,6 +289,7 @@ help:
 	@echo "   make list-assets					-> Will list all assets from a built project, and return them in env var: ASSETS_FOUND"
 	@echo "   make deploy                       -> will deploy the installer packages of GerritMS and ConsoleAPI to artifactory"
 	@echo "   make deploy-gerrit                -> will deploy the installer package of GerritMS"
+	@echo "   make deploy-all-gerrit            -> will deploy all the assets associated with GerritMS"
 	@echo "   make deploy-console               -> will deploy the installer package of GerritMS Console API"
 	@echo "   make help                         -> Display available targets"
 .PHONY:help
