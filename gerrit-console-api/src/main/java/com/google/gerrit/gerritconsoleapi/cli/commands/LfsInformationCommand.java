@@ -13,31 +13,24 @@
  
 package com.google.gerrit.gerritconsoleapi.cli.commands;
 
-import com.google.common.base.Strings;
 import com.google.gerrit.gerritconsoleapi.cli.processing.AllProjectsInProcessLoader;
 import com.google.gerrit.gerritconsoleapi.cli.processing.CliCommandItemBase;
-import com.google.gerrit.gerritconsoleapi.cli.processing.CmdLineParserFactory;
 import com.google.gerrit.gerritconsoleapi.exceptions.LogAndExitException;
 
 import com.google.gerrit.sshd.CommandMetaData;
 import com.wandisco.gerrit.gitms.shared.config.lfs.LfsConfigFactory;
 import com.wandisco.gerrit.gitms.shared.config.lfs.LfsProjectConfigSection;
-import com.wandisco.gerrit.gitms.shared.config.lfs.LfsStorageBackend;
 import com.wandisco.gerrit.gitms.shared.properties.GitMsApplicationProperties;
-import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
-import org.kohsuke.args4j.OptionHandlerFilter;
 
-import java.io.File;
 import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.io.PrintStream;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 
 import java.util.Map;
 
+import static com.google.gerrit.gerritconsoleapi.GerConError.LFS_CONFIG_INFO_ERROR;
 import static com.google.gerrit.gerritconsoleapi.LfsRepositoryUtilities.*;
+
 
 
 @CommandMetaData(name = "lfs-info", description = "Lfs content storage location of the backend belonging to the specified repository.")
@@ -61,7 +54,7 @@ public class LfsInformationCommand extends CliCommandItemBase {
       applicationProperties = new GitMsApplicationProperties();
     } catch (IOException e) {
       debugStackTrace(e);
-      throw new RuntimeException( new LogAndExitException("Unable to obtain LFS configuration information.", e));
+      throw new LogAndExitException(LFS_CONFIG_INFO_ERROR.getDescription() + " : Unable to obtain LFS configuration information.", e, LFS_CONFIG_INFO_ERROR.getCode());
     }
 
     try {
@@ -71,7 +64,7 @@ public class LfsInformationCommand extends CliCommandItemBase {
       configFactory.setAllProjectsLoaderCallback(allProjectsLoader);
     } catch (Exception e) {
       debugStackTrace(e);
-      throw new RuntimeException( new LogAndExitException("Unable to obtain LFS configuration information.", e));
+      throw new LogAndExitException(LFS_CONFIG_INFO_ERROR.getDescription() + " : Unable to obtain LFS configuration information.", e, LFS_CONFIG_INFO_ERROR.getCode());
     }
   }
 
@@ -91,7 +84,7 @@ public class LfsInformationCommand extends CliCommandItemBase {
         return;
       }
     } catch (Exception e) {
-      throw new LogAndExitException("Unable to obtain information about whether this repository is LFS enabled. Details: ", e);
+      throw new LogAndExitException(LFS_CONFIG_INFO_ERROR.getDescription() + " : Unable to obtain information about whether this repository is LFS enabled. Details: ", e, LFS_CONFIG_INFO_ERROR.getCode());
     }
 
     // it is a repo, get its LFS Project configuration.
@@ -99,7 +92,7 @@ public class LfsInformationCommand extends CliCommandItemBase {
     try {
       reposLfsConfiguration = configFactory.getLfsAllProjectsConfig().getSpecificProjectsLfsConfig(repositoryName);
     } catch (Exception e) {
-      throw new LogAndExitException("Unable to obtain information repository LFS configuration information. Details: ", e);
+      throw new LogAndExitException(LFS_CONFIG_INFO_ERROR.getDescription() + " : Unable to obtain information repository LFS configuration information. Details: ", e, LFS_CONFIG_INFO_ERROR.getCode());
     }
 
     // Turn into a set of name / value pairs, representing the LFS configuration for this project for ease of use later.
@@ -112,7 +105,7 @@ public class LfsInformationCommand extends CliCommandItemBase {
           configFactory.getGerritServerLfsConfig().getGerritRootDir(),
           configFactory.getGerritServerLfsConfig().getDefaultBackendDirectory());
     } catch (Exception e) {
-      throw new LogAndExitException("Unable to obtain LFS backend storage location. Details: ", e);
+      throw new LogAndExitException(LFS_CONFIG_INFO_ERROR.getDescription() + " : Unable to obtain LFS backend storage location. Details: ", e, LFS_CONFIG_INFO_ERROR.getCode());
     }
 
     // Now we have the backend get the information about it.

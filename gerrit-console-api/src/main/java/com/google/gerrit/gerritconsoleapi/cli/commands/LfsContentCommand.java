@@ -27,8 +27,9 @@ import java.io.*;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
+
+import static com.google.gerrit.gerritconsoleapi.GerConError.LFS_CONTENT_ERROR;
 import static com.google.gerrit.gerritconsoleapi.LfsRepositoryUtilities.*;
 import static com.wandisco.gerrit.gitms.shared.commands.GitCommandRunner.lfsLsFiles;
 
@@ -57,7 +58,7 @@ public class LfsContentCommand extends CliCommandItemBase {
       applicationProperties = new GitMsApplicationProperties();
     } catch (IOException e) {
       debugStackTrace(e);
-      throw new RuntimeException( new LogAndExitException("Unable to obtain LFS configuration information.", e));
+      throw new LogAndExitException(LFS_CONTENT_ERROR.getDescription() + " : Unable to obtain LFS configuration information.", e, LFS_CONTENT_ERROR.getCode());
     }
 
     try {
@@ -67,7 +68,7 @@ public class LfsContentCommand extends CliCommandItemBase {
       configFactory.setAllProjectsLoaderCallback(allProjectsLoader);
     } catch (Exception e) {
       debugStackTrace(e);
-      throw new RuntimeException( new LogAndExitException("Unable to obtain LFS configuration information.", e));
+      throw new LogAndExitException(LFS_CONTENT_ERROR.getDescription() + " : Unable to obtain LFS configuration information.", e, LFS_CONTENT_ERROR.getCode());
     }
   }
 
@@ -96,7 +97,7 @@ public class LfsContentCommand extends CliCommandItemBase {
         return;
       }
     } catch (Exception e) {
-      throw new LogAndExitException("Unable to obtain information about whether this repository is LFS enabled. Details: ", e);
+      throw new LogAndExitException( LFS_CONTENT_ERROR.getDescription() + " : Unable to obtain information about whether this repository is LFS enabled. Details: ", e, LFS_CONTENT_ERROR.getCode());
     }
 
     // it is a repo, get its LFS Project configuration.
@@ -104,7 +105,7 @@ public class LfsContentCommand extends CliCommandItemBase {
     try {
       reposLfsConfiguration = configFactory.getLfsAllProjectsConfig().getSpecificProjectsLfsConfig(repositoryName);
     } catch (Exception e) {
-      throw new LogAndExitException("Unable to obtain information repository LFS configuration information. Details: ", e);
+      throw new LogAndExitException(LFS_CONTENT_ERROR.getDescription() + " : Unable to obtain information repository LFS configuration information. Details: ", e, LFS_CONTENT_ERROR.getCode());
     }
 
     // Turn into a set of name / value pairs, representing the LFS configuration for this project for ease of use later.
@@ -117,7 +118,7 @@ public class LfsContentCommand extends CliCommandItemBase {
           configFactory.getGerritServerLfsConfig().getGerritRootDir(),
           configFactory.getGerritServerLfsConfig().getDefaultBackendDirectory());
     } catch (Exception e) {
-      throw new LogAndExitException("Unable to obtain LFS backend storage location. Details: ", e);
+      throw new LogAndExitException(LFS_CONTENT_ERROR.getDescription() + " : Unable to obtain LFS backend storage location. Details: ", e, LFS_CONTENT_ERROR.getCode());
     }
 
     // ok now we have the storage location on disk lets get the full list of content from this repo.
@@ -131,7 +132,7 @@ public class LfsContentCommand extends CliCommandItemBase {
       lfsContentOids = parseLfsContentInfo(lfsContentInfo);
     } catch (Exception e) {
       debugStackTrace(e);
-      throw new LogAndExitException("Failed to obtain the list of lfs-content");
+      throw new LogAndExitException(LFS_CONTENT_ERROR.getDescription() + " : Failed to obtain the list of lfs-content : " , e, LFS_CONTENT_ERROR.getCode());
     }
 
     // ok now we have a list of content, we need to do 2 things.
@@ -161,16 +162,16 @@ public class LfsContentCommand extends CliCommandItemBase {
       if ( Strings.isNullOrEmpty(oid))
       {
         throw new LogAndExitException(
-            String.format("A problem occurred processing the lfs-content as the lfs ls-files command returned an oid of incorrect length or format.\n" +
-            "Item is: %s", lfsContent));
+            String.format( LFS_CONTENT_ERROR.getDescription() + " : A problem occurred processing the lfs-content as the lfs ls-files command returned an oid of incorrect length or format.\n" +
+            "Item is: %s", lfsContent), LFS_CONTENT_ERROR.getCode());
       }
 
       // now check out item is 64 characters.
       if ( oid.length() != 64 )
       {
         throw new LogAndExitException(
-            String.format("A problem occurred processing the lfs-content as the lfs ls-files command returned a list which doesn't have an 64 character oid as first member.\n" +
-                "Item is: {%s} with first string being of length: {%s}", lfsContent, oid.length()));
+            String.format(LFS_CONTENT_ERROR.getDescription() + " : A problem occurred processing the lfs-content as the lfs ls-files command returned a list which doesn't have an 64 character oid as first member.\n" +
+                "Item is: {%s} with first string being of length: {%s}", lfsContent, oid.length()), LFS_CONTENT_ERROR.getCode());
       }
 
       // now we have the oid add to our list.
@@ -204,7 +205,7 @@ public class LfsContentCommand extends CliCommandItemBase {
         logwarning(String.format("Processed a total of:{%s} lfs content entries.", lfsContentOids.size()));
 
       } catch (IOException e) {
-        throw new LogAndExitException("A problem occurred when writing the lfs-content information to disk.", e);
+        throw new LogAndExitException(LFS_CONTENT_ERROR.getDescription() + " : A problem occurred when writing the lfs-content information to disk.", e, LFS_CONTENT_ERROR.getCode());
       }
 
       return;

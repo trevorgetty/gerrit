@@ -33,6 +33,8 @@ import java.io.OutputStreamWriter;
 import java.util.Arrays;
 import java.util.List;
 
+import static com.google.gerrit.gerritconsoleapi.GerConError.LFS_RUNTIME_ERROR;
+
 /**
  * A class used to parse configuration files stored in the All-Projects repo.
  * Command line arguments can be passed which are used to specify the config
@@ -112,7 +114,6 @@ public class MainProgramCommand implements CommandItem {
       // class, if we can't do this, just allow the default handling to kick in using the default SubCommand->Config
       parser.parseArgument(arguments);
     } catch (CmdLineException ex) {
-
       System.err.println("An error occurred....");
       System.err.println(ex.getMessage());
 
@@ -163,8 +164,6 @@ public class MainProgramCommand implements CommandItem {
     return commandTypeBean;
   }
 
-
-
   /**
    * Execute this classes purpose, which is to call the appropriate sub command now we have got this far.
    */
@@ -184,7 +183,7 @@ public class MainProgramCommand implements CommandItem {
 
   @Override
   public void execute() throws LogAndExitException {
-    throw new LogAndExitException("Not supported to call execute without args here.");
+    throw new LogAndExitException(LFS_RUNTIME_ERROR.getDescription() + " : Not supported to call execute without args here.", LFS_RUNTIME_ERROR.getCode());
   }
   /**
    * Display Help for this application, and example use.
@@ -207,21 +206,23 @@ public class MainProgramCommand implements CommandItem {
 
     // TODO, make this easier, to get any command in namespace X?  maybe reflection or bindings?
     // Show each command here.
-    List<CliCommandItemBase> commandItemArrayList = Arrays.asList(
-        new ConfigurationCommand(),
-        new LfsContentCommand(),
-        new LfsInformationCommand(),
-        new HelpCommand());
 
-    for (CliCommandItemBase commandItem : commandItemArrayList) {
-      CmdLineParser subCommandParser = new CmdLineParser(commandItem);
+      List<CliCommandItemBase> commandItemArrayList = Arrays.asList(
+          new ConfigurationCommand(),
+          new LfsContentCommand(),
+          new LfsInformationCommand(),
+          new HelpCommand());
 
-      System.out.println(
-          String.format("Command Example - %s\n"
-                  + "    java -jar console-api.jar %s %s",
-              commandItem.getCommandName(), commandItem.getCommandName(), subCommandParser.printExample(OptionHandlerFilter.REQUIRED)));
-      System.out.println("");
-    }
+      for (CliCommandItemBase commandItem : commandItemArrayList) {
+        CmdLineParser subCommandParser = new CmdLineParser(commandItem);
+
+        System.out.println(
+            String.format("Command Example - %s\n"
+                    + "    java -jar console-api.jar %s %s",
+                commandItem.getCommandName(), commandItem.getCommandName(), subCommandParser.printExample(OptionHandlerFilter.REQUIRED)));
+        System.out.println("");
+      }
+
   }
 
   private void trace(String s) {

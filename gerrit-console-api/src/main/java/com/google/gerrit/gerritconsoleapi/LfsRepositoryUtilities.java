@@ -31,6 +31,9 @@ import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 
+import static com.google.gerrit.gerritconsoleapi.GerConError.LFS_CONFIG_INFO_ERROR;
+import static com.google.gerrit.gerritconsoleapi.GerConError.LFS_STORAGE_BACKEND_ERROR;
+
 public class LfsRepositoryUtilities extends Logging {
 
   /**
@@ -47,7 +50,7 @@ public class LfsRepositoryUtilities extends Logging {
         configFactory = LfsConfigFactory.getInstance();
       } catch (Exception e) {
         e.printStackTrace();
-        throw new LogAndExitException("Failed to otain the LfsConfigFactory instance. ", e);
+        throw new LogAndExitException(LFS_STORAGE_BACKEND_ERROR.getDescription() + " : Failed to obtain the LfsConfigFactory instance. ", e, LFS_STORAGE_BACKEND_ERROR.getCode());
       }
     }
 
@@ -65,11 +68,10 @@ public class LfsRepositoryUtilities extends Logging {
 
       // throw as its not valid for some reason.
       throw new LogAndExitException(
-          String.format("Unable to find backend namespace {%s} in gerrit_root/etc/LFS.config.", backendName));
+          LFS_STORAGE_BACKEND_ERROR.getDescription() + String.format(" : Unable to find backend namespace {%s} in gerrit_root/etc/LFS.config.", backendName), LFS_STORAGE_BACKEND_ERROR.getCode());
 
     } catch (Exception e) {
-      throw new LogAndExitException(
-          String.format("Unable to find backend namespace {%s} in gerrit_root/etc/LFS.config.", backendName), e);
+      throw new LogAndExitException(LFS_STORAGE_BACKEND_ERROR.getDescription() + String.format("Unable to find backend namespace {%s} in gerrit_root/etc/LFS.config.", backendName), e, LFS_STORAGE_BACKEND_ERROR.getCode());
     }
   }
 
@@ -86,18 +88,18 @@ public class LfsRepositoryUtilities extends Logging {
     try {
       applicationProperties = gitMsApplicationProperties == null ? new GitMsApplicationProperties() : gitMsApplicationProperties;
     } catch (IOException e) {
-      throw new LogAndExitException("Failed to get GitMS application properties. Details: ", e);
+      throw new LogAndExitException(LFS_CONFIG_INFO_ERROR.getDescription() + " : Failed to get GitMS application properties. Details: ", e, LFS_CONFIG_INFO_ERROR.getCode());
     }
 
     String repoHome = null;
     try {
       if (Strings.isNullOrEmpty(applicationProperties.getGerritRepoHome()))
       {
-        throw new LogAndExitException("Invalid null value for {gerrit.repo.home}.");
+        throw new LogAndExitException(LFS_CONFIG_INFO_ERROR.getDescription() + " : Invalid null value for {gerrit.repo.home}.", LFS_CONFIG_INFO_ERROR.getCode());
       }
       repoHome = applicationProperties.getGerritRepoHome();
     } catch (IOException e) {
-      throw new LogAndExitException("A problem occurred when obtaining gitms property {gerrit.repo.home}. Details: ", e);
+      throw new LogAndExitException(LFS_CONFIG_INFO_ERROR.getDescription() + " : A problem occurred when obtaining gitms property {gerrit.repo.home}. Details: ", e, LFS_CONFIG_INFO_ERROR.getCode());
     }
 
     // Search for our repo in the gerrit repo home location.
@@ -123,8 +125,8 @@ public class LfsRepositoryUtilities extends Logging {
       if ( !repositoryLocation.exists()) {
         // doesn't exist?
         throw new LogAndExitException(
-            String.format("The repository specified {%s} does not exist at the gerrit.repo.home location: {%s}",
-                repositoryName, repoHome));
+           LFS_CONFIG_INFO_ERROR.getDescription() +  String.format(" : The repository specified {%s} does not exist at the gerrit.repo.home location: {%s}",
+                repositoryName, repoHome), LFS_CONFIG_INFO_ERROR.getCode());
       }
 
     }
@@ -132,8 +134,8 @@ public class LfsRepositoryUtilities extends Logging {
     if (!repositoryLocation.canRead())
     {
       throw new LogAndExitException(
-          String.format("The repository specified {%s} cannot be read at location: {%s}",
-              repositoryName, repositoryLocation.getPath()));
+          LFS_CONFIG_INFO_ERROR.getDescription() + String.format(" : The repository specified {%s} cannot be read at location: {%s}",
+              repositoryName, repositoryLocation.getPath()), LFS_CONFIG_INFO_ERROR.getCode());
     }
 
     return repoPath;
@@ -164,11 +166,10 @@ public class LfsRepositoryUtilities extends Logging {
       lfsRepo = LfsFsRepositoryFactory.get(repositoryName, backendName, gerritRootDir, lfsDefaultDataDirectory);
     } catch (InvalidConfigurationException | IOException ex) {
       throw new LogAndExitException(
-          String.format("Unable to gain LFS information about repository: {%s} using backend: {%s}", repositoryName, backendName), ex);
+          LFS_CONFIG_INFO_ERROR.getDescription() + String.format(" : Unable to gain LFS information about repository: {%s} using backend: {%s}", repositoryName, backendName), ex, LFS_CONFIG_INFO_ERROR.getCode());
     } catch (Exception ex) {
       throw new LogAndExitException(
-          String.format("Unable to gain LFS information about repository: {%s} using backend: {%s}", repositoryName, backendName), ex);
-
+         LFS_CONFIG_INFO_ERROR.getDescription() +  String.format(" : Unable to gain LFS information about repository: {%s} using backend: {%s}", repositoryName, backendName), ex, LFS_CONFIG_INFO_ERROR.getCode());
     }
 
     /*
@@ -176,7 +177,7 @@ public class LfsRepositoryUtilities extends Logging {
      */
     if (lfsRepo.getLocalFileStore() == null || lfsRepo.getLocalFileStore().toFile() == null) {
       throw new LogAndExitException(
-          String.format("Unable to determine the location of the LFS file store for repository: {%s} using backend: {%s}", repositoryName, backendName));
+         LFS_STORAGE_BACKEND_ERROR.getDescription() +  String.format(" : Unable to determine the location of the LFS file store for repository: {%s} using backend: {%s}", repositoryName, backendName), LFS_STORAGE_BACKEND_ERROR.getCode());
     }
 
     return lfsRepo.getLocalFileStore();

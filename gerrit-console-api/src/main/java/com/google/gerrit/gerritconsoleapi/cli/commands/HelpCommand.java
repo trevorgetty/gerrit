@@ -25,6 +25,8 @@ import org.kohsuke.args4j.OptionHandlerFilter;
 import java.util.Arrays;
 import java.util.List;
 
+import static com.google.gerrit.gerritconsoleapi.GerConError.LFS_RUNTIME_ERROR;
+
 @CommandMetaData(name = "help", description = "Application help")
 public class HelpCommand extends CliCommandItemBase {
 
@@ -70,7 +72,7 @@ public class HelpCommand extends CliCommandItemBase {
         displayHelp();
         break;
       default:
-        throw new LogAndExitException(String.format("Unknown help command: {%s} specified.", helpOnCommand));
+        throw new LogAndExitException(LFS_RUNTIME_ERROR.getDescription() + String.format(" : Unknown help command: {%s} specified.", helpOnCommand), LFS_RUNTIME_ERROR.getCode());
     }
   }
 

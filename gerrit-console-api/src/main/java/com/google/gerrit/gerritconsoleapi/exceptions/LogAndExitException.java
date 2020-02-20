@@ -17,7 +17,9 @@ package com.google.gerrit.gerritconsoleapi.exceptions;
  * Class to allow an exception to be thrown which only logs out a message and terminates the application.
  * It will not show a stack trace by default.
  */
-public class LogAndExitException extends Exception {
+public class LogAndExitException  extends RuntimeException {
+
+  private int exitCode = 0;
 
   public LogAndExitException(final String exceptionMessage) {
       super(exceptionMessage);
@@ -25,5 +27,19 @@ public class LogAndExitException extends Exception {
 
   public LogAndExitException(final String exceptionMessage, final Throwable ex) {
     super(exceptionMessage, ex);
+  }
+
+  public LogAndExitException(final String exceptionMessage , final int commandExitCode ) {
+    super(exceptionMessage);
+    exitCode = commandExitCode;
+  }
+
+  public LogAndExitException(final String exceptionMessage, final Throwable ex, final int commandExitCode) {
+    super(exceptionMessage, ex);
+    exitCode = commandExitCode;
+  }
+
+  public int getExitCode() {
+    return exitCode;
   }
 }

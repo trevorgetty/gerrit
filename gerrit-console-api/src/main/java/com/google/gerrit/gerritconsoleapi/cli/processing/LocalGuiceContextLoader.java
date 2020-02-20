@@ -28,6 +28,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 import static com.wandisco.gerrit.gitms.shared.util.ReplicationUtils.getGitConfigLocationProperty;
+import static com.google.gerrit.gerritconsoleapi.GerConError.LFS_CONFIG_INFO_ERROR;
 
 public class LocalGuiceContextLoader {
 
@@ -78,7 +79,7 @@ public class LocalGuiceContextLoader {
      */
     if (gitConfigLocationOverride.isEmpty()) {
       logger.trace("Invalid git configuration args. ");
-      throw new LogAndExitException("The \"git-config\" must either be specified manually or found via GIT_CONFIG java property, system environment or ${users.home}/.gitconfig file.");
+      throw new LogAndExitException(LFS_CONFIG_INFO_ERROR.getDescription() + " : The \"git-config\" must either be specified manually or found via GIT_CONFIG java property, system environment or ${users.home}/.gitconfig file.", LFS_CONFIG_INFO_ERROR.getCode());
     }
 
   /*
@@ -88,8 +89,8 @@ public class LocalGuiceContextLoader {
     if (!gitconfigFile.exists() || gitconfigFile.isDirectory()) {
       logger.trace("Invalid git configuration it wasn't a valid file on disk. ");
 
-      throw new LogAndExitException("The \".gitconfig\" file provided is invalid or a directory. " +
-          "Please supply the full path to this file.");
+      throw new LogAndExitException(LFS_CONFIG_INFO_ERROR.getDescription() + " : The \".gitconfig\" file provided is invalid or a directory. " +
+          "Please supply the full path to this file.", LFS_CONFIG_INFO_ERROR.getCode());
     }
 
     /*
@@ -106,7 +107,7 @@ public class LocalGuiceContextLoader {
     try {
       confProps = ReplicationUtils.parseGitMSConfig();
     } catch (IOException e) {
-      throw new LogAndExitException("Problem occurred when retrieving GitMS configuration. Error Details: ", e);
+      throw new LogAndExitException(LFS_CONFIG_INFO_ERROR.getDescription() + " : Problem occurred when retrieving GitMS configuration. Error Details: ", e, LFS_CONFIG_INFO_ERROR.getCode());
     }
 
     /*
@@ -117,7 +118,7 @@ public class LocalGuiceContextLoader {
     try {
       gerritSitePath = Paths.get(confProps.getGerritRoot());
     } catch (IOException e) {
-      throw new LogAndExitException("Problem occurred when retrieving GitMS \"gerrit_root\" configuration. Error Details: ", e);
+      throw new LogAndExitException(LFS_CONFIG_INFO_ERROR.getDescription() + " : Problem occurred when retrieving GitMS \"gerrit_root\" configuration. Error Details: ", e, LFS_CONFIG_INFO_ERROR.getCode());
     }
 
 

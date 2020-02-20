@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.PrintStream;
+import static com.google.gerrit.gerritconsoleapi.GerConError.LFS_RUNTIME_ERROR;
 
 public abstract class CliCommandItemBase extends Logging implements CommandItem {
 
@@ -71,12 +72,12 @@ public abstract class CliCommandItemBase extends Logging implements CommandItem 
   // add default implementation which say its not implemented yet of both executes.
   @Override
   public void execute() throws LogAndExitException {
-    throw new LogAndExitException("This command doesn't support execution without args.");
+    throw new LogAndExitException(LFS_RUNTIME_ERROR.getDescription() + " : This command doesn't support execution without args.", LFS_RUNTIME_ERROR.getCode());
   }
 
   @Override
   public void execute(String... arguments) throws LogAndExitException {
-    throw new LogAndExitException("This command doesn't support execution without args.");
+    throw new LogAndExitException(LFS_RUNTIME_ERROR.getDescription() + " : This command doesn't support execution without args.", LFS_RUNTIME_ERROR.getCode());
   }
 
   /**
