@@ -27,8 +27,7 @@ public final class ReplicationConstants {
 
   //Events can be skipped by providing a comma seperated list of event types.
   //e.g, TopicChangedEvent, ReviewerDeletedEvent, ReviewerUpdatedEvent
-  public static final String GERRIT_EVENT_TYPES_TO_BE_SKIPPED = "gerrit.event.types.to.be.skipped";
-  public static final String DEFAULT_GERRIT_EVENT_TYPES_TO_BE_SKIPPED = "gerrit.event.types.to.be.skipped";
+  public static final String GERRIT_EVENT_TYPES_TO_BE_SKIPPED = "gerrit.event.types.disabled.list";
 
   public static final String GERRIT_REPLICATED_EVENTS_ENABLED_RECEIVE = "gerrit.replicated.events.enabled.receive";
   public static final String GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL = "gerrit.replicated.events.enabled.receive.original";
