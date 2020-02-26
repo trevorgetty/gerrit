@@ -63,9 +63,7 @@ function sanitize_path() {
 
 #Attempts to find the gerrit base path using the specified GERRIT_ROOT
 function get_gerrit_base_path() {
-    export GIT_CONFIG="${1}/etc/gerrit.config"
-    local gerrit_base_path=$(git config gerrit.basePath)
-    unset GIT_CONFIG
+    local gerrit_base_path=$(GIT_CONFIG="${1}/etc/gerrit.config" git config gerrit.basePath)
     echo "$gerrit_base_path"
 }
 
@@ -184,9 +182,8 @@ function create_scratch_dir() {
 ## Check in ~/.gitconfig for the gitmsconfig property
 ## gitms_root can be derived from this
 function find_gitms() {
-  GIT_CONFIG="$HOME/.gitconfig"
-  export GIT_CONFIG
-  local gitms_config=$(git config core.gitmsconfig)
+
+  local gitms_config=$(GIT_CONFIG="$HOME/.gitconfig" git config core.gitmsconfig)
 
   if [[ -z "$gitms_config" || ! -e "$gitms_config" ]]; then
     ## check if the default gitms install folder is present
@@ -240,7 +237,6 @@ function remove_property() {
 function fetch_config_from_application_properties() {
   SSL_ENABLED=$(fetch_property "ssl.enabled")
   GERRIT_ENABLED=$(fetch_property "gerrit.enabled")
-  GERRIT_ROOT=$(fetch_property "gerrit.root")
   GERRIT_USERNAME=$(fetch_property "gerrit.username")
   GERRIT_RPGROUP_ID=$(fetch_property "gerrit.rpgroupid")
   GERRIT_REPO_HOME=$(fetch_property "gerrit.repo.home")
@@ -476,9 +472,7 @@ function check_gerrit_root() {
 
   ## default location
   local gerrit_war_path="${gerrit_root}/bin/gerrit.war"
-  GIT_CONFIG="$gerrit_config"
-  export GIT_CONFIG
-  local container_war_prop=$(git config container.war)
+  local container_war_prop=$(GIT_CONFIG="$gerrit_config" git config container.war)
 
   if [ ! -z "$container_war_prop" ]; then
     ## container.war is set, gerrit.war may be elsewhere
@@ -537,9 +531,90 @@ function check_gerrit_root() {
   return 0
 }
 
+function check_java() {
+  echo " Checking Java version and JAVA_HOME is set..."
+
+  #Check if we have a JAVA_HOME variable set in main.conf
+  JAVA_HOME=$(GIT_CONFIG="$GERRIT_ROOT/etc/gerrit.config" git config container.javaHome)
+  #If the JAVA_HOME is set to a value then check the value set
+  if [[ -n "$JAVA_HOME" ]]; then
+    #Parsing the actual version from the java -version output
+    known_java_version="$(${JAVA_HOME}/bin/java -version 2>&1 | awk -F '"' '/version/ {print $2}')"
+    known_java_version_split=(${known_java_version//./ })
+
+    if [[ "${#known_java_version_split[@]}" -gt 1 ]];then
+      #If the minor version is less than 8 then report an error
+      minor_version="${known_java_version_split[1]}"
+      if [[ "$minor_version" -ne 8 ]]; then
+        echo "ERROR: We require that you use the latest java 8 version with our applications."
+        exit 1
+      else
+        export JAVA_HOME
+      fi
+    fi
+  else
+    echo "ERROR: Required JAVA_HOME setting not found - aborting."
+    exit 1
+  fi
+  JAVA_BIN="$JAVA_HOME/bin/java"
+  export JAVA_HOME
+  return 0
+}
+
+function get_gerrit_root_from_user() {
+  if [[ -z "$GERRIT_ROOT" ]]; then
+    header
+    bold " Configuration Information"
+    info ""
+    while true
+    do
+      get_directory "Gerrit Root Directory" "false"
+
+      ## Check the Gerrit install at this location is good
+      if ! check_gerrit_root "$INPUT_DIR"; then
+        continue
+      fi
+      break
+    done
+    GERRIT_ROOT="$INPUT_DIR"
+    export GERRIT_ROOT
+  else
+    info " Gerrit Root Directory: $GERRIT_ROOT"
+
+    ## GERRIT_ROOT is either set in non-interactive mode, or from application.properties
+    ## It should still be verified, but in this case, a failure exits the install
+    ## rather than reprompting for input
+    if ! check_gerrit_root "$GERRIT_ROOT"; then
+      echo "ERROR: Exiting install, $GERRIT_ROOT does not point to a valid Gerrit install." 1>&2
+      exit 1;
+    fi
+  fi
+}
+
+function run_gerrit_init() {
+
+  info ""
+  info " Running Gerrit init..."
+  info ""
+
+  local ret_code
+  ${JAVA_BIN} -Dhttps.protocols=TLSv1.2 -jar "${GERRIT_ROOT}/bin/gerrit.war" init -d "${GERRIT_ROOT}" --batch --no-reindex
+  ret_code="$?"
+
+  if [[ "$ret_code" -ne "0" ]]; then
+    info ""
+    info " \033[1mWARNING:\033[0m Init process failed with return code: \033[1m${ret_code}\033[0m."
+    info " The init will have to be performed manually."
+    info ""
+  else
+    info ""
+    info " Finished init"
+  fi
+}
+
 function replicated_upgrade() {
 
-  if [ ! "$REPLICATED_UPGRADE" == "true" ]; then
+  if [[ ! "$REPLICATED_UPGRADE" == "true" ]]; then
     return
   fi
 
@@ -559,55 +634,6 @@ function replicated_upgrade() {
   info " database is in use. This is required to update locally stored 3rd party dependencies not "
   info " included in the gerrit.war file."
   info ""
-
-  local perform_init
-
-  if [ ! "$NON_INTERACTIVE" == "1" ]; then
-    perform_init=$(get_boolean "Do you want this installer to run the re-init command above now?" "true")
-  else
-    if [ "$RUN_GERRIT_INIT" == "true" ]; then
-      perform_init="true"
-    else
-      perform_init="false"
-    fi
-  fi
-
-  if [ "$perform_init" == "true" ]; then
-    info ""
-    info " Running Gerrit re-init..."
-    info ""
-
-    ## Find Java - it should be referenced by JAVA_HOME
-    if [[ -z "$JAVA_HOME"  || ! -d "$JAVA_HOME" || ! -x "${JAVA_HOME}/bin/java" ]]; then
-      bold " Could not find java using JAVA_HOME."
-      info ""
-      info " Please provide the full path to the java executable you wish to use to perform the re-init."
-      info ""
-
-      ## Search for java on the path first, so if we find it we can offer it as a default option
-      local detected_java_path=$(command -v java)
-      get_executable "Path to Java:" "$detected_java_path"
-      JAVA_BIN="$EXECUTABLE_PATH"
-      info ""
-    else
-      ## JAVA_HOME is set and seems to be sane
-      JAVA_BIN="${JAVA_HOME}/bin/java"
-    fi
-
-    local ret_code
-    $JAVA_BIN -Dhttps.protocols=TLSv1.2 -jar "${GERRIT_ROOT}/bin/gerrit.war" init -d "${GERRIT_ROOT}" --batch
-    ret_code="$?"
-
-    if [ "$ret_code" -ne "0" ]; then
-      info ""
-      info " \033[1mWARNING:\033[0m Re-init process failed with return code: \033[1m${ret_code}\033[0m."
-      info " The re-init will have to be performed manually."
-      info ""
-    else
-      info ""
-      info " Finished re-init"
-    fi
-  fi
 }
 
 ## arg1 = string to look within.
@@ -687,13 +713,11 @@ function get_config_from_user() {
       info ""
       exit 1
     fi
-
     info ""
     bold " Reading GitMS Configuration..."
     info ""
     fetch_config_from_application_properties
   fi
-
   ## Copy APPLICATION_PROPERTIES to SCRATCH, so an install aborted part way
   ## will not have modified existing install.
   cp "$APPLICATION_PROPERTIES" "$SCRATCH"
@@ -713,36 +737,6 @@ function get_config_from_user() {
     set_property "gerrit.enabled" "true"
   fi
 
-  if [ -z "$GERRIT_ROOT" ]; then
-
-    while true
-    do
-      get_directory "Gerrit Root Directory" "false"
-
-      ## Check the Gerrit install at this location is good
-      check_gerrit_root "$INPUT_DIR"
-
-      if [ ! "$?" == "0" ]; then
-        continue
-      fi
-
-      break
-    done
-    GERRIT_ROOT="$INPUT_DIR"
-  else
-    info " Gerrit Root Directory: $GERRIT_ROOT"
-
-    ## GERRIT_ROOT is either set in non-interactive mode, or from application.properties
-    ## It should still be verified, but in this case, a failure exits the install
-    ## rather than reprompting for input
-    check_gerrit_root "$GERRIT_ROOT"
-
-    if [ "$?" == "1" ]; then
-      echo " Exiting install, $GERRIT_ROOT does not point to a valid Gerrit install."
-      exit 1;
-    fi
-  fi
-
   ## Check if Gerrit is running now that we know the Gerrit root
   if check_gerrit_status -ne 0; then
     ##Gerrit was detected as running, display a warning
@@ -755,7 +749,7 @@ function get_config_from_user() {
 
   set_property "gerrit.root" "$GERRIT_ROOT"
   
-  if ps aux|grep GerritCodeReview|grep $GERRIT_ROOT |grep -v " grep " > /dev/null 2>&1; then
+  if ps aux | grep GerritCodeReview | grep $GERRIT_ROOT | grep -v " grep " > /dev/null 2>&1; then
     info ""
     info " \033[1mWARNING:\033[0m Looks like Gerrit is currently running"
     info ""
@@ -1000,10 +994,7 @@ function check_gerrit_status() {
 }
 
 function get_gerrit_port() {
-  local gerrit_config_file="$GERRIT_ROOT/etc/gerrit.config"
-  export GIT_CONFIG="$gerrit_config_file"
-  local gerrit_port=$(git config httpd.listenUrl | cut -d":" -f3 | cut -d"/" -f1)
-  unset GIT_CONFIG
+  local gerrit_port=$(GIT_CONFIG="$GERRIT_ROOT/etc/gerrit.config" git config httpd.listenUrl | cut -d":" -f3 | cut -d"/" -f1)
   echo "$gerrit_port"
 }
 
@@ -1026,10 +1017,7 @@ function create_backup() {
 
   if [ "$FIRST_NODE" == "true" ]; then
     ## Fetch some properties from gerrit.config to potentially backup the database
-    GIT_CONFIG="$GERRIT_ROOT/etc/gerrit.config"
-    export GIT_CONFIG
-    local db_name=$(git config database.database)
-    unset GIT_CONFIG
+    local db_name=$(GIT_CONFIG="$GERRIT_ROOT/etc/gerrit.config" git config database.database)
 
     info ""
     info " \033[1mNOTE:\033[0m This instance of Gerrit has been configured to use the database $db_name."
@@ -1088,10 +1076,7 @@ function write_gerrit_config() {
   local tmp_gerrit_config="$SCRATCH/gerrit.config"
   cp "$gerrit_config" "$tmp_gerrit_config"
 
-  GIT_CONFIG="$tmp_gerrit_config"
-  export GIT_CONFIG
-  git config receive.timeout 900000
-  unset GIT_CONFIG
+  GIT_CONFIG="$tmp_gerrit_config" git config receive.timeout 900000
 
   local timestamped=$(date +%Y%m%d%H%M%S)
   cp "$gerrit_config" "${gerrit_config}.${timestamped}"
@@ -1139,7 +1124,7 @@ function install_gerrit_scripts() {
 }
 
 
-function write_new_config() {
+function finalize_install() {
   header
   bold " Finalizing Install"
 
@@ -1149,6 +1134,7 @@ function write_new_config() {
   install_gerrit_scripts
   create_wd_logging_properties_file
   replicated_upgrade
+  run_gerrit_init
 
   info ""
   info " GitMS and Gerrit have now been configured."
@@ -1478,13 +1464,16 @@ function mkdirectory(){
     fi
 }
 
-check_executables
-create_scratch_dir
 NON_INTERACTIVE=0
 WD_GERRIT_VERSION=$(get_gerrit_version "release.war")
 NEW_GERRIT_VERSION=$(echo $WD_GERRIT_VERSION | cut -f1 -d '-')
 GERRIT_RELEASE_NOTES="https://gerrit-documentation.storage.googleapis.com/ReleaseNotes/ReleaseNotes-2.13.html"
 GERRITMS_INSTALL_DOC="http://docs.wandisco.com/gerrit/1.9/#doc_gerritinstall"
+
+check_executables
+get_gerrit_root_from_user
+check_java
+create_scratch_dir
 
 ## Versions of Gerrit that we allow the user to upgrade from. Generally a user is not allowed to skip a major
 ## version, but can skip minor versions. This is not a hard and fast rule however, as the reality of when an
@@ -1535,5 +1524,5 @@ check_environment_variables_that_affect_curl
 check_user
 get_config_from_user
 create_backup
-write_new_config
+finalize_install
 cleanup
