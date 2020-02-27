@@ -283,8 +283,10 @@ public class CreateProject
               + " because the name is already occupied by another project."
               + " The other project has the same name, only spelled in a"
               + " different case.");
-    } catch (RepositoryNotFoundException badName) {
-      throw new BadRequestException("invalid project name: " + nameKey);
+    } catch (RepositoryNotFoundException e) {
+      String msg = "Repository Not Found: %s";
+      logger.atSevere().withCause(e).log(msg, nameKey);
+      throw new BadRequestException(e.getCause().getMessage());
     } catch (PreconditionFailedException e) {
       String msg = "Resource with the name: %s, already exists on one or more nodes.";
       logger.atSevere().withCause(e).log(msg, nameKey);
