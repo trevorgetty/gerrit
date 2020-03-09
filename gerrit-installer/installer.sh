@@ -1135,6 +1135,7 @@ function finalize_install() {
   create_wd_logging_properties_file
   replicated_upgrade
   run_gerrit_init
+  cleanup
 
   info ""
   info " GitMS and Gerrit have now been configured."
@@ -1525,4 +1526,3 @@ check_user
 get_config_from_user
 create_backup
 finalize_install
-cleanup
