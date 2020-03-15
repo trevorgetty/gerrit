@@ -19,8 +19,11 @@ import com.google.common.base.Strings;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 
+import com.wandisco.gerrit.gitms.shared.events.GerritEventData;
+import com.wandisco.gerrit.gitms.shared.util.ObjectUtils;
+import com.wandisco.gerrit.gitms.shared.util.StringUtils;
+
 import java.io.File;
-import java.io.FileFilter;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -58,7 +61,7 @@ public class Persister<T extends Persistable> {
   private static final String FIRST_PART = "persisted_";
   private static final String LAST_PART = ".json";
   private static final String TMP_PART = ".tmp";
-  private static final String PERSIST_FILE=FIRST_PART + "%s_%s_%s" + LAST_PART;
+  private static final String PERSIST_FILE=FIRST_PART + "%s_%s_%s_%s" + LAST_PART;
   private static final ReplicatedEventsFileFilter fileFilter = new ReplicatedEventsFileFilter(FIRST_PART);
   private static final Gson gson = new Gson();
   private final File baseDir;
@@ -145,27 +148,43 @@ public class Persister<T extends Persistable> {
   }
 
   public void persist(T obj, String projectNameSha) throws IOException {
-    final String msg = gson.toJson(obj)+'\n';
+    final String json = gson.toJson(obj)+'\n';
 
     File tempFile = File.createTempFile(FIRST_PART, TMP_PART, baseDir);
     try (FileOutputStream writer = new FileOutputStream(tempFile,true)) {
       //writing event to .tmp file
-      writer.write(msg.getBytes(StandardCharsets.UTF_8));
+      writer.write(json.getBytes(StandardCharsets.UTF_8));
     }
 
-    String [] jsonData = Replicator.ParseEventJson.jsonEventParse(msg);
+    //Creating a GerritEventData object from the inner event JSON of the EventWrapper object.
+    GerritEventData eventData =
+        ObjectUtils.createObjectFromJson(json, GerritEventData.class);
 
-    //If there is a problem with the events within the event file for any reason then get out early
-    if(jsonData == null || jsonData.length <= 0){
-      log.error("jsonData was null or empty. Could not persist events file as it contained no events!");
-      //Note: if we get in here then the temp file will be left behind.
+    if(eventData == null){
+      log.error("Unable to set event filename, could not create "
+          + "GerritEventData object from JSON {}", json);
       return;
     }
 
+    String eventTimestamp = eventData.getEventTimestamp();
+    // The java.lang.System.nanoTime() method returns the current value of
+    // the most precise available system timer, in nanoseconds. The value returned represents
+    // nanoseconds since some fixed but arbitrary time (in the future, so values may be negative)
+    // and provides nanosecond precision, but not necessarily nanosecond accuracy.
+
+    // The long value returned will be represented as a padded hexadecimal value to 16 digits in order to have a
+    //guaranteed fixed length as System.nanoTime() varies in length on each OS.
+    // If we are dealing with older event files where eventNanoTime doesn't exist as part of the event
+    // then we will set the eventNanoTime portion to 16 zeros, same length as a nanoTime represented as HEX.
+    String eventNanoTime = eventData.getEventNanoTime() != null ?
+        ObjectUtils.getHexStringOfLongObjectHash(Long.parseLong(eventData.getEventNanoTime())) : Replicator.DEFAULT_NANO;
+    String eventTimeStr = String.format("%sx%s", eventTimestamp, eventNanoTime);
+    String objectHash = ObjectUtils.getHexStringOfIntObjectHash(json.hashCode());
+
     //The persisted events file is the same as an event file except it starts with persisted instead
-    //of event. The format of the file will be persisted_timestamp_nodeId_projectNameSha1.json
+    //of event. The format of the file will be persisted_<eventTimestamp>x<eventNanoTime>_<nodeId>_<projectNameSha1>_<hashcode>.json
     File persistFile = new File(baseDir, String.format(PERSIST_FILE,
-        jsonData[0], jsonData[1], getProjectNameSha1(projectNameSha)));
+        eventTimeStr, eventData.getNodeIdentity(), getProjectNameSha1(projectNameSha), objectHash));
 
     //We then rename the file from persisted_<randomDigit>.tmp to the persisted event file
     boolean done = tempFile.renameTo(persistFile);

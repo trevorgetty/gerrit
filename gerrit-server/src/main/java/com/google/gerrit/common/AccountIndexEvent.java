@@ -13,34 +13,28 @@
  
 package com.google.gerrit.common;
 
+import com.wandisco.gerrit.gitms.shared.events.ReplicatedEvent;
+
 /**
  * Event to cover replication of the Account Index events
- *
  */
-public class AccountIndexEvent {
+public class AccountIndexEvent extends ReplicatedEvent {
   public int indexNumber;
-  public long eventTimestamp;
-  public String nodeIdentity;
 
-  public AccountIndexEvent() {
+  public AccountIndexEvent(final String nodeIdentity) {
+    super(nodeIdentity);
   }
 
-  public AccountIndexEvent(int id, String nodeIdentity) {
-    this.eventTimestamp = System.currentTimeMillis();
-    this.nodeIdentity = nodeIdentity;
+  public AccountIndexEvent(int id, final String nodeIdentity) {
+    super(nodeIdentity);
     this.indexNumber=id;
   }
 
-  public void setNodeIdentity(String nodeIdentity) {
-    this.nodeIdentity = nodeIdentity;
-  }
-
-  @Override
-  public String toString() {
-    return "AccountIndexEvent{" +
-        "AccountID=" + indexNumber +
-        ", eventTimestamp=" + eventTimestamp +
-        ", nodeIdentity='" + nodeIdentity + '\'' +
-        '}';
+  @Override public String toString() {
+    final StringBuilder sb = new StringBuilder("AccountIndexEvent{");
+    sb.append("indexNumber=").append(indexNumber);
+    sb.append(", ").append(super.toString());
+    sb.append('}');
+    return sb.toString();
   }
 }

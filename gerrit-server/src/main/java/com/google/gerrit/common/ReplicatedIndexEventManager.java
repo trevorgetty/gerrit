@@ -14,12 +14,14 @@
 package com.google.gerrit.common;
 
 
+import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.INDEX_EVENT;
+import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.PACKFILE_EVENT;
+
 import com.google.common.base.Supplier;
 import com.google.gerrit.reviewdb.client.Change;
 import com.google.gerrit.reviewdb.server.ReviewDb;
 import com.google.gerrit.server.events.Event;
 import com.google.gerrit.server.events.EventDeserializer;
-import com.google.gerrit.server.events.EventWrapper;
 import com.google.gerrit.server.events.SupplierDeserializer;
 import com.google.gerrit.server.events.SupplierSerializer;
 import com.google.gerrit.server.index.change.ChangeIndexer;
@@ -32,6 +34,9 @@ import com.google.gwtorm.server.ResultSet;
 import com.google.gwtorm.server.SchemaFactory;
 import com.google.inject.Provider;
 import com.google.inject.util.Providers;
+
+import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
+import com.wandisco.gerrit.gitms.shared.events.ReplicatedEvent;
 
 import org.eclipse.jgit.lib.Config;
 import org.eclipse.jgit.lib.NullProgressMonitor;
@@ -147,10 +152,12 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
         instance.gerritIndexerRunning = true;
         return null;
       }
-      Replicator.subscribeEvent(EventWrapper.Originator.INDEX_EVENT, instance);
-      Replicator.subscribeEvent(EventWrapper.Originator.PACKFILE_EVENT, instance);
 
       if (instance != null) {
+
+        Replicator.subscribeEvent(INDEX_EVENT, instance);
+        Replicator.subscribeEvent(PACKFILE_EVENT, instance);
+
         instance.setIndexEventDirectory();
         if (indexEventReaderAndPublisherThread == null) {
           indexEventReaderAndPublisherThread = new Thread(instance);
@@ -433,7 +440,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
     boolean success = false;
 
     if (newEvent != null) {
-      switch (newEvent.originator) {
+      switch (newEvent.getEventOrigin()) {
         case INDEX_EVENT:
           success = unwrapAndSendIndexEvent(newEvent);
           break;
@@ -441,7 +448,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
           success = unwrapAndReadPackFile(newEvent);
           break;
         default:
-          log.error("RC INDEX_EVENT has been sent here but originator is not the right one ({})",newEvent.originator);
+          log.error("RC INDEX_EVENT has been sent here but originator is not the right one ({})",newEvent.getEventOrigin());
       }
     } else {
       log.error("RC null event has been sent here");
@@ -452,11 +459,11 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
   private boolean unwrapAndSendIndexEvent(EventWrapper newEvent) throws JsonSyntaxException {
     boolean success = false;
     try {
-      Class<?> eventClass = Class.forName(newEvent.className);
+      Class<?> eventClass = Class.forName(newEvent.getClassName());
       IndexToReplicateComparable originalEvent = null;
 
       try {
-        IndexToReplicate index = (IndexToReplicate) gson.fromJson(newEvent.event, eventClass);
+        IndexToReplicate index = (IndexToReplicate) gson.fromJson(newEvent.getEvent(), eventClass);
 
         if (index == null) {
           log.error("fromJson method returned null for {}", newEvent.toString());
@@ -482,7 +489,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
         indexEventsAreReady.notifyAll();
       }
     } catch(ClassNotFoundException e) {
-      log.error("RC INDEX_EVENT has been lost. Could not find {}",newEvent.className,e);
+      log.error("RC INDEX_EVENT has been lost. Could not find {}",newEvent.getClassName(),e);
     }
     return success;
   }
@@ -490,8 +497,8 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
   private boolean unwrapAndReadPackFile(EventWrapper newPackFileEvent) {
     boolean success = false;
 
-    File packFilePath = new File(newPackFileEvent.event); // we use the event member to store the path to the packfile
-    File gitDir = new File(newPackFileEvent.prefix); // we store the git directory in the prefix member
+    File packFilePath = new File(newPackFileEvent.getEvent()); // we use the event member to store the path to the packfile
+    File gitDir = new File(newPackFileEvent.getPrefix()); // we store the git directory in the prefix member
     log.info(String.format("RC Received packfile event from the replication. PackFile: %s, git dir: %s",packFilePath,gitDir));
     if (packFilePath.exists()) {
       final FileRepositoryBuilder builder = new FileRepositoryBuilder();
@@ -997,46 +1004,44 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
   /**
    * Holds information needed to index the change on the nodes, and also to make it replicate across the other nodes
    */
-  public static class IndexToReplicate /*implements Comparable<IndexToReplicate>*/ {
-    public final int indexNumber;
-    public final String projectName;
-    public final Timestamp lastUpdatedOn;
-    public final long currentTime;
-    public static final long STANDARD_REINDEX_DELAY = 30*1000; // 30 seconds
-    public final int timeZoneRawOffset;
-    public final boolean delete;
-    public long eventTimestamp;
-    public String nodeIdentity;
+  public static class IndexToReplicate extends ReplicatedEvent /*implements Comparable<IndexToReplicate>*/ {
+    public int indexNumber;
+    public String projectName;
+    public Timestamp lastUpdatedOn;
+    public long currentTime;
+    public static long STANDARD_REINDEX_DELAY = 30*1000; // 30 seconds
+    public int timeZoneRawOffset;
+    public boolean delete;
+
 
     public IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn) {
-      this(indexNumber, projectName, lastUpdatedOn, System.currentTimeMillis(), getRawOffset(System.currentTimeMillis()), false);
+      super(replicatorInstance.getThisNodeIdentity());
+      final long currentTimeMs = super.getEventTimestamp();
+      setBaseMembers(indexNumber, projectName, lastUpdatedOn, currentTimeMs, getRawOffset(currentTimeMs), false);
     }
 
     public IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, boolean delete) {
-      this(indexNumber, projectName, lastUpdatedOn, System.currentTimeMillis(), getRawOffset(System.currentTimeMillis()), delete);
-    }
-
-    protected IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, long currentTime) {
-      this(indexNumber, projectName, lastUpdatedOn, currentTime, getRawOffset(currentTime), false);
+      super(replicatorInstance.getThisNodeIdentity());
+      final long currentTimeMs = super.getEventTimestamp();
+      setBaseMembers(indexNumber, projectName, lastUpdatedOn, currentTimeMs, getRawOffset(currentTimeMs), delete);
     }
 
     private IndexToReplicate(IndexToReplicateDelayed delayed) {
       this(delayed.indexNumber, delayed.projectName, delayed.lastUpdatedOn, delayed.currentTime, getRawOffset(delayed.currentTime), false);
     }
 
-    protected IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, long currentTime, int rawOffset) {
-      this(indexNumber, projectName, lastUpdatedOn, currentTime, rawOffset, false);
+    protected IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, long currentTime, int rawOffset, boolean delete) {
+      super(replicatorInstance.getThisNodeIdentity());
+      setBaseMembers(indexNumber, projectName, lastUpdatedOn, currentTime, rawOffset, delete);
     }
 
-    protected IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, long currentTime, int rawOffset, boolean delete) {
+    private void setBaseMembers(int indexNumber, String projectName, Timestamp lastUpdatedOn, long currentTime, int rawOffset, boolean delete) {
       this.indexNumber = indexNumber;
       this.projectName = projectName;
       this.lastUpdatedOn = new Timestamp(lastUpdatedOn.getTime());
       this.currentTime = currentTime;
       this.timeZoneRawOffset = rawOffset;
       this.delete = delete;
-      this.eventTimestamp = System.currentTimeMillis();
-      this.nodeIdentity = replicatorInstance.getThisNodeIdentity();
     }
 
     protected static int getRawOffset(final long currentTime) {
@@ -1049,18 +1054,17 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
       return TimeZone.getDefault().getRawOffset();
     }
 
-    @Override
-    public String toString() {
-      return "IndexToReplicate{" +
-          "indexNumber=" + indexNumber +
-          ", projectName='" + projectName + '\'' +
-          ", lastUpdatedOn=" + lastUpdatedOn +
-          ", currentTime=" + currentTime +
-          ", timeZoneRawOffset=" + timeZoneRawOffset +
-          ", delete=" + delete +
-          ", eventTimestamp=" + eventTimestamp +
-          ", nodeIdentity='" + nodeIdentity + '\'' +
-          '}';
+    @Override public String toString() {
+      final StringBuilder sb = new StringBuilder("IndexToReplicate{");
+      sb.append("indexNumber=").append(indexNumber);
+      sb.append(", projectName='").append(projectName).append('\'');
+      sb.append(", lastUpdatedOn=").append(lastUpdatedOn);
+      sb.append(", currentTime=").append(currentTime);
+      sb.append(", timeZoneRawOffset=").append(timeZoneRawOffset);
+      sb.append(", delete=").append(delete);
+      sb.append(", ").append(super.toString());
+      sb.append('}');
+      return sb.toString();
     }
 
     @Override
@@ -1105,9 +1109,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
     public IndexToReplicateComparable(int indexNumber, String projectName, Timestamp lastUpdatedOn) {
       super(indexNumber, projectName, lastUpdatedOn);
     }
-    public IndexToReplicateComparable(int indexNumber, String projectName, Timestamp lastUpdatedOn, long currentTime) {
-      super(indexNumber, projectName, lastUpdatedOn, currentTime);
-    }
+
     public IndexToReplicateComparable(IndexToReplicate index) {
       super(index.indexNumber, index.projectName, index.lastUpdatedOn, index.currentTime, index.timeZoneRawOffset, index.delete);
     }
@@ -1190,7 +1192,7 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
           int eventsGot = 0;
           synchronized(changeSet) {
             while ((indexToReplicate = filteredQueue.poll()) != null) {
-              replicatorInstance.queueEventForReplication(new EventWrapper(indexToReplicate));
+              replicatorInstance.queueEventForReplication(GerritEventFactory.createReplicatedIndexEvent(indexToReplicate));
               instance.localReindexQueue.add(IndexToReplicateDelayed.shallowCopyOf(indexToReplicate));
               changeSet.remove(indexToReplicate.indexNumber);
               eventsGot++;

@@ -13,41 +13,42 @@
  
 package com.google.gerrit.common;
 
+import com.wandisco.gerrit.gitms.shared.events.ReplicatedEvent;
+
 /**
  * This is a wrapper for the delete project message to be replicated,
  *
  */
-public class ProjectInfoWrapper {
+public class ProjectInfoWrapper extends ReplicatedEvent {
   public String projectName;
   public boolean preserve;
   public String taskUuid;
-  public long eventTimestamp;
-  public String nodeIdentity;
   public transient boolean replicated = false;
 
-  public ProjectInfoWrapper(String projectName, boolean preserve, String taskUuid, String nodeIdentity) {
+  public ProjectInfoWrapper(String nodeIdentity) {
+    super(nodeIdentity);
+  }
+
+  public ProjectInfoWrapper(String projectName, boolean preserve, final String taskUuid, final String nodeIdentity) {
+    super(nodeIdentity);
     this.projectName = projectName;
     this.preserve = preserve;
     this.taskUuid = taskUuid;
-    this.eventTimestamp = System.currentTimeMillis();
-    this.nodeIdentity = nodeIdentity;
   }
-
-  public ProjectInfoWrapper() {}
 
   public void setNodeIdentity(String nodeIdentity) {
-    this.nodeIdentity = nodeIdentity;
+    super.setNodeIdentity(nodeIdentity);
   }
 
-  @Override
-  public String toString() {
-    return "ProjectInfoWrapper{" +
-        "projectName='" + projectName + '\'' +
-        ", preserve=" + preserve +
-        ", taskUuid='" + taskUuid + '\'' +
-        ", eventTimestamp=" + eventTimestamp +
-        ", nodeIdentity='" + nodeIdentity + '\'' +
-        ", replicated=" + replicated +
-        '}';
+
+  @Override public String toString() {
+    final StringBuilder sb = new StringBuilder("ProjectInfoWrapper{");
+    sb.append("projectName='").append(projectName).append('\'');
+    sb.append(", preserve=").append(preserve);
+    sb.append(", taskUuid='").append(taskUuid).append('\'');
+    sb.append(", '").append(super.toString()).append('\'');
+    sb.append(", replicated=").append(replicated);
+    sb.append('}');
+    return sb.toString();
   }
 }

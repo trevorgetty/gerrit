@@ -22,12 +22,14 @@ import com.google.gerrit.common.data.GlobalCapability;
 import com.google.gerrit.extensions.annotations.RequiresCapability;
 import com.google.gerrit.extensions.events.LifecycleListener;
 import com.google.gerrit.server.IdentifiedUser;
-import com.google.gerrit.server.events.EventWrapper;
 import com.google.gerrit.common.TimeUtil;
 import com.google.gerrit.sshd.CommandMetaData;
 import com.google.gerrit.sshd.SshCommand;
 
 import com.google.inject.Inject;
+
+import com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator;
+
 import org.apache.sshd.server.Environment;
 
 import java.io.IOException;
@@ -87,10 +89,10 @@ final class ShowReplicatorStats extends SshCommand {
         "Statistic", "Sent", "Received"));
     stdout.print("---------------------------------------------------------------------------+\n");
 
-    ImmutableMultiset<EventWrapper.Originator> totalPublishedForeignEventsByType = repl.getTotalPublishedForeignEventsByType();
-    ImmutableMultiset<EventWrapper.Originator> totalPublishedLocalEventsByType = repl.getTotalPublishedLocalEventsByType();
+    ImmutableMultiset<Originator> totalPublishedForeignEventsByType = repl.getTotalPublishedForeignEventsByType();
+    ImmutableMultiset<Originator> totalPublishedLocalEventsByType = repl.getTotalPublishedLocalEventsByType();
 
-    for(EventWrapper.Originator orig: EventWrapper.Originator.values()) {
+    for(Originator orig: Originator.values()) {
       stdout.print(String.format("%-30s | %19s | %19s |\n", //
           orig+" messages:",
           totalPublishedLocalEventsByType.count(orig),

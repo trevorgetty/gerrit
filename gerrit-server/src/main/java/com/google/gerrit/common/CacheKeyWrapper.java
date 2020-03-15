@@ -15,46 +15,44 @@ package com.google.gerrit.common;
 
 import com.google.gson.Gson;
 
+import com.wandisco.gerrit.gitms.shared.events.ReplicatedEvent;
+
 /**
  * This is a wrapper for the cache message to be replicated,
  * so that it's easier to rebuild the "original" on the landing
  * node.
  *
  */
-public class CacheKeyWrapper {
+public class CacheKeyWrapper extends ReplicatedEvent {
   public String cacheName;
   public Object key;
   public String keyClassName;
   public String keyValue;
-  public long eventTimestamp;
-  public String nodeIdentity;
   public transient boolean replicated = false;
   protected static final Gson gson = new Gson();
 
   public CacheKeyWrapper(String cacheName, Object key, String nodeIdentity) {
+    super(nodeIdentity);
     this.cacheName = cacheName;
     this.key = key;
     this.keyClassName = key.getClass().getName();
     this.keyValue = gson.toJson(key);
-    this.eventTimestamp = System.currentTimeMillis();
-    this.nodeIdentity = nodeIdentity;
   }
 
-  @Override
-  public String toString() {
-    return "CacheKeyWrapper{" +
-        "cacheName='" + cacheName + '\'' +
-        ", key=" + key +
-        ", keyClassName='" + keyClassName + '\'' +
-        ", keyValue='" + keyValue + '\'' +
-        ", eventTimestamp=" + eventTimestamp +
-        ", nodeIdentity='" + nodeIdentity + '\'' +
-        ", replicated=" + replicated +
-        '}';
+  @Override public String toString() {
+    final StringBuilder sb = new StringBuilder("CacheKeyWrapper{");
+    sb.append("cacheName='").append(cacheName).append('\'');
+    sb.append(", key=").append(key);
+    sb.append(", keyClassName='").append(keyClassName).append('\'');
+    sb.append(", keyValue='").append(keyValue).append('\'');
+    sb.append(", ").append(super.toString()).append('\'');
+    sb.append(", replicated=").append(replicated);
+    sb.append('}');
+    return sb.toString();
   }
 
   public void setNodeIdentity(String nodeIdentity) {
-    this.nodeIdentity = nodeIdentity;
+    super.setNodeIdentity(nodeIdentity);
   }
 
   void rebuildOriginal() throws ClassNotFoundException {
