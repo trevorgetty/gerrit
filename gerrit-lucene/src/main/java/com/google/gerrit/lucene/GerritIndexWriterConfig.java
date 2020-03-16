@@ -18,6 +18,7 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.gerrit.common.Replicator;
 import com.google.gerrit.server.config.ConfigUtil;
 
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
@@ -26,6 +27,8 @@ import org.apache.lucene.index.ConcurrentMergeScheduler;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.IndexWriterConfig.OpenMode;
 import org.eclipse.jgit.lib.Config;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
@@ -40,7 +43,11 @@ class GerritIndexWriterConfig {
   private final IndexWriterConfig luceneConfig;
   private long commitWithinMs;
   private final CustomMappingAnalyzer analyzer;
-
+  private static final Logger log = LoggerFactory.getLogger(GerritIndexWriterConfig.class);
+  /*
+   Note that GerritIndexWriterConfig takes both a cfg object and a name,
+   name is the name of the subsection, i.e changes_open / change_closed
+   */
   GerritIndexWriterConfig(Config cfg, String name) {
     analyzer =
         new CustomMappingAnalyzer(new StandardAnalyzer(
@@ -76,6 +83,15 @@ class GerritIndexWriterConfig {
               MILLISECONDS.convert(5, MINUTES), MILLISECONDS);
     } catch (IllegalArgumentException e) {
       commitWithinMs = cfg.getLong("index", name, "commitWithin", 0);
+    }
+
+    //Checking that it has been set correctly and if so turn the verbose logging on
+    //for Lucene.
+    if ( cfg.getBoolean("index", name, "verboseLogging", false)) {
+      // turn on verbose logging for lucene
+      luceneConfig.setInfoStream(System.out);
+      // Show the current configuration.
+      log.info("Current lucene configuration: {}", luceneConfig.toString());
     }
   }
 
