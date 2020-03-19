@@ -23,6 +23,7 @@ fi
 install -p -m 0550 gerrit-installer/installer.sh target/tmp
 install -p -m 0550 gerrit-installer/sync_repo.sh target/tmp
 install -p -m 0550 gerrit-installer/reindex.sh target/tmp
+install -p -m 0640 gerrit-installer/gerrit.service.template target/tmp
 install -p -m 0640 gerrit-installer/resources/logo.txt target/tmp/resources
 install -p -m 0640 ${RELEASE_WAR} target/tmp
 

@@ -1106,6 +1106,24 @@ function remove_gitms_gerrit_plugin() {
   fi
 }
 
+# This function will make a copy and update the
+# gerrit service template by replacing a place
+# holder with the actual path to where gerrit has
+# been installed.  This will produce a fully
+# functional service file.
+function update_gerrit_service_template() {
+  temp_dir=$(mktemp -d)
+  cp -f "gerrit.service.template" "$temp_dir"
+
+  sed -i -e 's:${Gerrit_install_directory}:'"${GERRIT_ROOT}"':g' "${temp_dir}/gerrit.service.template"
+
+  # Rename service template
+  mv "$temp_dir/gerrit.service.template" "$temp_dir/gerrit-rp.service"
+
+  cp -f "$temp_dir/gerrit-rp.service" "${GERRIT_ROOT}/bin"
+  rm -R ${temp_dir}
+}
+
 function install_gerrit_scripts() {
   cp -f "reindex.sh" "$GERRIT_HELPER_SCRIPT_INSTALL_DIR"
   cp -f "sync_repo.sh" "$GERRIT_HELPER_SCRIPT_INSTALL_DIR"
@@ -1132,6 +1150,7 @@ function finalize_install() {
   write_gitms_config
   replace_gerrit_war
   install_gerrit_scripts
+  update_gerrit_service_template
   create_wd_logging_properties_file
   replicated_upgrade
   run_gerrit_init
@@ -1206,7 +1225,7 @@ function create_wd_logging_properties_file(){
   if [[ ! -f $GERRIT_ROOT/etc/wd_logging.properties ]]; then
 
     cat >$GERRIT_ROOT/etc/wd_logging.properties <<EOL
-    #@Copyright 2018 WANdisco
+    # @Copyright 2020 WANdisco
 
     #The wd_logging.properties file is used to change WANdisco specific default logging.
     #The default logging can be changed before startup to allow for custom logging.
