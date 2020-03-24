@@ -724,8 +724,10 @@ function get_config_from_user() {
   TMP_APPLICATION_PROPERTIES="$SCRATCH/application.properties"
 
   if ! is_gitms_running; then
-    info " \033[1mWARNING:\033[0m Looks like Git Multisite is not running"
+    info " \033[1mERROR:\033[0m Looks like Git Multisite is not running"
+    info " Please ensure that Git Multisite is running and re-run the installer."
     info ""
+    exit 1
   fi
 
   ## This is either an upgrade for an install which has already used GerritMS, or
@@ -966,9 +968,20 @@ function get_config_from_user() {
 
 }
 
+# Check is git-multisite running by
+# calling the git-multisite script and
+# invoking a status check.
 function is_gitms_running() {
-  ps aux | grep "com.wandisco.gitms.main.Main" | grep -v grep > /dev/null 2>&1
-  return $?
+  local init_cmd="${GITMS_ROOT}/bin/git-multisite"
+  if [[ -x "${init_cmd}" ]]; then
+    if "${init_cmd}" status >/dev/null 2>&1 ; then
+      return 0
+    fi
+  else
+    info " \033[1mWARNING:\033[0m Git Multisite startup script cannot be found or is not executable."
+    info ""
+  fi
+  return 1
 }
 
 ## Check if a port is currently being used
