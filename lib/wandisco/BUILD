@@ -6,7 +6,7 @@ java_library(
     visibility = ["//visibility:public"],
     exports = ["@gerrit-gitms-interface//jar"],
     runtime_deps = [
-        "//lib/jackson:jackson-mapper",
+        "//lib/jackson:codehaus-jackson-mapper-asl",
         "//lib/jgit/org.eclipse.jgit:jgit",
     ],
 )

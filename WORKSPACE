@@ -1184,9 +1184,19 @@ maven_jar(
     sha1 = "0f5a654e4675769c716e5b387830d19b501ca191",
 )
 
+# TODO: trevorg tidy post - 2.16.16.
+#  I have explicitally put the jackson codehaus ones into a codehaus- prefix'd naming convention and into the
+#  //lib/jackson folder.  I do note a new nongoogle.bzl coming in later gerrit post 2.16.15,
+#  so this may move once we get there..
 maven_jar(
-    name = "jackson-mapper",
+    name = "codehaus-jackson-mapper-asl",
     artifact = "org.codehaus.jackson:jackson-mapper-asl:1.9.13",
+    #    sha1 = "0f5a654e4675769c716e5b387830d19b501ca191",
+)
+
+maven_jar(
+    name = "codehaus-jackson-core-asl",
+    artifact = "org.codehaus.jackson:jackson-core-asl:1.9.13",
     #    sha1 = "0f5a654e4675769c716e5b387830d19b501ca191",
 )
 
