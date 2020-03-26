@@ -9,6 +9,7 @@ java_library(
     runtime_deps = [
         ":javaewah",
         "//lib/log:api",
+        "//lib/wandisco:gerrit-gitms-interface"
     ],
 )
 
