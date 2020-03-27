@@ -12,6 +12,9 @@
 #
 ######################################################################
 
+SHELL := /bin/bash
+
+
 # Work out this make files directory and the current PWD seperately
 #mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))
 mkfile_path := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
@@ -19,6 +22,7 @@ current_dir := $PWD
 
 # Gerrit repo root can be set to the mkfile path location
 GERRIT_ROOT= $(mkfile_path)
+GERRIT_BAZELCACHE_PATH := $(shell echo $(realpath $(shell echo ~/.gerritcodereview/bazel-cache)))
 
 # JENKINS_WORKSPACE is the location where the job puts work by default, and we need to have assets paths relative
 # to the workspace in some occasions.
@@ -113,12 +117,29 @@ fast-assembly-console:
 .PHONY:fast-assembly-console
 
 clean: | $(testing_location)
+	$(if $(GERRIT_BAZELCACHE_PATH),,$(error GERRIT_BAZELCACHE_PATH is not set))
+
 	@echo "************ Clean Phase Starting **************"
 	bazelisk clean
 	rm -rf $(GERRIT_BAZEL_OUT)
 	rm -rf $(GERRIT_TEST_LOCATION)/jgit-update-service
 	rm -f $(GERRIT_ROOT)/env.properties
+
+	@# we should think about only doing this with a force flag, but for now always wipe the cache - only way to be sure!!
+	@echo cache located here: $(GERRIT_BAZELCACHE_PATH)
+
+	@# Going to clear out anything that looks like our known assets for now...!
+	@echo
+	@echo "Deleting JGit cached assets.."
+	@ls $(GERRIT_BAZELCACHE_PATH)/downloaded-artifacts/*jgit*
+	@rm -fr $(GERRIT_BAZELCACHE_PATH)/downloaded-artifacts/*jgit*
+	@echo
+	@echo "Deleting Gerrit-GitMS-Interface cached assets..."
+	@ls $(GERRIT_BAZELCACHE_PATH)/downloaded-artifacts/*gitms*
+	@rm -fr $(GERRIT_BAZELCACHE_PATH)/downloaded-artifacts/*gitms*
+
 	@echo "************ Clean Phase Finished **************"
+
 .PHONY:clean
 
 list-assets:
@@ -181,7 +202,7 @@ skip-tests:
 testing_location:
 
 	./build-tools/setup-environment.sh
-	@echo "Testing location for temp assets is now: $GERRIT_TEST_LOCATION"
+	@echo "Testing location for temp assets is now: $(GERRIT_TEST_LOCATION)"
 
 .PHONY:testing_location
 
