@@ -15,13 +15,11 @@ package com.google.gerrit.common;
 
 import static com.wandisco.gerrit.gitms.shared.util.StringUtils.getProjectNameSha1;
 
-import com.google.common.base.Strings;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 
 import com.wandisco.gerrit.gitms.shared.events.GerritEventData;
 import com.wandisco.gerrit.gitms.shared.util.ObjectUtils;
-import com.wandisco.gerrit.gitms.shared.util.StringUtils;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -62,7 +60,7 @@ public class Persister<T extends Persistable> {
   private static final String LAST_PART = ".json";
   private static final String TMP_PART = ".tmp";
   private static final String PERSIST_FILE=FIRST_PART + "%s_%s_%s_%s" + LAST_PART;
-  private static final ReplicatedEventsFileFilter fileFilter = new ReplicatedEventsFileFilter(FIRST_PART);
+  private static final ReplicatedEventsFileFilter persistedEventsFileFilter = new ReplicatedEventsFileFilter(FIRST_PART);
   private static final Gson gson = new Gson();
   private final File baseDir;
 
@@ -82,7 +80,7 @@ public class Persister<T extends Persistable> {
   //NOTE: This method is called only once upon Persister object instance creation
   //in ReplicatedIndexEventManager.
   public <T extends Persistable> List<T> getObjectsFromPath(Class<T> clazz) {
-    File[] listFiles = baseDir.listFiles(fileFilter);
+    File[] listFiles = baseDir.listFiles(persistedEventsFileFilter);
     List<T> result = new ArrayList<>();
 
     if (listFiles != null) {

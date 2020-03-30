@@ -11,6 +11,7 @@ import java.io.FileFilter;
 public class ReplicatedEventsFileFilter implements FileFilter {
 
   private static final String LAST_PART=".json";
+  private static final String allowedExtension = ".tmp";
   private static final Logger log = LoggerFactory.getLogger(ReplicatedEventsFileFilter.class);
   private String firstPart;
 
@@ -31,12 +32,21 @@ public class ReplicatedEventsFileFilter implements FileFilter {
     }
 
     String name = pathname.getName();
+
+    // We want to screen out .tmp files as it may be the case that these
+    // files may exist in the directory at the time of the gerrit poll.
+    // We also don't want the file array populated with .tmp files either
+    // as this will affect the sort.
+    if (name.startsWith(firstPart) && name.endsWith(allowedExtension)){
+      return false;
+    }
+
     //All event files must end in .json however event files can begin
     //with events, persisted etc
     if (name.startsWith(firstPart) && name.endsWith(LAST_PART)) {
         return true;
     }
-    log.error("PR File {} is not allowed here, remove it please ",pathname);
+    log.error("File \"{}\" is not allowed here, remove it please ",pathname);
     return false;
   }
 
