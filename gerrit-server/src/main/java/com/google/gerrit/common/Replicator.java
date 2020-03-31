@@ -34,6 +34,7 @@ import com.wandisco.gerrit.gitms.shared.events.EventTime;
 import com.wandisco.gerrit.gitms.shared.events.EventTimestampComparator;
 import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
 import com.wandisco.gerrit.gitms.shared.events.GerritEventData;
+import com.wandisco.gerrit.gitms.shared.events.exceptions.InvalidEventJsonException;
 import com.wandisco.gerrit.gitms.shared.util.ObjectUtils;
 
 import java.io.ByteArrayOutputStream;
@@ -103,7 +104,6 @@ public class Replicator implements Runnable {
   public static final String DEFAULT_REPLICATED_INDEX_UNIQUE_CHANGES_QUEUE_WAIT_TIME = "20";
   public static final String DEFAULT_MINUTES_SINCE_CHANGE_LAST_INDEXED_CHECK_PERIOD = "60";
 
-  public static final String CURRENT_EVENTS_FILE = "current-events.json";
   private static final String FIRST_PART="events";
   public static final String DEFAULT_NANO = "0000000000000000";
   //event file is now following the format
@@ -644,11 +644,11 @@ public class Replicator implements Runnable {
    * Based on the project name, if the project is different, create/append a new file
    * @throws FileNotFoundException
    */
-  private void setNewCurrentEventsFile() throws FileNotFoundException {
+  private void setNewCurrentEventsFile() throws IOException {
     if(lastWriter == null) {
       createOutgoingEventsDir();
       if (outgoingReplEventsDirectory.exists() && outgoingReplEventsDirectory.isDirectory()) {
-        lastWriterFile = new File(outgoingReplEventsDirectory, CURRENT_EVENTS_FILE);
+        lastWriterFile = File.createTempFile("events-", ".tmp", outgoingReplEventsDirectory);
         lastWriter = new FileOutputStream(lastWriterFile, true);
         lastProjectName = null;
         writtenEventCount = 0;
@@ -674,7 +674,7 @@ public class Replicator implements Runnable {
   }
 
   /**
-   * Rename the current-events.json file to a unique filename
+   * Rename the outgoing events-<randomnum>.tmp file to a unique filename
    * Resetting the lastWriter and count of the writtenMessageCount
    */
   private void renameAndReset() {
@@ -728,7 +728,8 @@ public class Replicator implements Runnable {
     boolean result = false;
     if (!incomingReplEventsDirectory.exists()) {
       if (!incomingReplEventsDirectory.mkdirs()) {
-        log.error("RE {} path cannot be created! Replicated events will not work!",incomingReplEventsDirectory.getAbsolutePath());
+        log.error("RE {} path cannot be created! Replicated events will not work!",
+            incomingReplEventsDirectory.getAbsolutePath());
         return result;
       }
 
@@ -737,7 +738,8 @@ public class Replicator implements Runnable {
     try {
       File[] listFiles = incomingReplEventsDirectory.listFiles(incomingEventsToReplicateFileFilter);
       if (listFiles == null) {
-        log.error("RE Cannot read files in directory {}. Too many files open?",incomingReplEventsDirectory,new IllegalStateException("RE Cannot read files"));
+        log.error("RE Cannot read files in directory {}. Too many files open?",
+            incomingReplEventsDirectory,new IllegalStateException("RE Cannot read files"));
       } else if (listFiles.length > 0) {
         log.debug("RE Found {} files",listFiles.length);
 
@@ -766,12 +768,19 @@ public class Replicator implements Runnable {
 
             // if some events failed copy the file to the failed directory
             if (failedEvents > 0) {
-              log.error("RE There was {} failed events in this file {}",failedEvents, file.getAbsolutePath());
+              log.error("RE There was {} failed events in this file {}, "
+                  + "moving the failed event file to the failed events directory", failedEvents, file.getAbsolutePath());
               Persister.moveFileToFailed(incomingReplEventsDirectory, file);
+              //Once we move the failed events file to the failed events directory
+              //then there is nothing more to do here. We should just return at this point.
+              //result will be false at this point.
+              return result;
             }
 
+            //result gets set to true if we have no failed events.
             result = true;
-
+            //We want to delete events files that have been successfully published
+            //as there is no need for them to linger in the incoming directory.
             boolean deleted = file.delete();
             if (!deleted) {
               log.error("RE Could not delete file {}",file.getAbsolutePath());
@@ -781,8 +790,6 @@ public class Replicator implements Runnable {
           }
         }
       }
-    } catch (RuntimeException e) {
-      log.error("RE error while reading events from incoming queue", e);
     } catch (Exception e) {
       log.error("RE error while reading events from incoming queue", e);
     }
@@ -813,17 +820,25 @@ public class Replicator implements Runnable {
    * @return
    * @throws IOException
    */
-  private List<EventTime> sortEvents(byte[] eventsBytes) throws IOException {
+  private List<EventTime> sortEvents(byte[] eventsBytes)
+      throws IOException, InvalidEventJsonException {
 
     List<EventTime> eventDataList = new ArrayList<>();
     String[] events =
         new String(eventsBytes,StandardCharsets.UTF_8).split("\n");
 
     for (String event : events) {
-      EventWrapper originalEvent = gson.fromJson(event, EventWrapper.class);
-      if(event == null){
-        log.error("Null event found while sorting events");
-        continue;
+
+     if(event == null){
+        throw new InvalidEventJsonException("Event file is invalid, missing / null events.");
+      }
+
+      EventWrapper originalEvent;
+      try {
+        originalEvent = gson.fromJson(event, EventWrapper.class);
+      } catch (JsonSyntaxException e){
+        throw new InvalidEventJsonException(String.format("Event file contains Invalid JSON. \"%s\", \"%s\"",
+            event, e.getMessage()));
       }
 
       GerritEventData eventData =
@@ -848,58 +863,67 @@ public class Replicator implements Runnable {
    * this event over and over again
    * @param eventsBytes
    */
-  private int publishEvents(byte[] eventsBytes) throws IOException {
+  private int publishEvents(byte[] eventsBytes) {
     log.debug("RE Trying to publish original events...");
     Stats.totalPublishedForeignEventsBytes += eventsBytes.length;
     Stats.totalPublishedForeignEventsProsals++;
     int failedEvents = 0;
 
-    List<EventTime> sortedEvents = sortEvents(eventsBytes);
+    List<EventTime> sortedEvents = null;
+    try {
+      sortedEvents = sortEvents(eventsBytes);
+    } catch (IOException | InvalidEventJsonException e) {
+      log.error("RE Unable to sort events as there are invalid events in the event file {}",
+          e.getMessage());
+      failedEvents++;
+    }
 
-    for (EventTime event: sortedEvents) {
-      Stats.totalPublishedForeignEvents++;
-      EventWrapper originalEvent = event.getEventWrapper();
+    if(sortedEvents != null){
+      for (EventTime event: sortedEvents) {
+        Stats.totalPublishedForeignEvents++;
+        EventWrapper originalEvent = event.getEventWrapper();
 
-      if (originalEvent == null) {
-        log.error("RE fromJson method returned null for {}", event.toString());
-        failedEvents++;
-        continue;
-      }
+        if (originalEvent == null) {
+          log.error("RE fromJson method returned null for {}", event.toString());
+          failedEvents++;
+          continue;
+        }
 
-      if (originalEvent.getEvent().length() > 2) {
-        try {
-          Stats.totalPublishedForeignGoodEventsBytes += eventsBytes.length;
-          Stats.totalPublishedForeignGoodEvents++;
-          synchronized(eventListeners) {
-            Stats.totalPublishedForeignEventsByType.add(originalEvent.getEventOrigin());
-            Set<GerritPublishable> clients = eventListeners.get(originalEvent.getEventOrigin());
-            if (clients != null) {
-              if (originalEvent.getEventOrigin() == EventWrapper.Originator.DELETE_PROJECT_MESSAGE_EVENT) {
-                continue;
-              }
-              for(GerritPublishable gp: clients) {
-                try {
-                  boolean result = gp.publishIncomingReplicatedEvents(originalEvent);
+        if (originalEvent.getEvent().length() > 2) {
+          try {
+            Stats.totalPublishedForeignGoodEventsBytes += eventsBytes.length;
+            Stats.totalPublishedForeignGoodEvents++;
+            synchronized (eventListeners) {
+              Stats.totalPublishedForeignEventsByType.add(originalEvent.getEventOrigin());
+              Set<GerritPublishable> clients = eventListeners.get(originalEvent.getEventOrigin());
+              if (clients != null) {
+                if (originalEvent.getEventOrigin() == EventWrapper.Originator.DELETE_PROJECT_MESSAGE_EVENT) {
+                  continue;
+                }
+                for (GerritPublishable gp : clients) {
+                  try {
+                    boolean result = gp.publishIncomingReplicatedEvents(originalEvent);
 
-                  if (!result) {
+                    if (!result) {
+                      failedEvents++;
+                    }
+                  } catch (Exception e) {
+                    log.error("RE While publishing events", e);
                     failedEvents++;
                   }
-                } catch (Exception e) {
-                  log.error("RE While publishing events",e);
-                  failedEvents++;
                 }
               }
             }
+          } catch (JsonSyntaxException e) {
+            log.error("RE event has been lost. Could not rebuild obj using GSON", e);
+            failedEvents++;
           }
-        } catch(JsonSyntaxException e) {
-          log.error("RE event has been lost. Could not rebuild obj using GSON",e);
-          failedEvents++;
+        } else {
+          log.error("RE event GSON string is empty!",
+              new Exception("Internal error, event is empty: " + event));
         }
-      } else {
-        log.error("RE event GSON string is empty!", new Exception("Internal error, event is empty: "+event));
       }
     }
-
     return failedEvents;
   }
 

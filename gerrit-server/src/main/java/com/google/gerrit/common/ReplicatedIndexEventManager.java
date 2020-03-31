@@ -37,6 +37,8 @@ import com.google.inject.util.Providers;
 
 import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
 import com.wandisco.gerrit.gitms.shared.events.ReplicatedEvent;
+import com.wandisco.gerrit.gitms.shared.events.exceptions.InvalidEventJsonException;
+import com.wandisco.gerrit.gitms.shared.util.ObjectUtils;
 
 import org.eclipse.jgit.lib.Config;
 import org.eclipse.jgit.lib.NullProgressMonitor;
@@ -363,19 +365,24 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
       // Read each file and create a list with the changes to try reindex
       List<IndexToFile> indexList = new ArrayList<>();
       for (File file : listFiles) {
-        try (InputStreamReader fileToRead = new InputStreamReader(new FileInputStream(file),StandardCharsets.UTF_8)) {
-          IndexToReplicate index = gson.fromJson(fileToRead, IndexToReplicate.class);
+        try (InputStreamReader eventJson = new InputStreamReader(new FileInputStream(file),StandardCharsets.UTF_8)) {
+
+          IndexToReplicate index;
+          try {
+            index = gson.fromJson(eventJson, IndexToReplicate.class);
+          } catch (JsonSyntaxException e){
+            throw new InvalidEventJsonException(String.format("Index Event file contains Invalid JSON. \"%s\""
+                , eventJson.toString() ));
+          }
+
           if (index == null) {
-            log.error("fromJson method returned null for file {}", fileToRead);
+            log.error("fromJson method returned null for file {}", eventJson);
             continue;
           }
 
           indexList.add(new IndexToFile(index, file));
-        } catch (JsonSyntaxException je) {
+        } catch (JsonSyntaxException | IOException | InvalidEventJsonException je) {
           log.error("RC Could not decode json file {}", file, je);
-          Persister.moveFileToFailed(indexEventsDirectory, file);
-        } catch (IOException e) {
-          log.error("RC Could not decode json file {}", file, e);
           Persister.moveFileToFailed(indexEventsDirectory, file);
         }
       }

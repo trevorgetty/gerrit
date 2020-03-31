@@ -19,6 +19,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 
 import com.wandisco.gerrit.gitms.shared.events.GerritEventData;
+import com.wandisco.gerrit.gitms.shared.events.exceptions.InvalidEventJsonException;
 import com.wandisco.gerrit.gitms.shared.util.ObjectUtils;
 
 import java.io.File;
@@ -87,8 +88,17 @@ public class Persister<T extends Persistable> {
       Arrays.sort(listFiles);
       for (File file : listFiles) {
 
-        try (InputStreamReader fileToRead = new InputStreamReader(new FileInputStream(file),StandardCharsets.UTF_8)) {
-          T fromJson = gson.fromJson(fileToRead,clazz);
+        try (InputStreamReader eventJson = new InputStreamReader(new FileInputStream(file),StandardCharsets.UTF_8)) {
+
+          //If the event JSON is invalid, then we want to
+          T fromJson;
+          try {
+            fromJson = gson.fromJson(eventJson, clazz);
+          }catch(JsonSyntaxException e){
+            throw new InvalidEventJsonException(String.format("Event file contains Invalid JSON. \"%s\""
+                , eventJson.toString() ));
+          }
+
          if (fromJson == null) {
            log.warn("Json file {} only contained an EOF", file);
            continue;
@@ -96,7 +106,7 @@ public class Persister<T extends Persistable> {
 
           fromJson.setPersistFile(file);
           result.add(fromJson);
-        } catch (IOException | JsonSyntaxException e) {
+        } catch (IOException | JsonSyntaxException | InvalidEventJsonException e) {
           log.error("PR Could not decode json file {}", file, e);
           moveFileToFailed(baseDir, file);
         }
