@@ -1465,10 +1465,17 @@ public class RestApiServlet extends HttpServlet {
       return replyJson(
           req, res, allowTracing, ImmutableListMultimap.of("pp", "0"), new JsonPrimitive(text));
     }
+
+    // Sometimes the err can contain much more useful information but it
+    // can also be the same as text message but with class info as a prefix
+    // only report the error if it is different.
+    boolean duplicate = err.getMessage().endsWith(text);
+
     if (!text.endsWith("\n")) {
       text += "\n";
     }
-    if (err != null && !err.getMessage().isEmpty()){
+
+    if (err != null && !err.getMessage().isEmpty() && !duplicate){
       // report any additional errors
       text += String.format("Error details : %s\n", err.getMessage());
     }
