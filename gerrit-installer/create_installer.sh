@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash --noprofile
 
 echo "Creating installer"
 
@@ -7,6 +7,11 @@ mkdir -p target/tmp/resources
 
 RELEASE_WAR="${1}"
 CONSOLE_API_JAR="${2}"
+
+EXE_PERM=0777
+NOEXE_PERM=0666
+
+umask 000
 
 if [ ! -f "${RELEASE_WAR}" ]; then
   echo "Error: release.war not found. Was \"buck build release\" run?"
@@ -17,15 +22,15 @@ if [ ! -f "${CONSOLE_API_JAR}" ]; then
   echo "Error: ${CONSOLE_API_JAR} not found"
   exit 1
 else
-  install -p -m 0640 ${CONSOLE_API_JAR} target/tmp/console-api.jar
+  install -m ${NOEXE_PERM} ${CONSOLE_API_JAR} target/tmp/console-api.jar
 fi
 
-install -p -m 0550 gerrit-installer/installer.sh target/tmp
-install -p -m 0550 gerrit-installer/sync_repo.sh target/tmp
-install -p -m 0550 gerrit-installer/reindex.sh target/tmp
-install -p -m 0640 gerrit-installer/gerrit.service.template target/tmp
-install -p -m 0640 gerrit-installer/resources/logo.txt target/tmp/resources
-install -p -m 0640 ${RELEASE_WAR} target/tmp
+install -m ${EXE_PERM} gerrit-installer/installer.sh target/tmp
+install -m ${EXE_PERM} gerrit-installer/sync_repo.sh target/tmp
+install -m ${EXE_PERM} gerrit-installer/reindex.sh target/tmp
+install -m ${NOEXE_PERM} gerrit-installer/gerrit.service.template target/tmp
+install -m ${NOEXE_PERM} gerrit-installer/resources/logo.txt target/tmp/resources
+install -m ${NOEXE_PERM} ${RELEASE_WAR} target/tmp
 
 
 makeself target/tmp gerritms-installer.sh "GerritMS Installer" ./installer.sh

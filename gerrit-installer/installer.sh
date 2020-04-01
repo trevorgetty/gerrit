@@ -701,7 +701,17 @@ function get_config_from_user() {
       info " \033[1mERROR:\033[0m Exiting install, \033[1mmain.conf\033[0m does not exist in the config directory of the GitMS root directory."
       exit 1
     fi
-    
+
+    # To address GER-873, get the umask value from GitMS
+    # main.conf, so it can be applied to scripts that are
+    # installed with Gerrit.
+    umask_value=$(fetch_property_from_main_conf "GITMS_UMASK")
+    if [[ -z "$umask_value" ]];then
+      echo "Error: failed to find GITMS_UMASK in GitMS main.conf"
+      exit 1
+    else
+      umask "$umask_value"
+    fi
     gitmsUser=$(fetch_property_from_main_conf "GITMS_USER")
     
     if [[ "$currentUser" != "$gitmsUser" ]]; then
@@ -1133,24 +1143,29 @@ function update_gerrit_service_template() {
   # Rename service template
   mv "$temp_dir/gerrit.service.template" "$temp_dir/gerrit-rp.service"
 
-  cp -f "$temp_dir/gerrit-rp.service" "${GERRIT_ROOT}/bin"
+  copy_files_into_place "${GERRIT_ROOT}/bin" "$temp_dir/gerrit-rp.service"
   rm -R ${temp_dir}
 }
 
 function install_gerrit_scripts() {
-  cp -f "reindex.sh" "$GERRIT_HELPER_SCRIPT_INSTALL_DIR"
-  cp -f "sync_repo.sh" "$GERRIT_HELPER_SCRIPT_INSTALL_DIR"
+
+  copy_files_into_place "$GERRIT_HELPER_SCRIPT_INSTALL_DIR" "reindex.sh" "sync_repo.sh"
   
   CONSOLE_API_JAR="console-api.jar"
   if [[ ! -f "$CONSOLE_API_JAR" ]];then
     echo "Error: $CONSOLE_API_JAR not found"
     exit 1
   else
-    cp -f "$CONSOLE_API_JAR" "$GERRIT_HELPER_SCRIPT_INSTALL_DIR"   
-    if [ $? -ne 0 ]; then
-      echo "Failed to copy ${CONSOLE_API_JAR} to $GERRIT_HELPER_SCRIPT_INSTALL_DIR"
-      exit 1
-    fi
+    copy_files_into_place "$GERRIT_HELPER_SCRIPT_INSTALL_DIR" "$CONSOLE_API_JAR"
+  fi
+}
+
+function copy_files_into_place() {
+  dir_to_copy_file_to=$1 && shift
+  cp -f -t "$dir_to_copy_file_to/." "$@"
+  if [[ $? -ne 0 ]]; then
+    echo "ERROR: Failed to copy to directory \"$dir_to_copy_file_to\" some/all of the following files: $*" 1>&2
+    exit 1
   fi
 }
 
