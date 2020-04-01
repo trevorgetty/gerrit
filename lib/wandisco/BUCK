@@ -22,8 +22,8 @@ maven_jar(
   license = 'WANdisco',
   deps = ['//lib/jgit/org.eclipse.jgit:jgit',
           '//lib/jackson:jackson-mapper-asl'],
-  bin_sha1 = '1e854808032bc80f28b5a157110c7e76a814a176',
-  src_sha1 = '5c68160f9bcc7bc77e5c27ae3e598871db760143',
+  bin_sha1 = '2d5403173d30c46998c1350b9f64332d679ad46c',
+  src_sha1 = '1d50bec41b8e4aefe7a443dda04215968434916f',
   repository = REPO_WD,
 
   unsign = True,

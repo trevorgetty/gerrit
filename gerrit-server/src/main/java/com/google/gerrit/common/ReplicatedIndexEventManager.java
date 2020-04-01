@@ -352,7 +352,6 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
       return -1;
     }
     int numberOfSuccessfullyIndexedChanges = 0;
-    log.debug("RC looking for index files...");
     File[] listFiles = indexEventsDirectory.listFiles(indexEventsToRetryFileFilter);
 
     //  listFiles can be null if the directory has disappeared, if it's not readable or if too many files are open!
