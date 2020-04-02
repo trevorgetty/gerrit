@@ -1475,9 +1475,13 @@ public class RestApiServlet extends HttpServlet {
       text += "\n";
     }
 
-    if (err != null && !err.getMessage().isEmpty() && !duplicate){
+    if (!Strings.isNullOrEmpty(err.getMessage()) && !duplicate){
       // report any additional errors
       text += String.format("Error details : %s\n", err.getMessage());
+
+      if (err.getCause() != null && !Strings.isNullOrEmpty(err.getCause().getMessage())){
+        text += String.format("Cause : %s\n", err.getCause().getMessage());
+      }
     }
     if (allowTracing) {
       logger.atFinest().log("Text response body:\n%s", text);
