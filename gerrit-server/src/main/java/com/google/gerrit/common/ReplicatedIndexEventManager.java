@@ -638,7 +638,11 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
       log.debug("RC Going to index {} changes...",mapOfChanges.size());
 
       // fetch changes from db
+      long startTime = System.currentTimeMillis();
       ResultSet<Change> changesOnDb = db.changes().get(mapOfChanges.keySet());
+      long endTime = System.currentTimeMillis();
+      long duration = (endTime - startTime);
+      log.debug("RC Time taken to fetch changes {}", duration);
 
       int totalDone = 0;
       int thisNodeTimeZoneOffset = IndexToReplicate.getRawOffset(System.currentTimeMillis());
@@ -816,7 +820,12 @@ public class ReplicatedIndexEventManager implements Runnable, Replicator.GerritP
   }
 
   private boolean indexSingleChange(ReviewDb db, IndexToReplicate indexEvent, boolean enqueueIfUnsuccessful, boolean forceIndexing) throws OrmException {
+
+    long startTime = System.currentTimeMillis();
     Change change = db.changes().get(new Change.Id(indexEvent.indexNumber));
+    long endTime = System.currentTimeMillis();
+    long duration = (endTime - startTime);
+    log.debug("RC Lookup of change.Id {} took {}",indexEvent.indexNumber, duration);
 
     if (change == null) {
       log.info("RC Change {} not reindexed, not found -- deleted",indexEvent.indexNumber);
