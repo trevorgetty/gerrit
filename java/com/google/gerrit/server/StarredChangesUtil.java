@@ -506,8 +506,9 @@ public class StarredChangesUtil {
         case FORCED:
           gitRefUpdated.fire(allUsers, u, null);
           return;
-        case NEW:
         case NO_CHANGE:
+          return;
+        case NEW:
         case FAST_FORWARD:
         case IO_FAILURE:
         case LOCK_FAILURE:
