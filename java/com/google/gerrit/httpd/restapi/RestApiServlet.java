@@ -1469,15 +1469,20 @@ public class RestApiServlet extends HttpServlet {
     // Sometimes the err can contain much more useful information but it
     // can also be the same as text message but with class info as a prefix
     // only report the error if it is different.
-    boolean duplicate = err.getMessage().endsWith(text);
+    boolean duplicate = false;
+    String errorMessage = err.getMessage();
+
+    if (!Strings.isNullOrEmpty(errorMessage) && errorMessage.endsWith(text)){
+      duplicate = true;
+    }
 
     if (!text.endsWith("\n")) {
       text += "\n";
     }
 
-    if (!Strings.isNullOrEmpty(err.getMessage()) && !duplicate){
+    if (!Strings.isNullOrEmpty(errorMessage) && !duplicate){
       // report any additional errors
-      text += String.format("Error details : %s\n", err.getMessage());
+      text += String.format("Error details : %s\n", errorMessage);
 
       if (err.getCause() != null && !Strings.isNullOrEmpty(err.getCause().getMessage())){
         text += String.format("Cause : %s\n", err.getCause().getMessage());
