@@ -17,19 +17,12 @@ import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.server.config.AllProjectsName;
 import com.google.gerrit.server.git.GitRepositoryManager;
 import com.google.gerrit.server.project.ProjectConfig;
-
-
 import com.google.inject.Inject;
 import com.google.inject.Injector;
 import org.eclipse.jgit.errors.ConfigInvalidException;
 import org.eclipse.jgit.lib.Repository;
 
-import org.slf4j.LoggerFactory;
-import org.slf4j.Logger;
-
 public class ProjectLoader {
-
-  private final static Logger logger = LoggerFactory.getLogger(ProjectLoader.class);
 
   private final GitRepositoryManager mgr;
   private final Injector injector;
@@ -94,7 +87,6 @@ public class ProjectLoader {
     try (Repository git = mgr.openRepository(name)) {
       cfg.load(name, git);
     } catch (ConfigInvalidException e) {
-      logger.warn("Failed to load {} for {}", fileName, name.toString(), e);
       throw new Exception(String.format("Failed to load %s for %s", fileName, name.toString()), e);
     }
     

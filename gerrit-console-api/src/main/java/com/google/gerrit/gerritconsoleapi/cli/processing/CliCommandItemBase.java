@@ -15,14 +15,11 @@ package com.google.gerrit.gerritconsoleapi.cli.processing;
 
 import com.google.gerrit.gerritconsoleapi.Logging;
 import com.google.gerrit.gerritconsoleapi.exceptions.LogAndExitException;
-import org.eclipse.jgit.errors.NotSupportedException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 import org.kohsuke.args4j.OptionHandlerFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.PrintStream;
 import static com.google.gerrit.gerritconsoleapi.GerConError.LFS_RUNTIME_ERROR;
@@ -38,35 +35,11 @@ public abstract class CliCommandItemBase extends Logging implements CommandItem 
     this.commandName = commandName;
   }
 
-  @Option(name = "--debug", hidden = true, usage = "Enable trace level output, to the console for additional tracing.")
-  private boolean debug;
-
-  public boolean isDebug() {
-    return debug;
-  }
+  @Option(name = "--verbose", hidden = true, usage = "(Optional) Enable debug and stacktrace output to STDERR")
+  private boolean verbose;
 
   public String getCommandName() {
     return commandName;
-  }
-
-
-  protected void logtrace(String s) {
-    if (isDebug()) {
-      // output directly to the console in debug mode.
-      System.out.println("consoleapi: DEBUG: " + s);
-    } else {
-      // we dont want it on the console, so just use log4j, and whatever rooting it has for trace we shall use.
-      logger.trace(s);
-    }
-  }
-
-  protected void debugStackTrace(Exception e) {
-    if (isDebug()) {
-      e.printStackTrace();
-    }
-    else{
-      logger.trace(e.getMessage());
-    }
   }
 
   // add default implementation which say its not implemented yet of both executes.
@@ -89,7 +62,6 @@ public abstract class CliCommandItemBase extends Logging implements CommandItem 
     // request error help!
     displayHelp(false);
   }
-
 
   public void displayHelp(boolean requestHelp) {
 

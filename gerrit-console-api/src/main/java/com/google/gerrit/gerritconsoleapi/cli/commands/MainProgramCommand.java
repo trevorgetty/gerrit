@@ -15,7 +15,7 @@ package com.google.gerrit.gerritconsoleapi.cli.commands;
 
 
 import com.google.common.base.Strings;
-import com.google.gerrit.extensions.api.projects.ProjectApi;
+import com.google.gerrit.gerritconsoleapi.Logging;
 import com.google.gerrit.gerritconsoleapi.cli.processing.CliCommandItemBase;
 import com.google.gerrit.gerritconsoleapi.cli.processing.CmdLineParserFactory;
 import com.google.gerrit.gerritconsoleapi.cli.processing.CommandItem;
@@ -29,7 +29,6 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.Logger;
 
 import java.io.IOException;
-import java.io.OutputStreamWriter;
 import java.util.Arrays;
 import java.util.List;
 
@@ -71,12 +70,8 @@ public class MainProgramCommand implements CommandItem {
   })
   public CommandItem commandItem;
 
-  @Option(name = "--debug", hidden = true, usage = "Enable trace level output, to the console for additional tracing.")
-  private boolean debug;
-
-  public boolean isDebug() {
-    return debug;
-  }
+  @Option(name = "--verbose", hidden = true, required=false, usage = "(Optional) Enable debug and stacktrace output to STDERR")
+  private boolean verbose;
 
   /**
    * Parses the arguments passed in from the command line of the application
@@ -91,11 +86,11 @@ public class MainProgramCommand implements CommandItem {
    */
   public void doMain(final String... arguments) throws Exception, IOException {
 
-    trace("About to process args. ");
+    logger.trace("Executing Command");
 
     parseAndRunAppropriateCommand(this, arguments);
 
-    trace("Exiting application. ");
+    logger.trace("Command finished");
   }
 
 
@@ -114,8 +109,8 @@ public class MainProgramCommand implements CommandItem {
       // class, if we can't do this, just allow the default handling to kick in using the default SubCommand->Config
       parser.parseArgument(arguments);
     } catch (CmdLineException ex) {
-      System.err.println("An error occurred....");
-      System.err.println(ex.getMessage());
+      // Write error to STDERR
+      Logging.logerror(logger, "console-api: ERROR: ", ex);
 
       // Sneak a peak at which command we are running, if its the main program and an error ocurred,
       // it could be cause it was trying to create a subcommmand and failed, use its error information, as it is much
@@ -123,7 +118,8 @@ public class MainProgramCommand implements CommandItem {
       CommandItem cmdItemBean = getCommandContextForHelp(commandTypeBean, arguments);
       cmdItemBean.displayHelp();
 
-      System.err.println("\nPlease use 'java -jar console-api.jar help <command>' for more specific context information.\n");
+      // Write command usage information to STDOUT
+      System.err.println("\nPlease use 'console-api help <command>' for more specific context information.\n");
       return;
     }
 
@@ -191,7 +187,7 @@ public class MainProgramCommand implements CommandItem {
   @Override
   public void displayHelp() {
 
-//  // Take a newline, and display the help information, and example use.
+    // Take a newline, and display the help information, and example use.
     System.out.println("");
 
     System.out.println("**********************************");
@@ -201,8 +197,6 @@ public class MainProgramCommand implements CommandItem {
     // print the list of available options
     CmdLineParser localCmdLineParser = CmdLineParserFactory.createCmdLineParser(this);
     localCmdLineParser.printUsage(System.out);
-
-    System.out.println("Example commands uses...");
 
     // TODO, make this easier, to get any command in namespace X?  maybe reflection or bindings?
     // Show each command here.
@@ -224,15 +218,5 @@ public class MainProgramCommand implements CommandItem {
       }
 
   }
-
-  private void trace(String s) {
-    if (isDebug()) {
-      // output directly to the console in debug mode.
-      System.out.println("DEBUG MODE: " + s);
-    } else {
-      logger.trace(s);
-    }
-  }
-
 
 }

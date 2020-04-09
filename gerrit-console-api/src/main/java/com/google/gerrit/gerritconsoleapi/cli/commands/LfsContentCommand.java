@@ -14,6 +14,7 @@
 package com.google.gerrit.gerritconsoleapi.cli.commands;
 
 import com.google.common.base.Strings;
+import com.google.gerrit.gerritconsoleapi.Logging;
 import com.google.gerrit.gerritconsoleapi.cli.processing.AllProjectsInProcessLoader;
 import com.google.gerrit.gerritconsoleapi.cli.processing.CliCommandItemBase;
 import com.google.gerrit.gerritconsoleapi.exceptions.LogAndExitException;
@@ -22,6 +23,8 @@ import com.wandisco.gerrit.gitms.shared.config.lfs.LfsConfigFactory;
 import com.wandisco.gerrit.gitms.shared.config.lfs.LfsProjectConfigSection;
 import com.wandisco.gerrit.gitms.shared.properties.GitMsApplicationProperties;
 import org.kohsuke.args4j.Option;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.nio.file.Path;
@@ -36,6 +39,7 @@ import static com.wandisco.gerrit.gitms.shared.commands.GitCommandRunner.lfsLsFi
 @CommandMetaData(name = "lfs-content", description = "Lfs content filepaths for belonging to the specified repo")
 public class LfsContentCommand extends CliCommandItemBase {
 
+  private static Logger logger = LoggerFactory.getLogger(LfsContentCommand.class);
 
   @Option(name = "--repositoryname", aliases = "-r", usage = "The repository name to gather lfs content paths from.", metaVar = "lfstest01.git", required = true)
   private String repositoryName;
@@ -57,7 +61,8 @@ public class LfsContentCommand extends CliCommandItemBase {
     try {
       applicationProperties = new GitMsApplicationProperties();
     } catch (IOException e) {
-      debugStackTrace(e);
+      Logging.logerror(logger, "console-api: ERROR: " , e);
+      // Throw exception to write out additional stack trace if --verbose enabled , and exit cons
       throw new LogAndExitException(LFS_CONTENT_ERROR.getDescription() + " : Unable to obtain LFS configuration information.", e, LFS_CONTENT_ERROR.getCode());
     }
 
@@ -67,7 +72,8 @@ public class LfsContentCommand extends CliCommandItemBase {
 
       configFactory.setAllProjectsLoaderCallback(allProjectsLoader);
     } catch (Exception e) {
-      debugStackTrace(e);
+      Logging.logerror(logger, "console-api: ERROR: ", e);
+      // Throw exception to write out additional stack trace if --verbose enabled , and exit cons
       throw new LogAndExitException(LFS_CONTENT_ERROR.getDescription() + " : Unable to obtain LFS configuration information.", e, LFS_CONTENT_ERROR.getCode());
     }
   }
@@ -75,8 +81,8 @@ public class LfsContentCommand extends CliCommandItemBase {
   @Override
   public void execute() throws LogAndExitException {
 
-    logtrace("Starting execution.");
-    logtrace(String.format("Using repository: {%s} and outputFile: {%s}", repositoryName, outputfile));
+    logger.trace("Starting execution.");
+    logger.debug(String.format("Using repository: {%s} and outputFile: {%s}", repositoryName, outputfile));
 
     // Now we have 2 typos of use of the reponame, 1) for lfs checking, it uses the projectname without the .git
     // suffix.  But for finding it on disk, it might need the .git suffix on the end.
@@ -92,8 +98,7 @@ public class LfsContentCommand extends CliCommandItemBase {
       if ( !configFactory.getLfsAllProjectsConfig().checkIfProjectIsLfs(repositoryName) )
       {
         // this project isn't recognised as LFS.
-        logwarning(String.format("The repository given: {%s} is not recognised as a valid LFS repository.\n" +
-            "Please check the repository name, or validate the repository status, in the UI", repositoryName));
+        logger.warn(String.format("The repository given: {%s} is not recognised as a valid LFS repository. Please check the repository name, or validate the repository status, in the UI", repositoryName));
         return;
       }
     } catch (Exception e) {
@@ -131,16 +136,14 @@ public class LfsContentCommand extends CliCommandItemBase {
       // <oid> - <filename> to only being a list of <oids>
       lfsContentOids = parseLfsContentInfo(lfsContentInfo);
     } catch (Exception e) {
-      debugStackTrace(e);
-      throw new LogAndExitException(LFS_CONTENT_ERROR.getDescription() + " : Failed to obtain the list of lfs-content : " , e, LFS_CONTENT_ERROR.getCode());
+      throw new LogAndExitException(String.format(LFS_CONTENT_ERROR.getDescription() + " : Failed to obtain the list of lfs-content : " , e, LFS_CONTENT_ERROR.getCode()));
     }
 
     // ok now we have a list of content, we need to do 2 things.
     // 1) Create full paths to these content files.
     // 2) Create a file on disk in the output location with this information.
     outputLfsContent( lfsContentOids, lfsStorageLocation);
-
-    logtrace("Finished execution.");
+    logger.trace("Finished execution.");
   }
 
   /**
@@ -202,7 +205,7 @@ public class LfsContentCommand extends CliCommandItemBase {
           out.println(fullLfsContentLocation);
         }
 
-        logwarning(String.format("Processed a total of:{%s} lfs content entries.", lfsContentOids.size()));
+        System.out.println(String.format("Processed a total of:{%s} lfs content entries.", lfsContentOids.size()));
 
       } catch (IOException e) {
         throw new LogAndExitException(LFS_CONTENT_ERROR.getDescription() + " : A problem occurred when writing the lfs-content information to disk.", e, LFS_CONTENT_ERROR.getCode());
@@ -210,8 +213,6 @@ public class LfsContentCommand extends CliCommandItemBase {
 
       return;
     }
-
-    logwarning(String.format("Processed a total of:{%s} lfs content entries.", lfsContentOids.size()));
 
     // just output the information to the console directly.
     for (String lfsOid : lfsContentOids) {

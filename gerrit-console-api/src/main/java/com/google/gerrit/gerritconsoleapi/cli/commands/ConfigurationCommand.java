@@ -13,39 +13,22 @@
  
 package com.google.gerrit.gerritconsoleapi.cli.commands;
 
-
 import com.google.common.base.Strings;
 import com.google.gerrit.gerritconsoleapi.AllProjectsCommands;
-import com.google.gerrit.gerritconsoleapi.bindings.GuiceConfigurator;
+
+import com.google.gerrit.gerritconsoleapi.Logging;
 import com.google.gerrit.gerritconsoleapi.cli.processing.CliCommandItemBase;
-import com.google.gerrit.gerritconsoleapi.cli.processing.CmdLineParserFactory;
 import com.google.gerrit.gerritconsoleapi.cli.processing.LocalGuiceContextLoader;
 import com.google.gerrit.gerritconsoleapi.exceptions.LogAndExitException;
 import com.google.gerrit.sshd.CommandMetaData;
-import com.google.inject.Injector;
-import com.wandisco.gerrit.gitms.shared.properties.GitMsApplicationProperties;
-import com.wandisco.gerrit.gitms.shared.util.ReplicationUtils;
-import org.kohsuke.args4j.Argument;
-import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
-import org.kohsuke.args4j.OptionHandlerFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.File;
-import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.io.PrintStream;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-
-import static com.wandisco.gerrit.gitms.shared.util.ReplicationUtils.getGitConfigLocationProperty;
 
 @CommandMetaData(name = "config", description = "Project configuration information")
 public class ConfigurationCommand extends CliCommandItemBase {
 
-
-  private static final Logger logger = LoggerFactory.getLogger(ConfigurationCommand.class);
+  private static Logger logger = LoggerFactory.getLogger(ConfigurationCommand.class);
 
   private LocalGuiceContextLoader contextLoader;
 
@@ -75,7 +58,7 @@ public class ConfigurationCommand extends CliCommandItemBase {
 
     processAllProjectsConfig();
 
-    logger.trace("Exiting application. ");
+    logger.trace("Exiting application.");
   }
 
 

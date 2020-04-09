@@ -21,6 +21,8 @@ import com.google.gerrit.sshd.CommandMetaData;
 import org.kohsuke.args4j.Argument;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.OptionHandlerFilter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.List;
@@ -29,6 +31,8 @@ import static com.google.gerrit.gerritconsoleapi.GerConError.LFS_RUNTIME_ERROR;
 
 @CommandMetaData(name = "help", description = "Application help")
 public class HelpCommand extends CliCommandItemBase {
+
+  private static Logger logger = LoggerFactory.getLogger(HelpCommand.class);
 
   @Argument(required =false, index = 0, metaVar = "<command>", usage = "Use: 'java -jar console-api.jar help <command>'.\n")
   public String helpOnCommand;
@@ -49,7 +53,7 @@ public class HelpCommand extends CliCommandItemBase {
     // Workaround!
     // This is because args4j does not display subcommand useage /examples
     // at the moment. see https://github.com/kohsuke/args4j/issues/106
-    logtrace("Help on command: " + helpOnCommand);
+    logger.debug(String.format("Help on command: %s" + helpOnCommand));
 
     // get the appropriate command class now and call.
     // TODO Find some way of looking up the command name, and obtaining the command class from annotations
@@ -114,7 +118,7 @@ public class HelpCommand extends CliCommandItemBase {
 
       System.err.println(
           String.format("Command Example - %s\n"
-                  + "    java -jar console-api.jar %s %s",
+                  + "    console-api %s %s",
               commandItem.getCommandName(), commandItem.getCommandName(), subCommandParser.printExample(OptionHandlerFilter.REQUIRED)));
       System.err.println("");
     }

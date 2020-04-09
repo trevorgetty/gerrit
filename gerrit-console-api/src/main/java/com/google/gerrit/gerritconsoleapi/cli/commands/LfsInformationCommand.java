@@ -13,6 +13,7 @@
  
 package com.google.gerrit.gerritconsoleapi.cli.commands;
 
+import com.google.gerrit.gerritconsoleapi.Logging;
 import com.google.gerrit.gerritconsoleapi.cli.processing.AllProjectsInProcessLoader;
 import com.google.gerrit.gerritconsoleapi.cli.processing.CliCommandItemBase;
 import com.google.gerrit.gerritconsoleapi.exceptions.LogAndExitException;
@@ -22,6 +23,8 @@ import com.wandisco.gerrit.gitms.shared.config.lfs.LfsConfigFactory;
 import com.wandisco.gerrit.gitms.shared.config.lfs.LfsProjectConfigSection;
 import com.wandisco.gerrit.gitms.shared.properties.GitMsApplicationProperties;
 import org.kohsuke.args4j.Option;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -35,6 +38,8 @@ import static com.google.gerrit.gerritconsoleapi.LfsRepositoryUtilities.*;
 
 @CommandMetaData(name = "lfs-info", description = "Lfs content storage location of the backend belonging to the specified repository.")
 public class LfsInformationCommand extends CliCommandItemBase {
+
+  private static Logger logger = LoggerFactory.getLogger(LfsInformationCommand.class);
 
   private LfsConfigFactory configFactory;
   private final GitMsApplicationProperties applicationProperties;
@@ -53,7 +58,8 @@ public class LfsInformationCommand extends CliCommandItemBase {
     try {
       applicationProperties = new GitMsApplicationProperties();
     } catch (IOException e) {
-      debugStackTrace(e);
+      Logging.logerror(logger, "console-api: ERROR: ", e);
+      // Throw exception to write out additional stack trace if --verbose enabled , and exit console-api
       throw new LogAndExitException(LFS_CONFIG_INFO_ERROR.getDescription() + " : Unable to obtain LFS configuration information.", e, LFS_CONFIG_INFO_ERROR.getCode());
     }
 
@@ -63,7 +69,8 @@ public class LfsInformationCommand extends CliCommandItemBase {
 
       configFactory.setAllProjectsLoaderCallback(allProjectsLoader);
     } catch (Exception e) {
-      debugStackTrace(e);
+      Logging.logerror(logger, "console-api: ERROR: ", e);
+      // Throw exception to write out additional logging info +  stack trace if --verbose enabled , and exit console-api
       throw new LogAndExitException(LFS_CONFIG_INFO_ERROR.getDescription() + " : Unable to obtain LFS configuration information.", e, LFS_CONFIG_INFO_ERROR.getCode());
     }
   }
@@ -79,8 +86,7 @@ public class LfsInformationCommand extends CliCommandItemBase {
       if ( !configFactory.getLfsAllProjectsConfig().checkIfProjectIsLfs(repositoryName) )
       {
         // this project isn't recognised as LFS.
-        logwarning(String.format("The repository given: {%s} is not recognised as a valid LFS repository.\n" +
-            "Please check the repository name, or validate the repository status, in the UI", repositoryName));
+        logger.warn(String.format("The repository given: {%s} is not recognised as a valid LFS repository. Please check the repository name, or validate the repository status, in the UI", repositoryName));
         return;
       }
     } catch (Exception e) {

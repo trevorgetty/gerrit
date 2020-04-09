@@ -14,7 +14,9 @@
 package com.google.gerrit.gerritconsoleapi.cli.processing;
 
 import com.google.common.base.Strings;
+import com.google.gerrit.gerritconsoleapi.Logging;
 import com.google.gerrit.gerritconsoleapi.bindings.GuiceConfigurator;
+import com.google.gerrit.gerritconsoleapi.cli.commands.LfsInformationCommand;
 import com.google.gerrit.gerritconsoleapi.exceptions.LogAndExitException;
 import com.google.inject.Injector;
 import com.wandisco.gerrit.gitms.shared.properties.GitMsApplicationProperties;
@@ -32,7 +34,7 @@ import static com.google.gerrit.gerritconsoleapi.GerConError.LFS_CONFIG_INFO_ERR
 
 public class LocalGuiceContextLoader {
 
-  private static final Logger logger = LoggerFactory.getLogger(LocalGuiceContextLoader.class);
+  private static Logger logger = LoggerFactory.getLogger(LocalGuiceContextLoader.class);
 
   private Injector programGuiceContext;
 
@@ -78,7 +80,7 @@ public class LocalGuiceContextLoader {
      The gitConfigLocationOverride cannot be empty by this stage. If it is throw an exception.
      */
     if (gitConfigLocationOverride.isEmpty()) {
-      logger.trace("Invalid git configuration args. ");
+      Logging.logerror(logger, "Invalid git configuration args.", null);
       throw new LogAndExitException(LFS_CONFIG_INFO_ERROR.getDescription() + " : The \"git-config\" must either be specified manually or found via GIT_CONFIG java property, system environment or ${users.home}/.gitconfig file.", LFS_CONFIG_INFO_ERROR.getCode());
     }
 
@@ -87,10 +89,8 @@ public class LocalGuiceContextLoader {
    */
     File gitconfigFile = new File(gitConfigLocationOverride);
     if (!gitconfigFile.exists() || gitconfigFile.isDirectory()) {
-      logger.trace("Invalid git configuration it wasn't a valid file on disk. ");
-
-      throw new LogAndExitException(LFS_CONFIG_INFO_ERROR.getDescription() + " : The \".gitconfig\" file provided is invalid or a directory. " +
-          "Please supply the full path to this file.", LFS_CONFIG_INFO_ERROR.getCode());
+      Logging.logerror(logger, String.format("git configuration %s does not exist or is directory", gitConfigLocationOverride), null);
+      throw new LogAndExitException(LFS_CONFIG_INFO_ERROR.getDescription() + " : The \".gitconfig\" file provided does not exist or is directory. Please supply the full path to this file.", LFS_CONFIG_INFO_ERROR.getCode());
     }
 
     /*

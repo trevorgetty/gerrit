@@ -23,6 +23,8 @@ import com.wandisco.gerrit.gitms.shared.lfs.LfsFsRepository;
 import com.wandisco.gerrit.gitms.shared.lfs.LfsFsRepositoryFactory;
 import com.wandisco.gerrit.gitms.shared.properties.GitMsApplicationProperties;
 import org.eclipse.jgit.api.errors.InvalidConfigurationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -35,6 +37,8 @@ import static com.google.gerrit.gerritconsoleapi.GerConError.LFS_CONFIG_INFO_ERR
 import static com.google.gerrit.gerritconsoleapi.GerConError.LFS_STORAGE_BACKEND_ERROR;
 
 public class LfsRepositoryUtilities extends Logging {
+
+  private static Logger logger = LoggerFactory.getLogger(LfsRepositoryUtilities.class);
 
   /**
    * Return the LfsStorageBackend object for a given backend name.
@@ -49,7 +53,7 @@ public class LfsRepositoryUtilities extends Logging {
       try {
         configFactory = LfsConfigFactory.getInstance();
       } catch (Exception e) {
-        e.printStackTrace();
+        Logging.logerror(logger, "console-api: ERROR: " , e);
         throw new LogAndExitException(LFS_STORAGE_BACKEND_ERROR.getDescription() + " : Failed to obtain the LfsConfigFactory instance. ", e, LFS_STORAGE_BACKEND_ERROR.getCode());
       }
     }
