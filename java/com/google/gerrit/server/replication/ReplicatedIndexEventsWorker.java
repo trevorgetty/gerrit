@@ -599,7 +599,7 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
 
       // Check for files that have remained too long and are no longer valid
       // because they are no longer found in the database
-      removeStaleIndexes(mapOfChanges);
+      persister.gcOldPersistedFiles(replicatedIndexEventsManager.getIncomingPersistedLingerTime());
 
       logger.atFiner().log("RC Finished indexing %d changes... (%d)", mapOfChanges.size(), totalDone);
     } catch (OrmException e) {
@@ -622,28 +622,6 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
     return (System.currentTimeMillis() - thisNodeTimeZoneOffset
         - (indexToReplicate.lastUpdatedOn.getTime() - landedIndexTimeZoneOffset)) >
         replicatorInstance.getMinutesSinceChangeLastIndexedCheckPeriod();
-  }
-
-  /**
-   * This will remove old files in the incoming-persisted directory if they cannot be found in the DB
-   * and they have existed for X amount of time
-   *
-   * @param mapOfChanges not found in DB
-   */
-  private void removeStaleIndexes(NavigableMap<Change.Id, IndexToReplicateComparable> mapOfChanges) {
-    // work out time zone and offSet from UTC
-    TimeZone timeZone = TimeZone.getDefault();
-    long offSet = timeZone.getOffset(System.currentTimeMillis());
-
-    long currentTime = System.currentTimeMillis() - offSet;
-
-    for (IndexToReplicateComparable current : mapOfChanges.values()) {
-      if ((current.lastUpdatedOn.getTime() - current.timeZoneRawOffset) + replicatedIndexEventsManager.getIncomingPersistedLingerTime() < currentTime) {
-        logger.atFiner().log("Removing stale index file %s ", current.persistFile.getName());
-        persister.deleteFileFor(current);
-      }
-    }
-
   }
 
   /**

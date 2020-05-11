@@ -61,6 +61,8 @@ public class Persister<T extends Persistable> {
 
   public static final String PERSIST_FILE="persisted-%s-%s-%02d.json";
   public static String persistEventsFileName="";
+  private static final long GC_NOW = 0;
+  private static long lastGCTime = 0;
 
   public Persister(File baseDir) throws IOException {
     this.baseDir = baseDir;
@@ -72,7 +74,11 @@ public class Persister<T extends Persistable> {
       if (!created) {
         throw new IOException("Cannot create directory "+baseDir);
       }
+    } else {
+      // On startup start with a clean incoming persisted directory
+      gcOldPersistedFiles(GC_NOW);
     }
+
   }
 
   public <T extends Persistable> List<T> getObjectsFromPath(Class<T> clazz) {
@@ -163,6 +169,23 @@ public class Persister<T extends Persistable> {
       IOException e = new IOException(String.format("PR Unable to rename file %s to %s", tempFile, persistFile));
       log.error("Unable to rename file", e);
       throw e;
+    }
+  }
+
+  public void gcOldPersistedFiles(final long lingerTime){
+
+    long currentTime = System.currentTimeMillis();
+
+    if (lastGCTime + lingerTime < currentTime) {
+      // Time to perform a GC of the old persisted files
+      // If they have hung around for longer than the lingerTime get rid.
+      for (File fileEntry : baseDir.listFiles()) {
+        if (fileEntry.lastModified() + lingerTime < currentTime) {
+          fileEntry.delete();
+        }
+      }
+
+      lastGCTime = currentTime;
     }
   }
 
