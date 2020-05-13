@@ -70,6 +70,8 @@ public class Persister<T extends Persistable> {
     if (baseDir.exists() && !baseDir.isDirectory()) {
       throw new IOException("baseDir is not a directory: "+baseDir);
     } else if (!baseDir.exists()) {
+      // no need to run GC here because we are about to
+      // create the directory where it GC's the files from.
       boolean created = baseDir.mkdirs();
       if (!created) {
         throw new IOException("Cannot create directory "+baseDir);
