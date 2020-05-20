@@ -15,17 +15,23 @@ package com.google.gerrit.server.replication;
 
 
 import com.google.common.flogger.FluentLogger;
+import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.gerrit.extensions.events.LifecycleListener;
 import com.google.gerrit.lifecycle.LifecycleModule;
 import com.google.gerrit.reviewdb.client.Change;
 import com.google.gerrit.reviewdb.server.ReviewDb;
+import com.google.gerrit.server.config.ChangeUpdateExecutor;
 import com.google.gerrit.server.config.GerritServerConfig;
+import com.google.gerrit.server.index.change.ChangeIndexCollection;
 import com.google.gerrit.server.index.change.ChangeIndexer;
+import com.google.gerrit.server.notedb.ChangeNotes;
+import com.google.gerrit.server.notedb.NotesMigration;
 import com.google.gwtorm.server.OrmException;
 import com.google.gwtorm.server.SchemaFactory;
 import com.google.inject.Inject;
 import com.google.inject.Provider;
 import com.google.inject.Singleton;
+import com.google.inject.assistedinject.Assisted;
 import com.google.inject.util.Providers;
 
 import org.eclipse.jgit.lib.Config;
@@ -109,6 +115,13 @@ public class ReplicatedIndexEventManager implements LifecycleListener {
 
   private static ReplicatedIndexEventsWorker worker;
   private SchemaFactory<ReviewDb> schemaFactory;
+
+  private final ChangeIndexer.Factory indexerFactory;
+  private final ChangeIndexCollection indexes;
+  private final ListeningExecutorService executor;
+  private final ChangeNotes.Factory notesFactory;
+  private final NotesMigration notesMigration;
+
   private ChangeIndexer indexer;
 
   // HACK! This is only here until the caller uses dependency injection.. At which point it can simply inject this singleton
@@ -138,14 +151,49 @@ public class ReplicatedIndexEventManager implements LifecycleListener {
     return Providers.of(schemaFactory.open());
   }
 
+  public ChangeIndexer.Factory getIndexerFactory() {
+    return indexerFactory;
+  }
+
+  public ChangeIndexCollection getIndexes() {
+    return indexes;
+  }
+
+  public ListeningExecutorService getExecutor() {
+    return executor;
+  }
+
+  public ChangeNotes.Factory getNotesFactory() {
+    return notesFactory;
+  }
+
+  public NotesMigration getNotesMigration() {
+    return notesMigration;
+  }
+
   @Inject
   public ReplicatedIndexEventManager(
       SchemaFactory<ReviewDb> schemaFactory,
+
+      ChangeIndexer.Factory indexerFactory,
+      ChangeIndexCollection indexes,
+      ChangeNotes.Factory notesFactory,
       ChangeIndexer indexer,
+      NotesMigration notesMigration,
+      @ChangeUpdateExecutor ListeningExecutorService executor,
       @GerritServerConfig Config config
   ) {
     this.schemaFactory = schemaFactory;
     this.indexer = indexer;
+
+// TODO: trevorg   New group for noteDB, consider other tidy ups...
+    this.indexerFactory = indexerFactory;
+    this.indexes = indexes;
+    // TODO: trevorg consider if this should be a batch executor... is it faster / easier...
+    // Should we use the existing ChangeIndexer queue and just add our items to it?
+    this.executor = executor;
+    this.notesFactory = notesFactory;
+    this.notesMigration = notesMigration;
 
     // I know this is HACK but until we drop the 3 use cases that aren't using injection to use injection we still
     // need this instance. then we can move over to instance method for deleteChanges etc.

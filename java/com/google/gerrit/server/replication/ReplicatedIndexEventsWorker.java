@@ -3,14 +3,20 @@ package com.google.gerrit.server.replication;
 import com.google.common.base.Supplier;
 import com.google.common.flogger.FluentLogger;
 import com.google.gerrit.reviewdb.client.Change;
+import com.google.gerrit.reviewdb.client.Change.Id;
+import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.reviewdb.server.ReviewDb;
-import com.google.gerrit.server.events.*;
+import com.google.gerrit.server.events.Event;
+import com.google.gerrit.server.events.EventDeserializer;
+import com.google.gerrit.server.events.SupplierDeserializer;
+import com.google.gerrit.server.events.SupplierSerializer;
 import com.google.gerrit.server.index.change.ChangeIndexer;
+import com.google.gerrit.server.notedb.ChangeNotes;
+import com.google.gerrit.server.project.NoSuchChangeException;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
 import com.google.gwtorm.server.OrmException;
-import com.google.gwtorm.server.ResultSet;
 import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.INDEX_EVENT;
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.PACKFILE_EVENT;
@@ -23,11 +29,31 @@ import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.transport.PackParser;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileFilter;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.List;
+import java.util.NavigableMap;
+import java.util.Objects;
+import java.util.Set;
+import java.util.TimeZone;
+import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.DelayQueue;
+import java.util.concurrent.Delayed;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritPublishable {
@@ -71,10 +97,12 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
   private Persister<IndexToReplicateComparable> persister;
   private Replicator replicatorInstance;
   private ChangeIndexer indexer;
+  private ChangeNotes.Factory notesFactory;
 
   public ReplicatedIndexEventsWorker(ReplicatedIndexEventManager replicatedIndexEventManager, ChangeIndexer indexer) {
     this.replicatedIndexEventsManager = replicatedIndexEventManager;
     this.indexer = indexer;
+    this.notesFactory = replicatedIndexEventsManager.getNotesFactory();
   }
 
   public void start() {
@@ -152,7 +180,8 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
     if (persister == null) {
       try {
         persister = new Persister<>(replicatorInstance.getIncomingPersistedReplEventsDirectory());
-        List<IndexToReplicateComparable> objectsFromPath = persister.getObjectsFromPath(IndexToReplicateComparable.class);
+        List<IndexToReplicateComparable>
+                objectsFromPath = persister.getObjectsFromPath(IndexToReplicateComparable.class);
         incomingChangeEventsToIndex.addAll(objectsFromPath);
         logger.atInfo().log("Added %d existing objects in the persist directory", incomingChangeEventsToIndex.size());
       } catch (IOException e) {
@@ -533,11 +562,16 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
    *
    * @param mapOfChanges
    */
-  private void indexCollectionOfChanges(NavigableMap<Change.Id, IndexToReplicateComparable> mapOfChanges) {
+  private void indexCollectionOfChanges(NavigableMap<Id, IndexToReplicateComparable> mapOfChanges) {
 
-    // Use trywithresources to ensure autoclosable is called on reviewdb instance.L
+    // fetch changes but as they can use NoteDB alongside ReviewDb we can no longer use ReviewDB resultset to get a
+    // group of changes... Instead get one at a time via the notesFactory.
+    Collection<Change> changesOnDb = new ArrayList<Change>();
+
     try (ReviewDb db = replicatedIndexEventsManager.getReviewDbProvider().get()) {
 
+      // This loop does 2 things, one drops all the deletes as they wont be reindex checked, and secondly builds up
+      // the actual changes to be reindexed.
       for (IndexToReplicateComparable i : mapOfChanges.values()) {
         if (i.delete) {
           try {
@@ -545,13 +579,16 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
           } catch (IOException e) {
             logger.atSevere().withCause(e).log("RC Error while trying to delete change index %d", i.indexNumber);
           }
+          continue;
+        }
+
+        Change c = getChange(db, i);
+        if (c != null) {
+          changesOnDb.add(c);
         }
       }
 
       logger.atFiner().log("RC Going to index %s changes...", mapOfChanges.size());
-
-      // fetch changes from db
-      ResultSet<Change> changesOnDb = db.changes().get(mapOfChanges.keySet());
 
       int totalDone = 0;
       int thisNodeTimeZoneOffset = getRawOffset(System.currentTimeMillis());
@@ -604,6 +641,28 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
       logger.atFiner().log("RC Finished indexing %d changes... (%d)", mapOfChanges.size(), totalDone);
     } catch (OrmException e) {
       logger.atSevere().withCause(e).log("RC Error while trying to reindex change");
+    }
+  }
+
+  /**
+   * Get the change, as the change may be in NotesDB / ReviewDb or both we need to abstract away via the NotesFactory
+   * which can deal with both cases.
+   * @param db
+   * @param i
+   * @return
+   * @throws OrmException
+   */
+  private Change getChange(ReviewDb db, IndexToReplicate i) throws
+          OrmException {
+    try {
+      Change c =
+              notesFactory
+                      .createChecked(db, new Project.NameKey(i.projectName), new Id(i.indexNumber))
+                      .getChange();
+      return c;
+    } catch (NoSuchChangeException e) {
+      logger.atSevere().withCause(e).log("RC Error while trying to get change index %d", i.indexNumber);
+      return null;
     }
   }
 
@@ -678,7 +737,8 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
   }
 
   private boolean indexSingleChange(ReviewDb db, IndexToReplicate indexEvent, boolean enqueueIfUnsuccessful, boolean forceIndexing) throws OrmException {
-    Change change = db.changes().get(new Change.Id(indexEvent.indexNumber));
+
+    Change change = getChange(db, indexEvent);
 
     if (change == null) {
       logger.atInfo().log("RC Change %d not reindexed, not found -- deleted", indexEvent.indexNumber);
