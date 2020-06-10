@@ -24,6 +24,7 @@ import com.github.rholder.retry.Attempt;
 import com.github.rholder.retry.RetryListener;
 import com.google.auto.value.AutoValue;
 import com.google.common.base.Joiner;
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSetMultimap;
@@ -631,7 +632,9 @@ public class MergeOp implements AutoCloseable {
       // If you happen across one of these, the correct fix is to convert the
       // inner IntegrationException to a ResourceConflictException.
       String msg;
-      if (e.getCause() instanceof IntegrationException) {
+
+      // if there is a cause we should report it for example from a GitUpdateException.
+      if (e.getCause() != null && !Strings.isNullOrEmpty(e.getCause().getMessage())) {
         msg = e.getCause().getMessage();
       } else {
         msg = genericMergeError(cs);
