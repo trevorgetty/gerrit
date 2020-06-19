@@ -106,6 +106,7 @@ public class ChangeIndexer {
   private final PluginSetContext<ChangeIndexedListener> indexedListeners;
   private final StalenessChecker stalenessChecker;
   private final boolean autoReindexIfStale;
+  private final boolean replicateAutoReindexIfStale;
 
   private final Set<IndexTask> queuedIndexTasks =
       Collections.newSetFromMap(new ConcurrentHashMap<>());
@@ -135,6 +136,7 @@ public class ChangeIndexer {
     this.stalenessChecker = stalenessChecker;
     this.batchExecutor = batchExecutor;
     this.autoReindexIfStale = autoReindexIfStale(cfg);
+    this.replicateAutoReindexIfStale = replicateAutoReindexIfStale(cfg);
     this.index = index;
     this.indexes = null;
   }
@@ -162,12 +164,17 @@ public class ChangeIndexer {
     this.stalenessChecker = stalenessChecker;
     this.batchExecutor = batchExecutor;
     this.autoReindexIfStale = autoReindexIfStale(cfg);
+    this.replicateAutoReindexIfStale = replicateAutoReindexIfStale(cfg);
     this.index = null;
     this.indexes = indexes;
   }
 
   private static boolean autoReindexIfStale(Config cfg) {
     return cfg.getBoolean("index", null, "autoReindexIfStale", false);
+  }
+
+  private static boolean replicateAutoReindexIfStale(Config cfg) {
+    return cfg.getBoolean("index", null, "replicateAutoReindexIfStale", false);
   }
 
   /**
@@ -629,7 +636,10 @@ public class ChangeIndexer {
       remove();
       try {
         if (stalenessChecker.isStale(id)) {
-          indexImpl(newChangeData(db.get(), project, id), true);
+          logger.atFine().log("Change %s in project %s found to be stale reindexing replicated = %s .", id,
+                              project.get(),
+                              replicateAutoReindexIfStale);
+          indexImpl(newChangeData(db.get(), project, id), replicateAutoReindexIfStale);
           return true;
         }
       } catch (NoSuchChangeException nsce) {
