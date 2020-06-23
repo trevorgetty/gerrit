@@ -16,10 +16,10 @@ After=network.target nss-lookup.target time-sync.target local-fs.target
 [Service]
 Type=forking
 User=root
-WorkingDirectory=${Gerrit_install_directory}/gerrit
-ExecStart=${Gerrit_install_directory}/gerrit/bin/gerrit.sh start
-ExecStop=${Gerrit_install_directory}/gerrit/bin/gerrit.sh stop
-ExecReload=${Gerrit_install_directory}/gerrit/bin/gerrit.sh stop; ${Gerrit_install_directory}/gerrit/bin/gerrit.sh start
+WorkingDirectory=${Gerrit_install_directory}
+ExecStart=${Gerrit_install_directory}/bin/gerrit.sh start
+ExecStop=${Gerrit_install_directory}/bin/gerrit.sh stop
+ExecReload=${Gerrit_install_directory}/bin/gerrit.sh stop; ${Gerrit_install_directory}/bin/gerrit.sh start
 RemainAfterExit=yes
 SyslogIdentifier=GerritCodeReview
 
