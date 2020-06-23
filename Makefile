@@ -74,7 +74,7 @@ DEV_BOX_TMP_TEST_LOCATION := /tmp/builds/gerritms
 BUILD_USER=$USER
 git_username=Testme
 
-all: display_version clean fast-assembly installer run-integration-tests
+all: display_version clean fast-assembly installer run-acceptance-tests
 .PHONY:all
 
 all-skip-tests: display_version fast-assembly installer skip-tests
@@ -206,22 +206,16 @@ testing_location:
 
 .PHONY:testing_location
 
-run-integration-tests: check_build_assets | $(testing_location)
-	@echo "\n************ Integration Tests Starting **************"
-	@echo "About to run integration tests -> resetting environment"
+run-acceptance-tests:
+	@echo "\n************ Acceptance Tests Starting **************"
+	@echo "About to run the Gerrit Acceptance Tests. These are the minimum required set of tests needed to run to verify Gerrits integrity."
+	@echo "We specify GERRITMS_REPLICATION_DISABLED=true so that replication is disabled."
+	@echo "Tests with the following labels in their BUILD files are disabled : [ elastic, docker, disabled ]"
 
-	@echo "Integration test location will be in: $(GERRIT_TEST_LOCATION)"
-	@echo "Release war path in makefile is: $(RELEASE_WAR_PATH)"
-	@echo "ConsoleApi jar path in makefile is: $(CONSOLE_API_RELEASE_JAR_PATH).jar"
-	@echo "GITMS_VERSION is: $(GITMS_VERSION)"
+	bazelisk test --cache_test_results=NO --test_env=GERRITMS_REPLICATION_DISABLED=true --test_tag_filters=-elastic,-docker,-disabled  //...
 
-
-	$(if $(GITMS_VERSION),,$(error GITMS_VERSION is not set))
-
-	./build-tools/run-integration-tests.sh $(RELEASE_WAR_PATH) $(GERRIT_TEST_LOCATION) $(CONSOLE_API_RELEASE_JAR_PATH) $(GITMS_VERSION)
-
-	@echo "\n************ Integration Tests Finished **************"
-.PHONY:run-integration-tests
+	@echo "\n************ Acceptance Tests Finished **************"
+.PHONY:run-acceptance-tests
 
 deploy: deploy-console deploy-gerrit
 .PHONY:deploy
@@ -306,13 +300,12 @@ help:
 	@echo "   make fast-assembly-console        -> will just build the GerritMS Console API package"
 	@echo "   make clean fast-assembly installer  -> will build the packages and installer asset"
 	@echo "   make installer                    -> will build the installer asset using already built packages"
-	@echo "   make run-integration-tests        -> will run the integration tests, against the already built packages"
-	@echo "   make list-assets					-> Will list all assets from a built project, and return them in env var: ASSETS_FOUND"
+	@echo "   make run-acceptance-tests         -> will run the Gerrit acceptance tests, against the already built packages"
+	@echo "   make list-assets                  -> Will list all assets from a built project, and return them in env var: ASSETS_FOUND"
 	@echo "   make deploy                       -> will deploy the installer packages of GerritMS and ConsoleAPI to artifactory"
 	@echo "   make deploy-gerrit                -> will deploy the installer package of GerritMS"
 	@echo "   make deploy-all-gerrit            -> will deploy all the assets associated with GerritMS"
 	@echo "   make deploy-console               -> will deploy the installer package of GerritMS Console API"
 	@echo "   make help                         -> Display available targets"
 .PHONY:help
-
 

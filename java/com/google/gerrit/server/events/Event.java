@@ -47,8 +47,10 @@ public abstract class Event {
 
   protected Event(String type) {
     this.type = type;
-    this.eventTimestamp = System.currentTimeMillis();
-    this.nodeIdentity = Replicator.getInstance().getThisNodeIdentity();
+    if(!Replicator.isReplicationDisabled()) {
+      this.eventTimestamp = System.currentTimeMillis();
+      this.nodeIdentity = Replicator.getInstance().getThisNodeIdentity();
+    }
   }
 
   @Deprecated

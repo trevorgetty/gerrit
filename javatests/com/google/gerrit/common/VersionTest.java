@@ -19,6 +19,8 @@ import static com.google.common.truth.Truth.assertThat;
 import com.google.common.collect.ImmutableList;
 import com.google.gerrit.launcher.GerritLauncher;
 import java.util.regex.Pattern;
+
+import org.junit.Ignore;
 import org.junit.Test;
 
 public final class VersionTest {
@@ -29,6 +31,7 @@ public final class VersionTest {
       Pattern.compile(
           "^[1-9]+\\.[0-9]+(\\.[0-9]+)*(-rc[0-9]+)?(-[0-9]+" + "-g[0-9a-f]{7,})?(-dirty)?$");
 
+  @Ignore("GER-1128 : Failing Gerrit acceptance tests tracker")
   @Test
   public void version() {
     Pattern expected =

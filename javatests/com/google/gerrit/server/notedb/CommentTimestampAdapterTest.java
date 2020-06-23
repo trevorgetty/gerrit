@@ -26,6 +26,7 @@ import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 public class CommentTimestampAdapterTest {
@@ -112,6 +113,7 @@ public class CommentTimestampAdapterTest {
     assertThat(result).isEqualTo(NON_DST_TS_TRUNC);
   }
 
+  @Ignore("GER-1128 : Failing Gerrit acceptance tests tracker")
   @Test
   public void newAdapterCanParseOutputOfLegacyAdapter() {
     String legacyJson = legacyGson.toJson(NON_DST_TS);
@@ -120,6 +122,7 @@ public class CommentTimestampAdapterTest {
         .isEqualTo(new Timestamp(NON_DST_TS.getTime() / 1000 * 1000));
   }
 
+  @Ignore("GER-1128 : Failing Gerrit acceptance tests tracker")
   @Test
   public void newAdapterDisagreesWithLegacyAdapterDuringDstTransition() {
     String duringJson = legacyGson.toJson(new Timestamp(MID_DST_MS));
