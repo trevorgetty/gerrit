@@ -186,12 +186,7 @@ public class AccountCacheImpl implements AccountCache {
     logger.atFine().log("Evict all accounts");
 
     if (Replicator.isReplicationEnabled()) {
-      for (Account.Id accountId : byId.asMap().keySet()) {
-        // replicate the invalidation.  I think it would be better to add a new evict All, instead of a single eviction request per item...
-        // TODO: (trevorg) GER-931 we are turning a one request into many for no benefit, and what happens if this cache has 2 members and the remote cache has 3 members, we evict
-        // all here but not all remotely.... So I think this needs to be changed long term!
-        ReplicatedCacheManager.replicateEvictionFromCache(BYID_NAME, accountId);
-      }
+        ReplicatedCacheManager.replicateEvictionFromCache(BYID_NAME, ReplicatedCacheManager.evictAllWildCard);
     }
 
     byId.invalidateAll();

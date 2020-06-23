@@ -26,7 +26,6 @@ import com.google.common.collect.Sets;
 import com.google.common.flogger.FluentLogger;
 import com.google.gerrit.index.project.ProjectIndexer;
 import com.google.gerrit.lifecycle.LifecycleModule;
-import com.google.gerrit.reviewdb.client.Account;
 import com.google.gerrit.reviewdb.client.AccountGroup;
 import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.server.cache.CacheModule;
@@ -370,12 +369,7 @@ public class ProjectCacheImpl implements ProjectCache {
   public void evictAllByName() {
     if (Replicator.isReplicationEnabled()) {
       // replicate the invalidation.
-      for (String name : byName.asMap().keySet()) {
-        // TODO: (trevorg) GER-931 we are turning a one request into many for no benefit.
-        //  What happens if this cache has 2 members and the remote cache has 3 members, we evict
-        // all here but not all remotely.... So I think this needs to be changed long term!
-        ReplicatedCacheManager.replicateEvictionFromCache(CACHE_PROJECTS_BYNAME, name);
-      }
+      ReplicatedCacheManager.replicateEvictionFromCache(CACHE_PROJECTS_BYNAME, ReplicatedCacheManager.evictAllWildCard);
     }
     byName.invalidateAll();
   }

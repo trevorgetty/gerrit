@@ -100,6 +100,7 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
 
   public static String projectCache = "ProjectCacheImpl";
   private static List<String> cacheEvictList = null;
+  public static final String evictAllWildCard = "*";
 
   // Used for statistics
   private static final Multiset<String> evictionsPerformed = ConcurrentHashMultiset.create();
@@ -146,7 +147,11 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
     private boolean evict(Object key) {
       boolean done = false;
       if (cache instanceof Cache) {
-        ((Cache) cache).invalidate(key);
+        if (key.toString().equals(evictAllWildCard)) {
+          ((Cache) cache).invalidateAll();
+        } else {
+          ((Cache) cache).invalidate(key);
+        }
         done = true;
       } else {
         logger.atSevere().withCause(new Exception("Class is missing: " + cache.getClass().getName())).log("CACHE is not supported!");
@@ -221,6 +226,10 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
       return;
     }
 
+    if (key.toString().equals(evictAllWildCard)){
+      logger.atInfo().log("CACHE key is %s so evicting all from cache: %s", evictAllWildCard, cacheName);
+    }
+
     CacheKeyWrapper cacheKeyWrapper = new CacheKeyWrapper(cacheName, key, Replicator.getInstance().getThisNodeIdentity());
     EventWrapper eventWrapper = GerritEventFactory.createReplicatedAllProjectsCacheEvent(cacheKeyWrapper);
     logger.atFiner().log("CACHE About to call replicated cache event: %s,%s", cacheName, key);
@@ -261,7 +270,8 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
       if (Replicator.isCacheToBeEvicted(cacheName)) {
         logger.atFiner().log("CACHE %s to evict %s...", cacheName, key);
         evicted = wrapper.evict(key);
-        if (Replicator.isCacheToBeReloaded(cacheName)) {
+        // Only reload the key if the cache is to be reloaded and the key is not a wildcard
+        if (Replicator.isCacheToBeReloaded(cacheName) && !key.toString().equals(evictAllWildCard)) {
           logger.atFiner().log("CACHE %s to reload key %s...", cacheName, key);
           reloaded = wrapper.reload(key);
         } else {
