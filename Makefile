@@ -212,7 +212,7 @@ run-acceptance-tests:
 	@echo "We specify GERRITMS_REPLICATION_DISABLED=true so that replication is disabled."
 	@echo "Tests with the following labels in their BUILD files are disabled : [ elastic, docker, disabled ]"
 
-	bazelisk test --cache_test_results=NO --test_env=GERRITMS_REPLICATION_DISABLED=true --test_tag_filters=-elastic,-docker,-disabled  //...
+	bazelisk test --cache_test_results=NO --test_env=GERRITMS_REPLICATION_DISABLED=true --test_tag_filters=-elastic,-docker,-disabled,-replication,-delete-project  //...
 
 	@echo "\n************ Acceptance Tests Finished **************"
 .PHONY:run-acceptance-tests
