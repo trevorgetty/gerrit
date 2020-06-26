@@ -12,6 +12,7 @@ junit_tests(
         "//java/com/google/gerrit/server",
         "//java/com/google/gerrit/util/http",
         "//javatests/com/google/gerrit/util/http/testutil",
+        "//java/com/google/gerrit/testing:gerrit-test-util",
         "//lib:gson",
         "//lib:guava",
         "//lib:gwtorm",
