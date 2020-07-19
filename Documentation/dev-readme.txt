@@ -1,7 +1,7 @@
 = Gerrit Code Review: Developer Setup
 
 To build a developer instance, you'll need link:https://bazel.build/[Bazel] to
-compile the code.
+compile the code, preferably launched with link:https://github.com/bazelbuild/bazelisk[Bazelisk].
 
 == Getting the Source
 
@@ -122,6 +122,12 @@ shut down.
 
 For instructions on running the acceptance tests with Bazel,
 see <<dev-bazel#tests,Running Unit Tests with Bazel>>.
+
+[[e2e]]
+=== End-to-end tests
+
+<<dev-e2e-tests#,This document>> describes how `e2e` (load or functional) test
+scenarios are implemented using link:https://gatling.io/[`Gatling`].
 
 [[run_daemon]]
 === Running the Daemon

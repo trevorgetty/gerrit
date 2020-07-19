@@ -54,6 +54,7 @@ import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.reviewdb.client.RefNames;
 import com.google.gerrit.server.GerritPersonIdent;
 import com.google.gerrit.server.IdentifiedUser;
+import com.google.gerrit.server.UsedAt;
 import com.google.gerrit.server.account.GroupBackend;
 import com.google.gerrit.server.config.AllProjectsName;
 import com.google.gerrit.server.config.AllUsersName;
@@ -248,9 +249,9 @@ public class CreateProject
     }
   }
 
-  private ProjectState createProject(CreateProjectArgs args)
-      throws BadRequestException, ResourceConflictException, IOException,
-      ConfigInvalidException, PreconditionFailedException {
+  @UsedAt(UsedAt.Project.COLLABNET)
+  public ProjectState createProject(CreateProjectArgs args)
+      throws BadRequestException, ResourceConflictException, IOException, ConfigInvalidException {
     final Project.NameKey nameKey = args.getProject();
     try {
       final String head = args.permissionsOnly ? RefNames.REFS_CONFIG : args.branch.get(0);

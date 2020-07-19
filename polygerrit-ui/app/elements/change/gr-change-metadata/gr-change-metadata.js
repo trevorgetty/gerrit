@@ -131,7 +131,7 @@
 
       _currentParents: {
         type: Array,
-        computed: '_computeParents(change)',
+        computed: '_computeParents(revision)',
       },
 
       /** @type {?} */
@@ -243,12 +243,12 @@
       this._newHashtag = '';
       this.$.restAPI.setChangeHashtag(
           this.change._number, {add: [newHashtag]}).then(newHashtag => {
-            this.set(['change', 'hashtags'], newHashtag);
-            if (newHashtag !== lastHashtag) {
-              this.dispatchEvent(
-                  new CustomEvent('hashtag-changed', {bubbles: true}));
-            }
-          });
+        this.set(['change', 'hashtags'], newHashtag);
+        if (newHashtag !== lastHashtag) {
+          this.dispatchEvent(
+              new CustomEvent('hashtag-changed', {bubbles: true}));
+        }
+      });
     },
 
     _computeTopicReadOnly(mutable, change) {
@@ -359,7 +359,7 @@
     _computeBranchURL(project, branch) {
       return Gerrit.Nav.getUrlForBranch(branch, project,
           this.change.status == this.ChangeStatus.NEW ? 'open' :
-              this.change.status.toLowerCase());
+            this.change.status.toLowerCase());
     },
 
     _computeTopicURL(topic) {
@@ -410,6 +410,7 @@
     /**
      * Get the user with the specified role on the change. Returns null if the
      * user with that role is the same as the owner.
+     *
      * @param {!Object} change
      * @param {string} role One of the values from _CHANGE_ROLE
      * @return {Object|null} either an accound or null.
@@ -444,13 +445,11 @@
       return null;
     },
 
-    _computeParents(change) {
-      if (!change.current_revision ||
-          !change.revisions[change.current_revision] ||
-          !change.revisions[change.current_revision].commit) {
+    _computeParents(revision) {
+      if (!revision || !revision.commit) {
         return undefined;
       }
-      return change.revisions[change.current_revision].commit.parents;
+      return revision.commit.parents;
     },
 
     _computeParentsLabel(parents) {

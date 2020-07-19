@@ -3,7 +3,11 @@ load("@rules_java//java:defs.bzl", "java_library")
 java_library(
     name = "api",
     data = ["//lib:LICENSE-slf4j"],
-    visibility = ["//visibility:public"],
+    visibility = [
+        "//javatests/com/google/gerrit/elasticsearch:__pkg__",
+        "//lib/jgit/org.eclipse.jgit:__pkg__",
+        "//plugins:__pkg__",
+    ],
     exports = ["@log-api//jar"],
 )
 

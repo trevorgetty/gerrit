@@ -78,16 +78,36 @@ limitations under the License.
       sandbox = sinon.sandbox.create();
 
       stub('gr-rest-api-interface', {
-        getConfig() { return Promise.resolve({change: {}}); },
-        getLoggedIn() { return Promise.resolve(false); },
-        getProjectConfig() { return Promise.resolve({}); },
-        getDiffChangeDetail() { return Promise.resolve({}); },
-        getChangeFiles() { return Promise.resolve({}); },
-        saveFileReviewed() { return Promise.resolve(); },
-        getDiffComments() { return Promise.resolve({}); },
-        getDiffRobotComments() { return Promise.resolve({}); },
-        getDiffDrafts() { return Promise.resolve({}); },
-        getReviewedFiles() { return Promise.resolve([]); },
+        getConfig() {
+          return Promise.resolve({change: {}});
+        },
+        getLoggedIn() {
+          return Promise.resolve(false);
+        },
+        getProjectConfig() {
+          return Promise.resolve({});
+        },
+        getDiffChangeDetail() {
+          return Promise.resolve({});
+        },
+        getChangeFiles() {
+          return Promise.resolve({});
+        },
+        saveFileReviewed() {
+          return Promise.resolve();
+        },
+        getDiffComments() {
+          return Promise.resolve({});
+        },
+        getDiffRobotComments() {
+          return Promise.resolve({});
+        },
+        getDiffDrafts() {
+          return Promise.resolve({});
+        },
+        getReviewedFiles() {
+          return Promise.resolve([]);
+        },
       });
       element = fixture('basic');
       return element._loadComments();
@@ -262,28 +282,28 @@ limitations under the License.
       assert.isTrue(element._loading);
       assert(diffNavStub.lastCall.calledWithExactly(element._change,
           'wheatley.md', '10', '5'),
-          'Should navigate to /c/42/5..10/wheatley.md');
+      'Should navigate to /c/42/5..10/wheatley.md');
       element._path = 'wheatley.md';
 
       MockInteractions.pressAndReleaseKeyOn(element, 219, null, '[');
       assert.isTrue(element._loading);
       assert(diffNavStub.lastCall.calledWithExactly(element._change,
           'glados.txt', '10', '5'),
-          'Should navigate to /c/42/5..10/glados.txt');
+      'Should navigate to /c/42/5..10/glados.txt');
       element._path = 'glados.txt';
 
       MockInteractions.pressAndReleaseKeyOn(element, 219, null, '[');
       assert.isTrue(element._loading);
       assert(diffNavStub.lastCall.calledWithExactly(element._change, 'chell.go',
           '10', '5'),
-          'Should navigate to /c/42/5..10/chell.go');
+      'Should navigate to /c/42/5..10/chell.go');
       element._path = 'chell.go';
 
       MockInteractions.pressAndReleaseKeyOn(element, 219, null, '[');
       assert.isTrue(element._loading);
       assert(changeNavStub.lastCall.calledWithExactly(element._change, '10',
           '5'),
-          'Should navigate to /c/42/5..10');
+      'Should navigate to /c/42/5..10');
     });
 
     test('keyboard shortcuts with old patch number', () => {
@@ -325,13 +345,13 @@ limitations under the License.
       MockInteractions.pressAndReleaseKeyOn(element, 221, null, ']');
       assert(diffNavStub.lastCall.calledWithExactly(element._change,
           'wheatley.md', '1', PARENT),
-          'Should navigate to /c/42/1/wheatley.md');
+      'Should navigate to /c/42/1/wheatley.md');
       element._path = 'wheatley.md';
 
       MockInteractions.pressAndReleaseKeyOn(element, 219, null, '[');
       assert(diffNavStub.lastCall.calledWithExactly(element._change,
           'glados.txt', '1', PARENT),
-          'Should navigate to /c/42/1/glados.txt');
+      'Should navigate to /c/42/1/glados.txt');
       element._path = 'glados.txt';
 
       MockInteractions.pressAndReleaseKeyOn(element, 219, null, '[');
@@ -342,6 +362,89 @@ limitations under the License.
       MockInteractions.pressAndReleaseKeyOn(element, 219, null, '[');
       assert(changeNavStub.lastCall.calledWithExactly(element._change, '1',
           PARENT), 'Should navigate to /c/42/1');
+    });
+
+    test('edit should redirect to edit page', done => {
+      element._loggedIn = true;
+      element._path = 't.txt';
+      element._patchRange = {
+        basePatchNum: PARENT,
+        patchNum: '1',
+      };
+      element._change = {
+        _number: 42,
+        status: 'NEW',
+        revisions: {
+          a: {_number: 1, commit: {parents: []}},
+          b: {_number: 2, commit: {parents: []}},
+        },
+      };
+      const redirectStub = sandbox.stub(Gerrit.Nav, 'navigateToRelativeUrl');
+      flush(() => {
+        const editBtn = Polymer.dom(element.root)
+            .querySelector('.editButton gr-button');
+        assert.isTrue(!!editBtn);
+        MockInteractions.tap(editBtn);
+        assert.isTrue(redirectStub.called);
+        done();
+      });
+    });
+
+    function isEditVisibile({loggedIn, changeStatus}) {
+      return new Promise(resolve => {
+        element._loggedIn = loggedIn;
+        element._path = 't.txt';
+        element._patchRange = {
+          basePatchNum: PARENT,
+          patchNum: '1',
+        };
+        element._change = {
+          _number: 42,
+          status: changeStatus,
+          revisions: {
+            a: {_number: 1, commit: {parents: []}},
+            b: {_number: 2, commit: {parents: []}},
+          },
+        };
+        flush(() => {
+          const editBtn = Polymer.dom(element.root)
+              .querySelector('.editButton gr-button');
+          resolve(!!editBtn);
+        });
+      });
+    }
+
+    test('edit visible only when logged and status NEW', async () => {
+      for (const changeStatus in element.ChangeStatus) {
+        if (!element.ChangeStatus.hasOwnProperty(changeStatus)) {
+          continue;
+        }
+        assert.isFalse(await isEditVisibile({loggedIn: false, changeStatus}),
+            `loggedIn: false, changeStatus: ${changeStatus}`);
+
+        if (changeStatus !== element.ChangeStatus.NEW) {
+          assert.isFalse(await isEditVisibile({loggedIn: true, changeStatus}),
+              `loggedIn: true, changeStatus: ${changeStatus}`);
+        } else {
+          assert.isTrue(await isEditVisibile({loggedIn: true, changeStatus}),
+              `loggedIn: true, changeStatus: ${changeStatus}`);
+        }
+      }
+    });
+
+    test('edit visible when logged and status NEW', async () => {
+      assert.isTrue(await isEditVisibile(
+          {loggedIn: true, changeStatus: element.ChangeStatus.NEW}));
+    });
+
+    test('edit hidden when logged and status ABANDONED', async () => {
+      assert.isFalse(await isEditVisibile(
+          {loggedIn: true, changeStatus: element.ChangeStatus.ABANDONED}));
+    });
+
+    test('edit hidden when logged and status MERGED', async () => {
+      assert.isFalse(await isEditVisibile(
+          {loggedIn: true, changeStatus: element.ChangeStatus.MERGED}));
     });
 
     test('Diff preferences hidden when no prefs or logged out', () => {
@@ -554,22 +657,6 @@ limitations under the License.
 
       assert(navigateStub.lastCall.calledWithExactly(element._change,
           element._path, '1', 'PARENT'));
-    });
-
-    test('download link', () => {
-      element._change = {project: 'test'},
-      element._changeNum = '42';
-      element._patchRange = {
-        basePatchNum: PARENT,
-        patchNum: '10',
-      };
-      element._fileList = ['chell.go', 'glados.txt', 'wheatley.md'];
-      element._path = 'glados.txt';
-      flushAsynchronousOperations();
-      const link = element.$$('.downloadLink');
-      assert.equal(link.getAttribute('href'),
-          '/changes/test~42/revisions/10/patch?zip&path=glados.txt');
-      assert.isTrue(link.hasAttribute('download'));
     });
 
     test('_prefs.manual_review is respected', () => {
@@ -1123,6 +1210,101 @@ limitations under the License.
         ['file1', 'file3'],
         1,
       ]);
+    });
+
+    test('_computeDownloadDropdownLinks', () => {
+      const downloadLinks = [
+        {
+          url: '/changes/test~12/revisions/1/patch?zip&path=index.php',
+          name: 'Patch',
+        },
+        {
+          url: '/changes/test~12/revisions/1' +
+              '/files/index.php/download?parent=1',
+          name: 'Left Content',
+        },
+        {
+          url: '/changes/test~12/revisions/1' +
+              '/files/index.php/download',
+          name: 'Right Content',
+        },
+      ];
+
+      const side = {
+        meta_a: true,
+        meta_b: true,
+      };
+
+      const base = {
+        patchNum: 1,
+        basePatchNum: 'PARENT',
+      };
+
+      assert.deepEqual(
+          element._computeDownloadDropdownLinks(
+              'test', 12, base, 'index.php', side),
+          downloadLinks);
+    });
+
+    test('_computeDownloadDropdownLinks diff returns renamed', () => {
+      const downloadLinks = [
+        {
+          url: '/changes/test~12/revisions/3/patch?zip&path=index.php',
+          name: 'Patch',
+        },
+        {
+          url: '/changes/test~12/revisions/2' +
+              '/files/index2.php/download',
+          name: 'Left Content',
+        },
+        {
+          url: '/changes/test~12/revisions/3' +
+              '/files/index.php/download',
+          name: 'Right Content',
+        },
+      ];
+
+      const side = {
+        change_type: 'RENAMED',
+        meta_a: {
+          name: 'index2.php',
+        },
+        meta_b: true,
+      };
+
+      const base = {
+        patchNum: 3,
+        basePatchNum: 2,
+      };
+
+      assert.deepEqual(
+          element._computeDownloadDropdownLinks(
+              'test', 12, base, 'index.php', side),
+          downloadLinks);
+    });
+
+    test('_computeDownloadFileLink', () => {
+      const base = {
+        patchNum: 1,
+        basePatchNum: 'PARENT',
+      };
+
+      assert.equal(
+          element._computeDownloadFileLink(
+              'test', 12, base, 'index.php', true),
+          '/changes/test~12/revisions/1/files/index.php/download?parent=1');
+
+      assert.equal(
+          element._computeDownloadFileLink(
+              'test', 12, base, 'index.php', false),
+          '/changes/test~12/revisions/1/files/index.php/download');
+    });
+
+    test('_computeDownloadPatchLink', () => {
+      assert.equal(
+          element._computeDownloadPatchLink(
+              'test', 12, {patchNum: 1}, 'index.php'),
+          '/changes/test~12/revisions/1/patch?zip&path=index.php');
     });
   });
 </script>

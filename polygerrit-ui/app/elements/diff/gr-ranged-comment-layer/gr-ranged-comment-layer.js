@@ -46,6 +46,7 @@
 
     /**
      * Layer method to add annotations to a line.
+     *
      * @param {!HTMLElement} el The DIV.contentText element to apply the
      *     annotation to.
      * @param {!Object} line The line object. (GrDiffLine)
@@ -53,12 +54,12 @@
     annotate(el, line) {
       let ranges = [];
       if (line.type === GrDiffLine.Type.REMOVE || (
-          line.type === GrDiffLine.Type.BOTH &&
+        line.type === GrDiffLine.Type.BOTH &&
           el.getAttribute('data-side') !== 'right')) {
         ranges = ranges.concat(this._getRangesForLine(line, 'left'));
       }
       if (line.type === GrDiffLine.Type.ADD || (
-          line.type === GrDiffLine.Type.BOTH &&
+        line.type === GrDiffLine.Type.BOTH &&
           el.getAttribute('data-side') !== 'left')) {
         ranges = ranges.concat(this._getRangesForLine(line, 'right'));
       }
@@ -72,6 +73,7 @@
 
     /**
      * Register a listener for layer updates.
+     *
      * @param {function(number, number, string)} fn The update handler function.
      *     Should accept as arguments the line numbers for the start and end of
      *     the update and the side as a string.
@@ -82,6 +84,7 @@
 
     /**
      * Notify Layer listeners of changes to annotations.
+     *
      * @param {number} start The line where the update starts.
      * @param {number} end The line where the update ends.
      * @param {string} side The side of the update. ('left' or 'right')
@@ -95,6 +98,7 @@
     /**
      * Handle change in the comments by updating the comment maps and by
      * emitting appropriate update notifications.
+     *
      * @param {Object} record The change record.
      */
     _handleCommentChange(record) {
@@ -136,6 +140,7 @@
      * Take a list of comments and return a sparse list mapping line numbers to
      * partial ranges. Uses an end-character-index of -1 to indicate the end of
      * the line.
+     *
      * @param {?} commentList The list of comments.
      *    Getting this param to match closure requirements caused problems.
      * @return {!Object} The sparse list.
@@ -165,8 +170,8 @@
 
       for (const splice of record.indexSplices) {
         const ranges = splice.removed.length ?
-            splice.removed.map(c => { return c.range; }) :
-            [splice.object[splice.index].range];
+          splice.removed.map(c => { return c.range; }) :
+          [splice.object[splice.index].range];
         for (const range of ranges) {
           if (!range) { continue; }
           this._notifyUpdateRange(range.start_line, range.end_line, side);

@@ -85,7 +85,7 @@ public class ListGroups implements RestReadView<TopLevelResource> {
   private final Groups groups;
   private final GroupResolver groupResolver;
 
-  private EnumSet<ListGroupsOption> options = EnumSet.noneOf(ListGroupsOption.class);
+  private Set<ListGroupsOption> options = EnumSet.noneOf(ListGroupsOption.class);
   private boolean visibleToAll;
   private Account.Id user;
   private boolean owned;
@@ -205,7 +205,10 @@ public class ListGroups implements RestReadView<TopLevelResource> {
     options.addAll(ListGroupsOption.fromBits(Integer.parseInt(hex, 16)));
   }
 
-  @Option(name = "--owned-by", usage = "list groups owned by the given group uuid")
+  @Option(
+      name = "--owned-by",
+      aliases = {"--ownedby"},
+      usage = "list groups owned by the given group uuid")
   public void setOwnedBy(String ownedBy) {
     this.ownedBy = ownedBy;
   }
@@ -234,7 +237,7 @@ public class ListGroups implements RestReadView<TopLevelResource> {
     this.groupResolver = groupResolver;
   }
 
-  public void setOptions(EnumSet<ListGroupsOption> options) {
+  public void setOptions(Set<ListGroupsOption> options) {
     this.options = options;
   }
 

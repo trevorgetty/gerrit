@@ -54,6 +54,7 @@
     /**
      * Because either the source text or the linkification config has changed,
      * the content should be re-parsed.
+     *
      * @param {string|null|undefined} content The raw, un-linkified source
      *     string to parse.
      * @param {Object|null|undefined} config The server config specifying
@@ -67,10 +68,17 @@
           this._handleParseResult.bind(this), this.removeZeroWidthSpace);
       parser.parse(content);
 
-      // Ensure that links originating from HTML commentlink configs open in a
-      // new tab. @see Issue 5567
+      // Ensure that external links originating from HTML commentlink configs
+      // open in a new tab. @see Issue 5567
+      // Ensure links to the same host originating from commentlink configs
+      // open in the same tab. When target is not set - default is _self
+      // @see Issue 4616
       output.querySelectorAll('a').forEach(anchor => {
-        anchor.setAttribute('target', '_blank');
+        if (anchor.hostname === window.location.hostname) {
+          anchor.removeAttribute('target');
+        } else {
+          anchor.setAttribute('target', '_blank');
+        }
         anchor.setAttribute('rel', 'noopener');
       });
     },
@@ -83,6 +91,7 @@
      *   element should be created and attached to the resulting DOM.
      * - To attach an arbitrary fragment: when called with only the `fragment`
      *   argument, the fragment should be attached to the resulting DOM as is.
+     *
      * @param {string|null} text
      * @param {string|null} href
      * @param  {DocumentFragment|undefined} fragment

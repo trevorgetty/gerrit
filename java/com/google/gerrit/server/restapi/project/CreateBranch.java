@@ -29,6 +29,7 @@ package com.google.gerrit.server.restapi.project;
 
 import static com.google.gerrit.reviewdb.client.RefNames.isConfigRef;
 
+import com.google.common.base.Strings;
 import com.google.common.flogger.FluentLogger;
 import com.google.gerrit.extensions.api.projects.BranchInfo;
 import com.google.gerrit.extensions.api.projects.BranchInput;
@@ -104,7 +105,10 @@ public class CreateBranch
     if (input.ref != null && !ref.equals(input.ref)) {
       throw new BadRequestException("ref must match URL");
     }
-    if (input.revision == null) {
+    if (input.revision != null) {
+      input.revision = input.revision.trim();
+    }
+    if (Strings.isNullOrEmpty(input.revision)) {
       input.revision = Constants.HEAD;
     }
     while (ref.startsWith("/")) {
@@ -134,7 +138,7 @@ public class CreateBranch
         try {
           object = rw.parseCommit(object);
         } catch (IncorrectObjectTypeException notCommit) {
-          throw new BadRequestException("\"" + input.revision + "\" not a commit");
+          throw new BadRequestException("\"" + input.revision + "\" not a commit", notCommit);
         }
       }
 
@@ -208,7 +212,7 @@ public class CreateBranch
         throw new IOException(branchError + ". " + err.getMessage());
       }
     } catch (RefUtil.InvalidRevisionException e) {
-      throw new BadRequestException("invalid revision \"" + input.revision + "\"");
+      throw new BadRequestException("invalid revision \"" + input.revision + "\"", e);
     }
   }
 }

@@ -53,6 +53,7 @@ import com.google.gerrit.extensions.common.FileInfo;
 import com.google.gerrit.extensions.restapi.AuthException;
 import com.google.gerrit.extensions.restapi.BinaryResult;
 import com.google.gerrit.extensions.restapi.ResourceConflictException;
+import com.google.gerrit.reviewdb.client.Patch;
 import com.google.gerrit.reviewdb.client.PatchSet;
 import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.reviewdb.server.ReviewDb;
@@ -156,8 +157,11 @@ public class ChangeEditIT extends AbstractDaemonTest {
   public void publishEdit() throws Exception {
     createArbitraryEditFor(changeId);
 
+    AddReviewerInput in = new AddReviewerInput();
+    in.reviewer = user.email;
+    gApi.changes().id(changeId).addReviewer(in);
+
     PublishChangeEditInput publishInput = new PublishChangeEditInput();
-    publishInput.notify = NotifyHandling.NONE;
     gApi.changes().id(changeId).edit().publish(publishInput);
 
     assertThat(getEdit(changeId)).isAbsent();
@@ -174,8 +178,10 @@ public class ChangeEditIT extends AbstractDaemonTest {
     assertThat(info.messages).isNotEmpty();
     assertThat(Iterables.getLast(info.messages).tag)
         .isEqualTo(ChangeMessagesUtil.TAG_UPLOADED_PATCH_SET);
+    assertThat(sender.getMessages()).isNotEmpty();
 
     // Move the change to WIP, repeat, and verify.
+    sender.clear();
     gApi.changes().id(changeId).setWorkInProgress();
     createEmptyEditFor(changeId);
     gApi.changes().id(changeId).edit().modifyFile(FILE_NAME, RawInputUtil.create(CONTENT_NEW2));
@@ -184,6 +190,7 @@ public class ChangeEditIT extends AbstractDaemonTest {
     assertThat(info.messages).isNotEmpty();
     assertThat(Iterables.getLast(info.messages).tag)
         .isEqualTo(ChangeMessagesUtil.TAG_UPLOADED_WIP_PATCH_SET);
+    assertThat(sender.getMessages()).isEmpty();
   }
 
   @Test
@@ -312,6 +319,17 @@ public class ChangeEditIT extends AbstractDaemonTest {
     assertThat(getEdit(changeId)).isPresent();
     ensureSameBytes(getFileContentOfEdit(changeId, FILE_NAME), CONTENT_NEW);
     ensureSameBytes(getFileContentOfEdit(changeId, FILE_NAME), CONTENT_NEW);
+  }
+
+  @Test
+  public void updateCommitMessageByEditingMagicCommitMsgFile() throws Exception {
+    createEmptyEditFor(changeId);
+    gApi.changes()
+        .id(changeId)
+        .edit()
+        .modifyFile(Patch.COMMIT_MSG, RawInputUtil.create("Foo Bar".getBytes(UTF_8)));
+    assertThat(getEdit(changeId)).isPresent();
+    ensureSameBytes(getFileContentOfEdit(changeId, Patch.COMMIT_MSG), "Foo Bar\n".getBytes(UTF_8));
   }
 
   @Test

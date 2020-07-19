@@ -1,17 +1,17 @@
 load("//tools/bzl:maven_jar.bzl", "MAVEN_CENTRAL", "MAVEN_LOCAL", "WANDISCO_ASSETS", "maven_jar")
 
-_JGIT_VANILLA_VERS = "5.1.12"
-_DOC_VERS = "5.1.12.201910011832-r"  # Set to _JGIT_VANILA_VERS unless using a snapshot
+_JGIT_VANILLA_VERS = "5.1.13"
+_DOC_VERS = "5.1.13.202002110435-r"  # Set to _JGIT_VANILA_VERS unless using a snapshot
 
 # Defines the WD postfix
 _POSTFIX_WD = "-WDv1-TC5-SNAPSHOT"
 
 # Defines the version of jgit, even the replicated version of jgit, should be no external use of the vanilla version.
-JGIT_VERS = _JGIT_VANILLA_VERS + _POSTFIX_WD
+_JGIT_VERS = _JGIT_VANILLA_VERS + _POSTFIX_WD
 
 JGIT_DOC_URL = "https://download.eclipse.org/jgit/site/" + _DOC_VERS + "/apidocs"
 
-JGIT_REPO = WANDISCO_ASSETS  # Leave here even so can be set to different maven repos easily.
+_JGIT_REPO = WANDISCO_ASSETS  # Leave here even so can be set to different maven repos easily.
 
 # set this to use a local version.
 # "/home/<user>/projects/jgit"
@@ -44,39 +44,39 @@ def jgit_maven_repos_dev():
 def jgit_maven_repos():
     maven_jar(
         name = "jgit-lib",
-        artifact = "org.eclipse.jgit:org.eclipse.jgit:" + JGIT_VERS,
-        repository = JGIT_REPO,
+        artifact = "org.eclipse.jgit:org.eclipse.jgit:" + _JGIT_VERS,
+        repository = _JGIT_REPO,
         #        sha1 = "5aa0e29d7b4db4e6c17e3ddee9bdc8d578f02ef0",
         #        src_sha1 = "48ae1f24793a18c94d7b2e335ccdee6f16f8dd09",
         unsign = True,
     )
     maven_jar(
         name = "jgit-servlet",
-        artifact = "org.eclipse.jgit:org.eclipse.jgit.http.server:" + JGIT_VERS,
-        repository = JGIT_REPO,
+        artifact = "org.eclipse.jgit:org.eclipse.jgit.http.server:" + _JGIT_VERS,
+        repository = _JGIT_REPO,
         #        sha1 = "2650749548a85adf53ffa7c334834edf3411d7c7",
         unsign = True,
     )
     maven_jar(
         name = "jgit-archive",
-        artifact = "org.eclipse.jgit:org.eclipse.jgit.archive:" + JGIT_VERS,
-        repository = JGIT_REPO,
+        artifact = "org.eclipse.jgit:org.eclipse.jgit.archive:" + _JGIT_VERS,
+        repository = _JGIT_REPO,
         #        sha1 = "0eb22173603c141047c790e28f9d8a1df39b8067",
     )
     maven_jar(
         name = "jgit-junit",
-        artifact = "org.eclipse.jgit:org.eclipse.jgit.junit:" + JGIT_VERS,
-        repository = JGIT_REPO,
-        #        sha1 = "35f4b77f8e8339da192120ee0b037944b94b4194",
+        artifact = "org.eclipse.jgit:org.eclipse.jgit.junit:" + _JGIT_VERS,
+        repository = _JGIT_REPO,
+        sha1 = "35f4b77f8e8339da192120ee0b037944b94b4194",
         unsign = True,
     )
 
     # Added to support lfs as core plugin from gerrit workspace
     maven_jar(
         name = "jgit-http-apache",
-        artifact = "org.eclipse.jgit:org.eclipse.jgit.http.apache:" + JGIT_VERS,
+        artifact = "org.eclipse.jgit:org.eclipse.jgit.http.apache:" + _JGIT_VERS,
         #        sha1 = "e52f857da16f4aeaf4861d736f3fc8a2eb6b031f",
-        repository = JGIT_REPO,
+        repository = _JGIT_REPO,
         unsign = True,
         exclude = [
             "about.html",
@@ -86,9 +86,9 @@ def jgit_maven_repos():
 
     maven_jar(
         name = "jgit-lfs",
-        artifact = "org.eclipse.jgit:org.eclipse.jgit.lfs:" + JGIT_VERS,
+        artifact = "org.eclipse.jgit:org.eclipse.jgit.lfs:" + _JGIT_VERS,
         #        sha1 = "772535caadb63866039acf6cd149939838c1d663",
-        repository = JGIT_REPO,
+        repository = _JGIT_REPO,
         unsign = True,
         exclude = [
             "about.html",
@@ -98,9 +98,9 @@ def jgit_maven_repos():
 
     maven_jar(
         name = "jgit-lfs-server",
-        artifact = "org.eclipse.jgit:org.eclipse.jgit.lfs.server:" + JGIT_VERS,
+        artifact = "org.eclipse.jgit:org.eclipse.jgit.lfs.server:" + _JGIT_VERS,
         #        sha1 = "a3344e68b00ef8a79859eebd07adf945197ba1e6",
-        repository = JGIT_REPO,
+        repository = _JGIT_REPO,
         unsign = True,
         exclude = [
             "about.html",

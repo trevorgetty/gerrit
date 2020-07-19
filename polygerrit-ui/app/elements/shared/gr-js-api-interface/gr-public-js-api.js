@@ -192,7 +192,7 @@
   Plugin.prototype.registerCustomComponent = function(
       endpointName, opt_moduleName, opt_options) {
     const type = opt_options && opt_options.replace ?
-          EndpointType.REPLACE : EndpointType.DECORATE;
+      EndpointType.REPLACE : EndpointType.DECORATE;
     const hook = this._domHooks.getDomHook(endpointName, opt_moduleName);
     const moduleName = opt_moduleName || hook.getModuleName();
     Gerrit._endpoints.registerModule(
@@ -258,14 +258,14 @@
 
   Plugin.prototype.changeActions = function() {
     return new GrChangeActionsInterface(this,
-      Plugin._sharedAPIElement.getElement(
-          Plugin._sharedAPIElement.Element.CHANGE_ACTIONS));
+        Plugin._sharedAPIElement.getElement(
+            Plugin._sharedAPIElement.Element.CHANGE_ACTIONS));
   };
 
   Plugin.prototype.changeReply = function() {
     return new GrChangeReplyInterface(this,
-      Plugin._sharedAPIElement.getElement(
-          Plugin._sharedAPIElement.Element.REPLY_DIALOG));
+        Plugin._sharedAPIElement.getElement(
+            Plugin._sharedAPIElement.Element.REPLY_DIALOG));
   };
 
   Plugin.prototype.changeView = function() {
@@ -294,6 +294,7 @@
 
   /**
    * To make REST requests for plugin-provided endpoints, use
+   *
    * @example
    * const pluginRestApi = plugin.restApi(plugin.url());
    *
@@ -567,6 +568,7 @@
 
   /**
    * Install "stepping stones" API for GWT-compiled plugins by default.
+   *
    * @deprecated best effort support, will be removed with GWT UI.
    */
   Gerrit.installGwt = function(url) {
@@ -661,6 +663,43 @@
       return false;
     }
   };
+
+  // TODO(taoalpha): List all internal supported event names.
+  // Also convert this to inherited class once we move Gerrit to class.
+  Gerrit._eventEmitter = new EventEmitter();
+  ['addListener',
+    'dispatch',
+    'emit',
+    'off',
+    'on',
+    'once',
+    'removeAllListeners',
+    'removeListener',
+  ].forEach(method => {
+    /**
+     * Enabling EventEmitter interface on Gerrit.
+     *
+     * This will enable to signal across different parts of js code without relying on DOM,
+     * including core to core, plugin to plugin and also core to plugin.
+     *
+     * @example
+     *
+     * // Emit this event from pluginA
+     * Gerrit.install(pluginA => {
+     *   fetch("some-api").then(() => {
+     *     Gerrit.on("your-special-event", {plugin: pluginA});
+     *   });
+     * });
+     *
+     * // Listen on your-special-event from pluignB
+     * Gerrit.install(pluginB => {
+     *   Gerrit.on("your-special-event", ({plugin}) => {
+     *     // do something, plugin is pluginA
+     *   });
+     * });
+     */
+    Gerrit[method] = Gerrit._eventEmitter[method].bind(Gerrit._eventEmitter);
+  });
 
   window.Gerrit = Gerrit;
 

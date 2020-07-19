@@ -26,13 +26,13 @@ def _impl(ctx):
     transitive_jar_paths = [j.path for j in transitive_jars.to_list()]
     dir = ctx.outputs.zip.path + ".dir"
     source = ctx.outputs.zip.path + ".source"
-    external_docs = ["https://docs.oracle.com/javase/8/docs/api"] + ctx.attr.external_docs
+    external_docs = ["https://docs.oracle.com/en/java/javase/11/docs/api"] + ctx.attr.external_docs
     cmd = [
         "TZ=UTC",
         "export TZ",
         "rm -rf %s" % source,
         "mkdir %s" % source,
-        " && ".join(["unzip -qud %s %s" % (source, j.path) for j in source_jars.to_list()]),
+        " && ".join(["unzip -qoud %s %s" % (source, j.path) for j in source_jars.to_list()]),
         "rm -rf %s" % dir,
         "mkdir %s" % dir,
         " ".join([

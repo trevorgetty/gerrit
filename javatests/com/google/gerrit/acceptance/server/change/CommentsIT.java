@@ -47,6 +47,7 @@ import com.google.gerrit.extensions.restapi.ResourceNotFoundException;
 import com.google.gerrit.extensions.restapi.TopLevelResource;
 import com.google.gerrit.reviewdb.client.Change;
 import com.google.gerrit.reviewdb.client.Patch;
+import com.google.gerrit.reviewdb.client.RefNames;
 import com.google.gerrit.server.change.ChangeResource;
 import com.google.gerrit.server.change.RevisionResource;
 import com.google.gerrit.server.notedb.ChangeNoteUtil;
@@ -69,6 +70,7 @@ import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.eclipse.jgit.lib.ObjectReader;
+import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.notes.NoteMap;
 import org.eclipse.jgit.revwalk.RevCommit;
@@ -288,6 +290,45 @@ public class CommentsIT extends AbstractDaemonTest {
   }
 
   @Test
+  public void postCommentsUnreachableData() throws Exception {
+    String file = "file";
+    PushOneCommit push =
+        pushFactory.create(db, admin.getIdent(), testRepo, "first subject", file, "l1\nl2\n");
+
+    String dest = "refs/for/master";
+    PushOneCommit.Result r1 = push.to(dest);
+    r1.assertOkStatus();
+    String changeId = r1.getChangeId();
+    String revId = r1.getCommit().getName();
+
+    PushOneCommit.Result r2 = amendChange(r1.getChangeId());
+    r2.assertOkStatus();
+
+    String draftRefName = RefNames.refsDraftComments(r1.getChange().getId(), admin.getId());
+
+    DraftInput draft = newDraft(file, Side.REVISION, 1, "comment");
+    addDraft(changeId, "1", draft);
+    ReviewInput reviewInput = new ReviewInput();
+    reviewInput.drafts = DraftHandling.PUBLISH;
+    reviewInput.message = "foo";
+    gApi.changes().id(r1.getChangeId()).revision(1).review(reviewInput);
+
+    addDraft(changeId, "2", newDraft(file, Side.REVISION, 2, "comment2"));
+    reviewInput = new ReviewInput();
+    reviewInput.drafts = DraftHandling.PUBLISH_ALL_REVISIONS;
+    reviewInput.message = "bar";
+    gApi.changes().id(r1.getChangeId()).revision(2).review(reviewInput);
+
+    Map<String, List<CommentInfo>> drafts = getDraftComments(changeId, revId);
+    assertThat(drafts.isEmpty()).isTrue();
+
+    try (Repository repo = repoManager.openRepository(allUsers)) {
+      Ref ref = repo.exactRef(draftRefName);
+      assertThat(ref).isNull();
+    }
+  }
+
+  @Test
   public void listComments() throws Exception {
     String file = "file";
     PushOneCommit push =
@@ -317,6 +358,40 @@ public class CommentsIT extends AbstractDaemonTest {
     List<CommentInfo> list = getPublishedCommentsAsList(changeId);
     assertThat(Lists.transform(list, infoToInput(file)))
         .containsExactlyElementsIn(expectedComments);
+  }
+
+  /**
+   * This test makes sure that the commits in the refs/draft-comments ref in NoteDb have no parent
+   * commits. This is important so that each new draft update (add, modify, delete) does not keep
+   * track of previous history. Run the test with this flag: --test_env=GERRIT_NOTEDB=ON
+   */
+  @Test
+  public void commitsInDraftCommentsRefHaveNoParent() throws Exception {
+    assume().that(notesMigration.disableChangeReviewDb()).isTrue();
+    PushOneCommit.Result r = createChange();
+    String changeId = r.getChangeId();
+    String revId = r.getCommit().getName();
+    String draftRefName = RefNames.refsDraftComments(r.getChange().getId(), user.getId());
+
+    DraftInput comment1 = newDraft("file_1", Side.REVISION, 1, "comment 1");
+    CommentInfo commentInfo1 = addDraft(changeId, revId, comment1);
+    assertThat(getHeadOfDraftCommentsRef(draftRefName).getParentCount()).isEqualTo(0);
+
+    DraftInput comment2 = newDraft("file_2", Side.REVISION, 2, "comment 2");
+    CommentInfo commentInfo2 = addDraft(changeId, revId, comment2);
+    assertThat(getHeadOfDraftCommentsRef(draftRefName).getParentCount()).isEqualTo(0);
+
+    deleteDraft(changeId, revId, commentInfo1.id);
+    assertThat(getHeadOfDraftCommentsRef(draftRefName).getParentCount()).isEqualTo(0);
+    assertThat(
+            getDraftComments(changeId, revId).values().stream()
+                .flatMap(List::stream)
+                .map(commentInfo -> commentInfo.message))
+        .containsExactly("comment 2");
+
+    deleteDraft(changeId, revId, commentInfo2.id);
+    assertThat(getHeadOfDraftCommentsRef(draftRefName)).isNull();
+    assertThat(getDraftComments(changeId, revId).values().stream().flatMap(List::stream)).isEmpty();
   }
 
   @Test
@@ -885,7 +960,7 @@ public class CommentsIT extends AbstractDaemonTest {
     // PS2 has comments [c6, c9].
     assertThat(getRevisionComments(changeId, ps2)).hasSize(2);
     // PS3 has no comment.
-    assertThat(getRevisionComments(changeId, ps3)).hasSize(0);
+    assertThat(getRevisionComments(changeId, ps3)).isEmpty();
     // PS4 has comments [c7, c8].
     assertThat(getRevisionComments(changeId, ps4)).hasSize(2);
 
@@ -1068,6 +1143,12 @@ public class CommentsIT extends AbstractDaemonTest {
         assertThat(commitAfter.getEncoding()).isEqualTo(commitBefore.getEncoding());
         assertThat(commitAfter.getEncodingName()).isEqualTo(commitBefore.getEncodingName());
       }
+    }
+  }
+
+  private RevCommit getHeadOfDraftCommentsRef(String refName) throws Exception {
+    try (Repository repo = repoManager.openRepository(allUsers)) {
+      return getHead(repo, refName);
     }
   }
 

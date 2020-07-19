@@ -90,6 +90,7 @@ import com.google.gerrit.server.PublishCommentUtil;
 import com.google.gerrit.server.ReviewerSet;
 import com.google.gerrit.server.account.AccountResolver;
 import com.google.gerrit.server.change.AddReviewersEmail;
+import com.google.gerrit.server.change.AddReviewersOp.Result;
 import com.google.gerrit.server.change.ChangeResource;
 import com.google.gerrit.server.change.EmailReviewComments;
 import com.google.gerrit.server.change.NotifyUtil;
@@ -316,7 +317,7 @@ public class PostReview
       Account.Id id = revision.getUser().getAccountId();
       boolean ccOrReviewer = false;
       if (input.labels != null && !input.labels.isEmpty()) {
-        ccOrReviewer = input.labels.values().stream().filter(v -> v != 0).findFirst().isPresent();
+        ccOrReviewer = input.labels.values().stream().anyMatch(v -> v != 0);
       }
 
       if (!ccOrReviewer) {
@@ -444,10 +445,15 @@ public class PostReview
     List<Address> toByEmail = new ArrayList<>();
     List<Address> ccByEmail = new ArrayList<>();
     for (ReviewerAddition addition : reviewerAdditions) {
-      if (addition.state() == ReviewerState.REVIEWER) {
+      Result reviewAdditionResult = addition.op.getResult();
+      if (addition.state() == ReviewerState.REVIEWER
+          && (!reviewAdditionResult.addedReviewers().isEmpty()
+              || !reviewAdditionResult.addedReviewersByEmail().isEmpty())) {
         to.addAll(addition.reviewers);
         toByEmail.addAll(addition.reviewersByEmail);
-      } else if (addition.state() == ReviewerState.CC) {
+      } else if (addition.state() == ReviewerState.CC
+          && (!reviewAdditionResult.addedCCs().isEmpty()
+              || !reviewAdditionResult.addedCCsByEmail().isEmpty())) {
         cc.addAll(addition.reviewers);
         ccByEmail.addAll(addition.reviewersByEmail);
       }
@@ -497,7 +503,8 @@ public class PostReview
           throw new AuthException(
               String.format(
                   "not permitted to modify label \"%s\" on behalf of \"%s\"",
-                  type.getName(), in.onBehalfOf));
+                  type.getName(), in.onBehalfOf),
+              e);
         }
       }
     }
@@ -515,7 +522,7 @@ public class PostReview
           .check(ChangePermission.READ);
     } catch (AuthException e) {
       throw new UnprocessableEntityException(
-          String.format("on_behalf_of account %s cannot see change", reviewer.getAccountId()));
+          String.format("on_behalf_of account %s cannot see change", reviewer.getAccountId()), e);
     }
 
     return new RevisionResource(
@@ -558,7 +565,7 @@ public class PostReview
         perm.check(new LabelPermission.WithValue(lt, val));
       } catch (AuthException e) {
         throw new AuthException(
-            String.format("Applying label \"%s\": %d is restricted", lt.getName(), val));
+            String.format("Applying label \"%s\": %d is restricted", lt.getName(), val), e);
       }
     }
   }

@@ -82,7 +82,7 @@ all-skip-tests: display_version fast-assembly installer skip-tests
 
 display_version:
 	@echo "About to use the following version information."
-	@./tools/workspace-status.sh
+	@python tools/workspace_status.py
 .PHONY:display_version
 
 # Do an assembly without doing unit tests, of all our builds

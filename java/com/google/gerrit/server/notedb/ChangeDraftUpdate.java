@@ -174,7 +174,6 @@ public class ChangeDraftUpdate extends AbstractChangeUpdate {
 
     Map<RevId, RevisionNoteBuilder> builders = cache.getBuilders();
     boolean touchedAnyRevs = false;
-    boolean hasComments = false;
     for (Map.Entry<RevId, RevisionNoteBuilder> e : builders.entrySet()) {
       updatedRevs.add(e.getKey());
       ObjectId id = ObjectId.fromString(e.getKey().get());
@@ -185,7 +184,6 @@ public class ChangeDraftUpdate extends AbstractChangeUpdate {
       if (data.length == 0) {
         rnm.noteMap.remove(id);
       } else {
-        hasComments = true;
         ObjectId dataBlob = ins.insert(OBJ_BLOB, data);
         rnm.noteMap.set(id, dataBlob);
       }
@@ -198,10 +196,9 @@ public class ChangeDraftUpdate extends AbstractChangeUpdate {
       return NO_OP_UPDATE;
     }
 
-    // If we touched every revision and there are no comments left, tell the
+    // If there are no comments left, tell the
     // caller to delete the entire ref.
-    boolean touchedAllRevs = updatedRevs.equals(rnm.revisionNotes.keySet());
-    if (touchedAllRevs && !hasComments) {
+    if (!rnm.noteMap.iterator().hasNext()) {
       return null;
     }
 
@@ -264,6 +261,11 @@ public class ChangeDraftUpdate extends AbstractChangeUpdate {
   @Override
   protected String getRefName() {
     return RefNames.refsDraftComments(getId(), accountId);
+  }
+
+  @Override
+  protected void setParentCommit(CommitBuilder cb, ObjectId parentCommitId) {
+    cb.setParentIds(); // Draft updates should not keep history of parent commits
   }
 
   @Override

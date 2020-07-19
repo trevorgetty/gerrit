@@ -22,6 +22,9 @@ languages included. Build it with the following:
     $>  # start in some temp directory
     $>  git clone https://github.com/highlightjs/highlight.js
     $>  cd highlight.js
+    $>  git clone https://github.com/highlightjs/highlightjs-closure-templates
+    $>  ln -s ../../highlightjs-closure-templates/soy.js src/languages/soy.js
+    $>  mkdir test/detect/soy && ln -s ../../../highlightjs-closure-templates/test/detect/soy/default.txt test/detect/soy/default.txt
     $>  npm install
     $>  node tools/build.js -n
 
@@ -39,7 +42,7 @@ Minify the file using closure-compiler using the command below.
     $> mv closure-compiler-*.jar closure-compiler.jar
 
     $>  java -jar ./closure-compiler.jar \
-            --js build/highlight.pack.js \
+            --js build/highlight.js \
             --js_output_file build/highlight.min.js
 
 Copy the header comment that appears on the first line of

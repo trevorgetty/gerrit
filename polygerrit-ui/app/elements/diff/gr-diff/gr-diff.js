@@ -54,6 +54,7 @@
 
     /**
      * Fired when the user selects a line.
+     *
      * @event line-selected
      */
 
@@ -69,11 +70,11 @@
      * @event diff-comments-modified
      */
 
-     /**
-      * Fired when a draft is added or edited.
-      *
-      * @event draft-interaction
-      */
+    /**
+     * Fired when a draft is added or edited.
+     *
+     * @event draft-interaction
+     */
 
     properties: {
       changeNum: String,
@@ -126,6 +127,7 @@
 
       /**
        * Special line number which should not be collapsed into a shared region.
+       *
        * @type {{
        *  number: number,
        *  leftSide: {boolean}
@@ -167,7 +169,7 @@
        * bypassed. If the value is a number, then that number represents the
        * context preference to use when rendering the bypassed diff.
        *
-       * @type (number|null)
+       * @type {number|null}
        */
       _safetyBypass: {
         type: Number,
@@ -353,8 +355,8 @@
         return false;
       }
       const patchNum = el.classList.contains(DiffSide.LEFT) ?
-          this.patchRange.basePatchNum :
-          this.patchRange.patchNum;
+        this.patchRange.basePatchNum :
+        this.patchRange.patchNum;
 
       const isEdit = this.patchNumEquals(patchNum, this.EDIT_NAME);
       const isEditBase = this.patchNumEquals(patchNum, this.PARENT_NAME) &&
@@ -574,19 +576,24 @@
     },
 
     _prefsObserver(newPrefs, oldPrefs) {
-      // Scan the preference objects one level deep to see if they differ.
-      let differ = !oldPrefs;
-      if (newPrefs && oldPrefs) {
-        for (const key in newPrefs) {
-          if (newPrefs[key] !== oldPrefs[key]) {
-            differ = true;
-          }
-        }
-      }
-
-      if (differ) {
+      if (!this._prefsEqual(newPrefs, oldPrefs)) {
         this._prefsChanged(newPrefs);
       }
+    },
+
+    _prefsEqual(prefs1, prefs2) {
+      if (prefs1 === prefs2) {
+        return true;
+      }
+      if (!prefs1 || !prefs2) {
+        return false;
+      }
+      // Scan the preference objects one level deep to see if they differ.
+      const keys1 = Object.keys(prefs1);
+      const keys2 = Object.keys(prefs2);
+      return keys1.length === keys2.length &&
+          keys1.every(key => prefs1[key] === prefs2[key]) &&
+          keys2.every(key => prefs1[key] === prefs2[key]);
     },
 
     _pathObserver() {
@@ -746,6 +753,7 @@
 
     /**
      * Find the last chunk for the given side.
+     *
      * @param {!Object} diff
      * @param {boolean} leftSide true if checking the base of the diff,
      *     false if testing the revision.
@@ -763,8 +771,8 @@
         chunkIndex--;
         chunk = diff.content[chunkIndex];
       } while (
-          // We haven't reached the beginning.
-          chunkIndex >= 0 &&
+      // We haven't reached the beginning.
+        chunkIndex >= 0 &&
 
           // The chunk doesn't have both sides.
           !chunk.ab &&
@@ -781,6 +789,7 @@
 
     /**
      * Check whether the specified side of the diff has a trailing newline.
+     *
      * @param {!Object} diff
      * @param {boolean} leftSide true if checking the base of the diff,
      *     false if testing the revision.

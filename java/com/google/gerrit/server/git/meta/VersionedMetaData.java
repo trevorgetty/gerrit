@@ -17,12 +17,15 @@ package com.google.gerrit.server.git.meta;
 import static com.google.common.base.Preconditions.checkArgument;
 
 import com.google.common.base.MoreObjects;
+import com.google.common.flogger.FluentLogger;
 import com.google.gerrit.common.Nullable;
 import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.server.git.LockFailureException;
 import com.google.gerrit.server.logging.TraceContext;
 import com.google.gerrit.server.logging.TraceContext.TraceTimer;
+import com.google.gerrit.server.util.CommitMessageUtil;
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
 import java.util.ArrayList;
@@ -65,6 +68,8 @@ import org.eclipse.jgit.util.RawParseUtils;
  * read from the repository, or format an update that can later be written back to the repository.
  */
 public abstract class VersionedMetaData {
+  private static final FluentLogger logger = FluentLogger.forEnclosingClass();
+
   /**
    * Path information that does not hold references to any repository data structures, allowing the
    * application to retain this object for long periods of time.
@@ -325,14 +330,8 @@ public abstract class VersionedMetaData {
         }
 
         if (update.insertChangeId()) {
-          ObjectId id =
-              ChangeIdUtil.computeChangeId(
-                  res,
-                  getRevision(),
-                  commit.getAuthor(),
-                  commit.getCommitter(),
-                  commit.getMessage());
-          commit.setMessage(ChangeIdUtil.insertId(commit.getMessage(), id));
+          commit.setMessage(
+              ChangeIdUtil.insertId(commit.getMessage(), CommitMessageUtil.generateChangeId()));
         }
 
         src = rw.parseCommit(inserter.insert(commit));
@@ -410,6 +409,7 @@ public abstract class VersionedMetaData {
           // read the subject line and use it as reflog message
           ru.setRefLogMessage("commit: " + reader.readLine(), true);
         }
+        logger.atFine().log("Saving commit '%s' on project '%s'", message.trim(), projectName);
         inserter.flush();
         RefUpdate.Result result = ru.update();
         switch (result) {
@@ -417,16 +417,12 @@ public abstract class VersionedMetaData {
           case FAST_FORWARD:
             revision = rw.parseCommit(ru.getNewObjectId());
             update.fireGitRefUpdatedEvent(ru);
+            logger.atFine().log(
+                "Saved commit '%s' as revision '%s' on project '%s'",
+                message.trim(), revision.name(), projectName);
             return revision;
           case LOCK_FAILURE:
-            throw new LockFailureException(
-                "Cannot update "
-                    + ru.getName()
-                    + " in "
-                    + db.getDirectory()
-                    + ": "
-                    + ru.getResult(),
-                ru);
+            throw new LockFailureException(errorMsg(ru, db.getDirectory()), ru);
           case FORCED:
           case IO_FAILURE:
           case NOT_ATTEMPTED:
@@ -437,14 +433,14 @@ public abstract class VersionedMetaData {
           case REJECTED_MISSING_OBJECT:
           case REJECTED_OTHER_REASON:
           default:
-            throw new IOException(
-                "Cannot update "
-                    + ru.getName()
-                    + " in "
-                    + db.getDirectory()
-                    + ": "
-                    + ru.getResult());
+            throw new IOException(errorMsg(ru, db.getDirectory()));
         }
+      }
+
+      private String errorMsg(RefUpdate ru, File location) {
+        return String.format(
+            "Cannot update %s in %s: %s (%s)",
+            ru.getName(), location, ru.getResult(), ru.getRefLogMessage());
       }
     };
   }

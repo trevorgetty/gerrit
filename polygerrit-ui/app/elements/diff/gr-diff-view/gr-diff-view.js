@@ -84,6 +84,10 @@
       /** @type {?} */
       _changeComments: Object,
       _changeNum: String,
+      /**
+       * This is a DiffInfo object.
+       * This is retrieved and owned by a child component.
+       */
       _diff: Object,
       // An array specifically formatted to be used in a gr-dropdown-list
       // element for selected a file to view.
@@ -253,8 +257,8 @@
       const patchRange = patchRangeRecord.base;
       return this.$.restAPI.getChangeFilePathsAsSpeciallySortedArray(
           changeNum, patchRange).then(files => {
-            this._fileList = files;
-          });
+        this._fileList = files;
+      });
     },
 
     _getDiffPreferences() {
@@ -522,6 +526,13 @@
       return this._getDiffUrl(this._change, this._patchRange, newPath.path);
     },
 
+    _goToEditFile() {
+      // TODO(taoalpha): add a shortcut for editing
+      const editUrl = Gerrit.Nav.getEditUrlForDiff(
+          this._change, this._path, this._patchRange.patchNum);
+      return Gerrit.Nav.navigateToRelativeUrl(editUrl);
+    },
+
     /**
      * Gives an object representing the target of navigating either left or
      * right through the change. The resulting object will have one of the
@@ -546,8 +557,8 @@
       let idx = fileList.indexOf(path);
       if (idx === -1) {
         const file = direction > 0 ?
-            fileList[0] :
-            fileList[fileList.length - 1];
+          fileList[0] :
+          fileList[fileList.length - 1];
         return {path: file};
       }
 
@@ -677,8 +688,8 @@
         // is specified.
         this._getReviewedStatus(this.editMode, this._changeNum,
             this._patchRange.patchNum, this._path).then(status => {
-              this.$.reviewed.checked = status;
-            });
+          this.$.reviewed.checked = status;
+        });
         return;
       }
 
@@ -880,7 +891,66 @@
       history.replaceState(null, '', url);
     },
 
-    _computeDownloadLink(project, changeNum, patchRange, path) {
+    _computeDownloadDropdownLinks(
+        project, changeNum, patchRange, path, diff) {
+      if (!patchRange || !patchRange.patchNum) { return []; }
+
+      const links = [
+        {
+          url: this._computeDownloadPatchLink(
+              project, changeNum, patchRange, path),
+          name: 'Patch',
+        },
+      ];
+
+      if (diff && diff.meta_a) {
+        let leftPath = path;
+        if (diff.change_type === 'RENAMED') {
+          leftPath = diff.meta_a.name;
+        }
+        links.push(
+            {
+              url: this._computeDownloadFileLink(
+                  project, changeNum, patchRange, leftPath, true),
+              name: 'Left Content',
+            }
+        );
+      }
+
+      if (diff && diff.meta_b) {
+        links.push(
+            {
+              url: this._computeDownloadFileLink(
+                  project, changeNum, patchRange, path, false),
+              name: 'Right Content',
+            }
+        );
+      }
+
+      return links;
+    },
+
+    _computeDownloadFileLink(
+        project, changeNum, patchRange, path, isBase) {
+      let patchNum = patchRange.patchNum;
+
+      const comparedAgainsParent = patchRange.basePatchNum === 'PARENT';
+
+      if (isBase && !comparedAgainsParent) {
+        patchNum = patchRange.basePatchNum;
+      }
+
+      let url = this.changeBaseURL(project, changeNum, patchNum) +
+          `/files/${encodeURIComponent(path)}/download`;
+
+      if (isBase && comparedAgainsParent) {
+        url += '?parent=1';
+      }
+
+      return url;
+    },
+
+    _computeDownloadPatchLink(project, changeNum, patchRange, path) {
       let url = this.changeBaseURL(project, changeNum, patchRange.patchNum);
       url += '/patch?zip&path=' + encodeURIComponent(path);
       return url;
@@ -1017,12 +1087,21 @@
       // so we resolve the right "next" file.
       const unreviewedFiles = this._fileList
           .filter(file =>
-          (file === this._path || !this._reviewedFiles.has(file)));
+            (file === this._path || !this._reviewedFiles.has(file)));
       this._navToFile(this._path, unreviewedFiles, 1);
     },
 
     _handleReloadingDiffPreference() {
       this._getDiffPreferences();
+    },
+
+    _computeIsLoggedIn(loggedIn) {
+      return loggedIn ? true : false;
+    },
+
+    _computeCanEdit(loggedIn, changeChangeRecord) {
+      return this._computeIsLoggedIn(loggedIn) &&
+          this.changeIsOpen(changeChangeRecord.base.status);
     },
   });
 })();

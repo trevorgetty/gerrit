@@ -73,9 +73,10 @@
 
     /**
      * Handle a click on the iron-dropdown element.
+     *
      * @param {!Event} e
      */
-    _handleDropdownTap(e) {
+    _handleDropdownClick(e) {
       // async is needed so that that the click event is fired before the
       // dropdown closes (This was a bug for touch devices).
       this.async(() => {
@@ -85,6 +86,7 @@
 
     /**
      * Handle a click on the button to open the dropdown.
+     *
      * @param {!Event} e
      */
     _showDropdownTapHandler(e) {
@@ -109,7 +111,7 @@
       });
       if (!selectedObj) { return; }
       this.text = selectedObj.triggerText? selectedObj.triggerText :
-          selectedObj.text;
+        selectedObj.text;
       this.dispatchEvent(new CustomEvent('value-change', {
         detail: {value},
         bubbles: false,

@@ -107,7 +107,8 @@
       return agreements ? 'show' : '';
     },
 
-    _disableAggreements(item, groups, signedAgreements) {
+    _disableAgreements(item, groups, signedAgreements) {
+      if (!groups) return false;
       for (const group of groups) {
         if ((item && item.auto_verify_group &&
             item.auto_verify_group.id === group.id) ||
@@ -118,9 +119,9 @@
       return false;
     },
 
-    _hideAggreements(item, groups, signedAgreements) {
-      return this._disableAggreements(item, groups, signedAgreements) ?
-          '' : 'hide';
+    _hideAgreements(item, groups, signedAgreements) {
+      return this._disableAgreements(item, groups, signedAgreements) ?
+        '' : 'hide';
     },
 
     _disableAgreementsText(text) {
@@ -131,6 +132,7 @@
     // if specified it returns 'hideAgreementsTextBox' which
     // then hides the text box and submit button.
     _computeHideAgreementClass(name, config) {
+      if (!config) return '';
       for (const key in config) {
         if (!config.hasOwnProperty(key)) { continue; }
         for (const prop in config[key]) {

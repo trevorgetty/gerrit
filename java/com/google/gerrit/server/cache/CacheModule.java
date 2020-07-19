@@ -68,7 +68,8 @@ public abstract class CacheModule extends FactoryModule {
    */
   protected <K, V> CacheBinding<K, V> cache(
       String name, TypeLiteral<K> keyType, TypeLiteral<V> valType) {
-    CacheProvider<K, V> m = new CacheProvider<>(this, name, keyType, valType);
+    CacheProvider<K, V> m =
+        new CacheProvider<>(this, name, keyType, valType, CacheBackend.CAFFEINE);
     bindCache(m, name, keyType, valType);
 
     return m;
@@ -124,7 +125,20 @@ public abstract class CacheModule extends FactoryModule {
    */
   protected <K, V> PersistentCacheBinding<K, V> persist(
       String name, Class<K> keyType, Class<V> valType) {
-    return persist(name, TypeLiteral.get(keyType), TypeLiteral.get(valType));
+    return persist(name, TypeLiteral.get(keyType), TypeLiteral.get(valType), CacheBackend.CAFFEINE);
+  }
+
+  /**
+   * Declare a named in-memory/on-disk cache.
+   *
+   * @param <K> type of key used to lookup entries.
+   * @param <V> type of value stored by the cache.
+   * @param backend cache backend.
+   * @return binding to describe the cache.
+   */
+  protected <K, V> PersistentCacheBinding<K, V> persist(
+      String name, Class<K> keyType, Class<V> valType, CacheBackend backend) {
+    return persist(name, TypeLiteral.get(keyType), TypeLiteral.get(valType), backend);
   }
 
   /**
@@ -136,7 +150,7 @@ public abstract class CacheModule extends FactoryModule {
    */
   protected <K, V> PersistentCacheBinding<K, V> persist(
       String name, Class<K> keyType, TypeLiteral<V> valType) {
-    return persist(name, TypeLiteral.get(keyType), valType);
+    return persist(name, TypeLiteral.get(keyType), valType, CacheBackend.CAFFEINE);
   }
 
   /**
@@ -147,8 +161,9 @@ public abstract class CacheModule extends FactoryModule {
    * @return binding to describe the cache.
    */
   protected <K, V> PersistentCacheBinding<K, V> persist(
-      String name, TypeLiteral<K> keyType, TypeLiteral<V> valType) {
-    PersistentCacheProvider<K, V> m = new PersistentCacheProvider<>(this, name, keyType, valType);
+      String name, TypeLiteral<K> keyType, TypeLiteral<V> valType, CacheBackend backend) {
+    PersistentCacheProvider<K, V> m =
+        new PersistentCacheProvider<>(this, name, keyType, valType, backend);
     bindCache(m, name, keyType, valType);
 
     Type cacheDefType =

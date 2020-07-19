@@ -27,10 +27,10 @@ import com.google.gerrit.server.permissions.PermissionBackend.RefFilterOptions;
 import com.google.gerrit.server.permissions.PermissionBackendException;
 import com.google.gerrit.server.permissions.ProjectPermission;
 import com.google.gerrit.sshd.AbstractGitCommand;
-import com.google.gerrit.sshd.SshSession;
 import com.google.inject.Inject;
 import java.io.IOException;
 import java.util.List;
+import org.eclipse.jgit.storage.pack.PackStatistics;
 import org.eclipse.jgit.transport.PostUploadHook;
 import org.eclipse.jgit.transport.PostUploadHookChain;
 import org.eclipse.jgit.transport.PreUploadHook;
@@ -44,8 +44,9 @@ final class Upload extends AbstractGitCommand {
   @Inject private DynamicSet<PostUploadHook> postUploadHooks;
   @Inject private DynamicSet<UploadPackInitializer> uploadPackInitializers;
   @Inject private UploadValidators.Factory uploadValidatorsFactory;
-  @Inject private SshSession session;
   @Inject private PermissionBackend permissionBackend;
+
+  private PackStatistics stats;
 
   @Override
   protected void runImpl() throws IOException, Failure {
@@ -55,9 +56,9 @@ final class Upload extends AbstractGitCommand {
 
       perm.check(ProjectPermission.RUN_UPLOAD_PACK);
     } catch (AuthException e) {
-      throw new Failure(1, "fatal: upload-pack not permitted on this server");
+      throw new Failure(1, "fatal: upload-pack not permitted on this server", e);
     } catch (PermissionBackendException e) {
-      throw new Failure(1, "fatal: unable to check permissions " + e);
+      throw new Failure(1, "fatal: unable to check permissions ", e);
     }
 
     final UploadPack up = new UploadPack(repo);
@@ -76,6 +77,7 @@ final class Upload extends AbstractGitCommand {
     try {
       up.upload(in, out, err);
       session.setPeerAgent(up.getPeerUserAgent());
+      stats = up.getStatistics();
     } catch (UploadValidationException e) {
       // UploadValidationException is used by the UploadValidators to
       // stop the uploadPack. We do not want this exception to go beyond this
@@ -84,6 +86,38 @@ final class Upload extends AbstractGitCommand {
       if (!e.isOutput()) {
         up.sendMessage(e.getMessage());
       }
+    }
+  }
+
+  @Override
+  protected void onExit(int rc) {
+    exit.onExit(
+        rc,
+        stats != null
+            ? stats.getTimeNegotiating()
+                + "ms "
+                + stats.getTimeSearchingForReuse()
+                + "ms "
+                + stats.getTimeSearchingForSizes()
+                + "ms "
+                + stats.getTimeCounting()
+                + "ms "
+                + stats.getTimeCompressing()
+                + "ms "
+                + stats.getTimeWriting()
+                + "ms "
+                + stats.getTimeTotal()
+                + "ms "
+                + stats.getBitmapIndexMisses()
+                + " "
+                + stats.getTotalDeltas()
+                + " "
+                + stats.getTotalObjects()
+                + " "
+                + stats.getTotalBytes()
+            : "-1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1");
+    if (cleanup != null) {
+      cleanup.run();
     }
   }
 }

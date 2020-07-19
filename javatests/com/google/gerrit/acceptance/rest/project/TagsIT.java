@@ -33,8 +33,12 @@ import com.google.gerrit.extensions.restapi.BadRequestException;
 import com.google.gerrit.extensions.restapi.MethodNotAllowedException;
 import com.google.gerrit.extensions.restapi.ResourceConflictException;
 import com.google.gerrit.extensions.restapi.ResourceNotFoundException;
+import com.google.gerrit.server.project.ProjectConfig;
 import java.sql.Timestamp;
+import java.util.Arrays;
 import java.util.List;
+import org.eclipse.jgit.revwalk.RevCommit;
+import org.junit.Before;
 import org.junit.Test;
 
 @NoHttpd
@@ -55,6 +59,16 @@ public class TagsIT extends AbstractDaemonTest {
           + "+SOklImn8TAZiNxhWtA6ens66IiammUkZYFv7SSzoPLFZT4dC84SmGPWgf94NoQ=\n"
           + "=XFeC\n"
           + "-----END PGP SIGNATURE-----";
+
+  @Before
+  public void setupPermissions() throws Exception {
+    try (ProjectConfigUpdate u = updateProject(allProjects)) {
+      ProjectConfig cfg = u.getConfig();
+      removeAllBranchPermissions(
+          cfg, Permission.CREATE, Permission.CREATE_TAG, Permission.CREATE_SIGNED_TAG);
+      u.save();
+    }
+  }
 
   @Test
   public void listTagsOfNonExistingProject() throws Exception {
@@ -164,7 +178,7 @@ public class TagsIT extends AbstractDaemonTest {
 
   @Test
   public void lightweightTag() throws Exception {
-    grantTagPermissions();
+    grant(project, R_TAGS + "*", Permission.CREATE);
 
     PushOneCommit push = pushFactory.create(db, admin.getIdent(), testRepo);
     PushOneCommit.Result r = push.to("refs/heads/master");
@@ -196,7 +210,7 @@ public class TagsIT extends AbstractDaemonTest {
 
   @Test
   public void annotatedTag() throws Exception {
-    grantTagPermissions();
+    grant(project, R_TAGS + "*", Permission.CREATE_TAG);
 
     PushOneCommit push = pushFactory.create(db, admin.getIdent(), testRepo);
     PushOneCommit.Result r = push.to("refs/heads/master");
@@ -326,6 +340,53 @@ public class TagsIT extends AbstractDaemonTest {
     tag(input.ref).create(input);
   }
 
+  @Test
+  public void noBaseRevision() throws Exception {
+    grantTagPermissions();
+
+    // If revision is not specified, the tag is created based on HEAD, which points to master.
+    RevCommit expectedRevision = getRemoteHead(project, "master");
+
+    TagInput input = new TagInput();
+    input.ref = "test";
+    input.revision = null;
+
+    TagInfo result = tag(input.ref).create(input).get();
+    assertThat(result.ref).isEqualTo(R_TAGS + input.ref);
+    assertThat(result.revision).isEqualTo(expectedRevision.name());
+  }
+
+  @Test
+  public void emptyBaseRevision() throws Exception {
+    grantTagPermissions();
+
+    // If revision is not specified, the tag is created based on HEAD, which points to master.
+    RevCommit expectedRevision = getRemoteHead(project, "master");
+
+    TagInput input = new TagInput();
+    input.ref = "test";
+    input.revision = "";
+
+    TagInfo result = tag(input.ref).create(input).get();
+    assertThat(result.ref).isEqualTo(R_TAGS + input.ref);
+    assertThat(result.revision).isEqualTo(expectedRevision.name());
+  }
+
+  @Test
+  public void baseRevisionIsTrimmed() throws Exception {
+    grantTagPermissions();
+
+    RevCommit revision = getRemoteHead(project, "master");
+
+    TagInput input = new TagInput();
+    input.ref = "test";
+    input.revision = "\t" + revision.name();
+
+    TagInfo result = tag(input.ref).create(input).get();
+    assertThat(result.ref).isEqualTo(R_TAGS + input.ref);
+    assertThat(result.revision).isEqualTo(revision.name());
+  }
+
   private void assertTagList(FluentIterable<String> expected, List<TagInfo> actual)
       throws Exception {
     assertThat(actual).hasSize(expected.size());
@@ -376,5 +437,11 @@ public class TagsIT extends AbstractDaemonTest {
     grant(project, R_TAGS + "", Permission.DELETE);
     grant(project, R_TAGS + "*", Permission.CREATE_TAG);
     grant(project, R_TAGS + "*", Permission.CREATE_SIGNED_TAG);
+  }
+
+  private static void removeAllBranchPermissions(ProjectConfig cfg, String... permissions) {
+    cfg.getAccessSections().stream()
+        .filter(s -> s.getName().startsWith("refs/tags/"))
+        .forEach(s -> Arrays.stream(permissions).forEach(s::removePermission));
   }
 }

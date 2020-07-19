@@ -32,6 +32,7 @@
 
   /**
    * Fired when a permission that was previously added was removed.
+   *
    * @event added-permission-removed
    */
 
@@ -220,7 +221,7 @@
 
     _computeGroupName(groups, groupId) {
       return groups && groups[groupId] && groups[groupId].name ?
-          groups[groupId].name : groupId;
+        groups[groupId].name : groupId;
     },
 
     _getGroupSuggestions() {
@@ -251,7 +252,12 @@
       // The group id is encoded, but have to decode in order for the access
       // API to work as expected.
       const groupId = decodeURIComponent(e.detail.value.id).replace(/\+/g, ' ');
-      this.set(['permission', 'value', 'rules', groupId], {});
+      // We cannot use "this.set(...)" here, because groupId may contain dots,
+      // and dots in property path names are totally unsupported by Polymer.
+      // Apparently Polymer picks up this change anyway, otherwise we should
+      // have looked at using MutableData:
+      // https://polymer-library.polymer-project.org/2.0/docs/devguide/data-system#mutable-data
+      this.permission.value.rules[groupId] = {};
 
       // Purposely don't recompute sorted array so that the newly added rule
       // is the last item of the array.
@@ -272,7 +278,8 @@
       Polymer.dom.flush();
       const value = this._rules[this._rules.length - 1].value;
       value.added = true;
-      this.set(['permission', 'value', 'rules', groupId], value);
+      // See comment above for why we cannot use "this.set(...)" here.
+      this.permission.value.rules[groupId] = value;
       this.dispatchEvent(new CustomEvent('access-modified', {bubbles: true}));
     },
 

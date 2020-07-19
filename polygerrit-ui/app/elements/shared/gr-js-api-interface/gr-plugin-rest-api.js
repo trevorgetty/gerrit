@@ -38,12 +38,17 @@
     return getRestApi().getVersion();
   };
 
+  GrPluginRestApi.prototype.getConfig = function() {
+    return getRestApi().getConfig();
+  };
+
   GrPluginRestApi.prototype.invalidateReposCache = function() {
     getRestApi().invalidateReposCache();
   };
 
   /**
    * Fetch and return native browser REST API Response.
+   *
    * @param {string} method HTTP Method (GET, POST, etc)
    * @param {string} url URL without base path or plugin prefix
    * @param {Object=} payload Respected for POST and PUT only.
@@ -59,6 +64,7 @@
 
   /**
    * Fetch and parse REST API response, if request succeeds.
+   *
    * @param {string} method HTTP Method (GET, POST, etc)
    * @param {string} url URL without base path or plugin prefix
    * @param {Object=} payload Respected for POST and PUT only.

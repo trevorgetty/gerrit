@@ -14,14 +14,18 @@
 
 package com.google.gerrit.elasticsearch;
 
-import com.google.gerrit.elasticsearch.ElasticTestUtils.ElasticNodeInfo;
 import com.google.gerrit.server.query.change.AbstractQueryChangesTest;
 import com.google.gerrit.testing.ConfigSuite;
 import com.google.gerrit.testing.InMemoryModule;
 import com.google.gerrit.testing.IndexConfig;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.protocol.HttpClientContext;
+import org.apache.http.impl.nio.client.CloseableHttpAsyncClient;
+import org.apache.http.impl.nio.client.HttpAsyncClients;
 import org.eclipse.jgit.lib.Config;
+import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 
@@ -31,18 +35,17 @@ public class ElasticV6QueryChangesTest extends AbstractQueryChangesTest {
     return IndexConfig.createForElasticsearch();
   }
 
-  private static ElasticNodeInfo nodeInfo;
   private static ElasticContainer container;
+  private static CloseableHttpAsyncClient client;
 
   @BeforeClass
   public static void startIndexService() {
-    if (nodeInfo != null) {
-      // do not start Elasticsearch twice
-      return;
+    if (container == null) {
+      // Only start Elasticsearch once
+      container = ElasticContainer.createAndStart(ElasticVersion.V6_8);
+      client = HttpAsyncClients.createDefault();
+      client.start();
     }
-
-    container = ElasticContainer.createAndStart(ElasticVersion.V6_8);
-    nodeInfo = new ElasticNodeInfo(container.getHttpHost().getPort());
   }
 
   @AfterClass
@@ -50,6 +53,21 @@ public class ElasticV6QueryChangesTest extends AbstractQueryChangesTest {
     if (container != null) {
       container.stop();
     }
+  }
+
+  @After
+  public void closeIndex() {
+    // Close the index after each test to prevent exceeding Elasticsearch's
+    // shard limit (see Issue 10120).
+    client.execute(
+        new HttpPost(
+            String.format(
+                "http://%s:%d/%s*/_close",
+                container.getHttpHost().getHostName(),
+                container.getHttpHost().getPort(),
+                getSanitizedMethodName())),
+        HttpClientContext.create(),
+        null);
   }
 
   @Override
@@ -63,7 +81,7 @@ public class ElasticV6QueryChangesTest extends AbstractQueryChangesTest {
     Config elasticsearchConfig = new Config(config);
     InMemoryModule.setDefaults(elasticsearchConfig);
     String indicesPrefix = getSanitizedMethodName();
-    ElasticTestUtils.configure(elasticsearchConfig, nodeInfo.port, indicesPrefix);
+    ElasticTestUtils.configure(elasticsearchConfig, container, indicesPrefix);
     return Guice.createInjector(new InMemoryModule(elasticsearchConfig, notesMigration));
   }
 }

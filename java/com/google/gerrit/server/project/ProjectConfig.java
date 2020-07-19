@@ -50,6 +50,7 @@ import com.google.gerrit.reviewdb.client.BooleanProjectConfig;
 import com.google.gerrit.reviewdb.client.Branch;
 import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.reviewdb.client.RefNames;
+import com.google.gerrit.server.UsedAt;
 import com.google.gerrit.server.account.GroupBackend;
 import com.google.gerrit.server.account.ProjectWatches.NotifyType;
 import com.google.gerrit.server.config.ConfigUtil;
@@ -197,6 +198,14 @@ public class ProjectConfig extends VersionedMetaData implements ValidationError.
       throws IOException, ConfigInvalidException {
     ProjectConfig r = new ProjectConfig(update.getProjectName());
     r.load(update, id);
+    return r;
+  }
+
+  @UsedAt(UsedAt.Project.COLLABNET)
+  public static ProjectConfig read(Repository repo, Project.NameKey name)
+      throws IOException, ConfigInvalidException {
+    ProjectConfig r = new ProjectConfig(name);
+    r.load(repo);
     return r;
   }
 

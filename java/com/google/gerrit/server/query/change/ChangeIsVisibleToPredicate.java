@@ -21,6 +21,7 @@ import com.google.gerrit.reviewdb.client.Change;
 import com.google.gerrit.reviewdb.server.ReviewDb;
 import com.google.gerrit.server.AnonymousUser;
 import com.google.gerrit.server.CurrentUser;
+import com.google.gerrit.server.InternalUser;
 import com.google.gerrit.server.index.IndexUtils;
 import com.google.gerrit.server.notedb.ChangeNotes;
 import com.google.gerrit.server.permissions.ChangePermission;
@@ -31,6 +32,7 @@ import com.google.gerrit.server.project.ProjectState;
 import com.google.gwtorm.server.OrmException;
 import com.google.inject.Provider;
 import java.io.IOException;
+import java.util.Optional;
 import org.eclipse.jgit.errors.RepositoryNotFoundException;
 
 public class ChangeIsVisibleToPredicate extends IsVisibleToPredicate<ChangeData> {
@@ -88,7 +90,10 @@ public class ChangeIsVisibleToPredicate extends IsVisibleToPredicate<ChangeData>
     PermissionBackend.WithUser withUser =
         user.isIdentifiedUser()
             ? permissionBackend.absentUser(user.getAccountId())
-            : permissionBackend.user(anonymousUserProvider.get());
+            : permissionBackend.user(
+                Optional.of(user)
+                    .filter(u -> u instanceof SingleGroupUser || u instanceof InternalUser)
+                    .orElseGet(anonymousUserProvider::get));
     try {
       withUser.indexedChange(cd, notes).database(db).check(ChangePermission.READ);
     } catch (PermissionBackendException e) {

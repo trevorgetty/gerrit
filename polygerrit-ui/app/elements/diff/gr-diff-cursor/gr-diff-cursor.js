@@ -66,7 +66,7 @@
        * the first chunk) the next time the diff renders. It is set back to null
        * when used.
        *
-       * @type (?number)
+       * @type {?number}
        */
       initialLineNumber: {
         type: Number,
@@ -173,6 +173,7 @@
 
     /**
      * Get the line number element targeted by the cursor row and side.
+     *
      * @return {?Element|undefined}
      */
     getTargetLineElement() {
@@ -240,6 +241,7 @@
      * {leftSide: false, number: 123} for line 123 of the revision, or
      * {leftSide: true, number: 321} for line 321 of the base patch.
      * Returns null if an address is not available.
+     *
      * @return {?Object}
      */
     getAddress() {
@@ -304,7 +306,7 @@
       if (this._getViewMode() === DiffViewMode.SIDE_BY_SIDE &&
           this._isTargetBlank()) {
         this.side = this.side === DiffSides.LEFT ?
-            DiffSides.RIGHT : DiffSides.LEFT;
+          DiffSides.RIGHT : DiffSides.LEFT;
       }
     },
 
@@ -364,6 +366,7 @@
     /**
      * Setup and tear down on-render listeners for any diffs that are added or
      * removed from the cursor.
+     *
      * @private
      */
     _diffsChanged(changeRecord) {
@@ -380,15 +383,15 @@
         splice = changeRecord.indexSplices[spliceIdx];
 
         for (i = splice.index;
-            i < splice.index + splice.addedCount;
-            i++) {
+          i < splice.index + splice.addedCount;
+          i++) {
           this.listen(this.diffs[i], 'render-start', '_handleDiffRenderStart');
           this.listen(this.diffs[i], 'render-content', 'handleDiffUpdate');
         }
 
         for (i = 0;
-            i < splice.removed && splice.removed.length;
-            i++) {
+          i < splice.removed && splice.removed.length;
+          i++) {
           this.unlisten(splice.removed[i],
               'render-start', '_handleDiffRenderStart');
           this.unlisten(splice.removed[i],

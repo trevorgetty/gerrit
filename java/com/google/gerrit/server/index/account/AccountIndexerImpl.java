@@ -121,8 +121,8 @@ public class AccountIndexerImpl implements AccountIndexer {
         }
       } else {
         try (TraceTimer traceTimer =
-                 TraceContext.newTimer(
-                     "Deleteing account %d in index version %d", id.get(), i.getSchema().getVersion())) {
+            TraceContext.newTimer(
+                "Deleting account %d in index version %d", id.get(), i.getSchema().getVersion())) {
           i.delete(id);
         }
       }
