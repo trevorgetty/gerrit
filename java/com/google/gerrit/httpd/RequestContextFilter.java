@@ -14,7 +14,6 @@
 
 package com.google.gerrit.httpd;
 
-import com.google.gerrit.server.RequestCleanup;
 import com.google.gerrit.server.util.RequestContext;
 import com.google.gerrit.server.util.ThreadLocalRequestContext;
 import com.google.inject.Inject;
@@ -30,7 +29,7 @@ import javax.servlet.ServletException;
 import javax.servlet.ServletRequest;
 import javax.servlet.ServletResponse;
 
-/** Executes any pending {@link RequestCleanup} at the end of a request. */
+/** Set the request context for the downstream filters and invocation. */
 @Singleton
 public class RequestContextFilter implements Filter {
   public static Module module() {
@@ -42,14 +41,11 @@ public class RequestContextFilter implements Filter {
     };
   }
 
-  private final Provider<RequestCleanup> cleanup;
   private final Provider<HttpRequestContext> requestContext;
   private final ThreadLocalRequestContext local;
 
   @Inject
-  RequestContextFilter(
-      Provider<RequestCleanup> r, Provider<HttpRequestContext> c, ThreadLocalRequestContext l) {
-    cleanup = r;
+  RequestContextFilter(Provider<HttpRequestContext> c, ThreadLocalRequestContext l) {
     requestContext = c;
     local = l;
   }
@@ -65,11 +61,7 @@ public class RequestContextFilter implements Filter {
       throws IOException, ServletException {
     RequestContext old = local.setContext(requestContext.get());
     try {
-      try {
-        chain.doFilter(request, response);
-      } finally {
-        cleanup.get().run();
-      }
+      chain.doFilter(request, response);
     } finally {
       local.setContext(old);
     }

@@ -26,6 +26,7 @@ limitations under the License.
 <link rel="import" href="../../core/gr-reporting/gr-reporting.html">
 <link rel="import" href="../../shared/gr-button/gr-button.html">
 <link rel="import" href="../../shared/gr-count-string-formatter/gr-count-string-formatter.html">
+<link rel="import" href="../../shared/gr-dropdown/gr-dropdown.html">
 <link rel="import" href="../../shared/gr-dropdown-list/gr-dropdown-list.html">
 <link rel="import" href="../../shared/gr-fixed-panel/gr-fixed-panel.html">
 <link rel="import" href="../../shared/gr-icons/gr-icons.html">
@@ -75,8 +76,7 @@ limitations under the License.
         align-items: center;
         display: flex;
       }
-      .navLink:not([href]),
-      .downloadLink:not([href]) {
+      .navLink:not([href]) {
         color: var(--deemphasized-text-color);
       }
       .navLinks {
@@ -138,11 +138,13 @@ limitations under the License.
         align-items: center;
         display: flex;
       }
-      .diffModeSelector {
+      .diffModeSelector,
+      .editButton {
         align-items: center;
         display: flex;
       }
-      .diffModeSelector span {
+      .diffModeSelector span,
+      .editButton span {
         margin-right: .2rem;
       }
       .diffModeSelector.hide,
@@ -153,6 +155,9 @@ limitations under the License.
         --trigger-style: {
           text-transform: none;
         }
+      }
+      .editButtona a {
+        text-decoration: none;
       }
       @media screen and (max-width: 50em) {
         header {
@@ -266,12 +271,15 @@ limitations under the License.
           </gr-patch-range-select>
           <span class="download desktop">
             <span class="separator"></span>
-            <a
-              class="downloadLink"
-              download
-              href$="[[_computeDownloadLink(_change.project, _changeNum, _patchRange, _path)]]">
-              Download
-            </a>
+            <gr-dropdown
+                link
+                down-arrow
+                items="[[_computeDownloadDropdownLinks(_change.project, _changeNum, _patchRange, _path, _diff)]]"
+                horizontal-align="left">
+              <span class="downloadTitle">
+                Download
+              </span>
+            </gr-dropdown>
           </span>
         </div>
         <div class="rightControls">
@@ -280,8 +288,17 @@ limitations under the License.
                 link
                 disabled="[[_isBlameLoading]]"
                 on-tap="_toggleBlame">[[_computeBlameToggleLabel(_isBlameLoaded, _isBlameLoading)]]</gr-button>
-            <span class="separator"></span>
           </span>
+          <template is="dom-if" if="[[_computeCanEdit(_loggedIn, _change.*)]]">
+            <span class="separator"></span>
+            <span class="editButton">
+              <gr-button
+                link
+                title="Edit current file"
+                on-click="_goToEditFile">edit</gr-button>
+            </span>
+          </template>
+          <span class="separator"></span>
           <div class$="diffModeSelector [[_computeModeSelectHideClass(_isImageDiff)]]">
             <span>Diff view:</span>
             <gr-diff-mode-selector
@@ -327,6 +344,7 @@ limitations under the License.
         class$="[[_computeDiffClass(_panelFloatingDisabled)]]"
         is-image-diff="{{_isImageDiff}}"
         files-weblinks="{{_filesWeblinks}}"
+        diff="{{_diff}}"
         change-num="[[_changeNum]]"
         commit-range="[[_commitRange]]"
         patch-range="[[_patchRange]]"

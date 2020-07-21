@@ -9,10 +9,22 @@ To build Gerrit from source, you need:
 * A JDK for Java 8|9|10|11|...
 * Python 2 or 3
 * Node.js
-* link:https://www.bazel.io/versions/master/docs/install.html[Bazel]
+* link:https://bazel.build/[Bazel] -launched with
+link:https://github.com/bazelbuild/bazelisk[Bazelisk]
 * Maven
 * zip, unzip
+* curl
 * gcc
+
+[[bazel]]
+=== Bazel
+
+link:https://github.com/bazelbuild/bazelisk[Bazelisk] includes a
+link:https://bazel.build/[Bazel] version check and downloads the correct
+`bazel` version for the git project/repository. Bazelisk is the recommended
+`bazel` launcher for Gerrit. Once Bazelisk is installed locally, a `bazel`
+symlink can be created towards it. This is so that every `bazel` command
+seamlessly uses Bazelisk, which then runs the proper `bazel` binary version.
 
 [[java]]
 === Java
@@ -277,7 +289,7 @@ The WAR file will be placed in:
 Debugging tests:
 
 ----
-  bazel test --test_output=streamed --test_filter=com.gerrit.TestClass.testMethod  testTarget
+  bazel test --test_output=streamed --test_filter=com.gerrit.TestClass.testMethod testTarget
 ----
 
 Debug test example:
@@ -355,6 +367,7 @@ The following values are currently supported for the group name:
 * edit
 * elastic
 * git
+* git-upload-archive
 * notedb
 * pgm
 * rest
@@ -365,12 +378,37 @@ The following values are currently supported for the group name:
 === Elasticsearch
 
 Successfully running the Elasticsearch tests requires Docker, and
-may require setting the local
-link:https://www.elastic.co/guide/en/elasticsearch/reference/current/vm-max-map-count.html[virtual memory].
+may require setting the local virtual memory on
+link:https://www.elastic.co/guide/en/elasticsearch/reference/current/vm-max-map-count.html[linux] and
+link:https://www.elastic.co/guide/en/elasticsearch/reference/current/docker.html#_set_vm_max_map_count_to_at_least_262144[macOS].
+
+On macOS, if using link:https://docs.docker.com/docker-for-mac/[Docker Desktop],
+the effective memory value can be set in the Preferences, under the Advanced tab.
+The default value usually does not suffice and is causing premature container exits.
+That default is currently 2 GB and should be set to at least 5 (GB).
 
 If Docker is not available, the Elasticsearch tests will be skipped.
 Note that Bazel currently does not show
 link:https://github.com/bazelbuild/bazel/issues/3476[the skipped tests].
+
+[[logging]]
+=== Controlling logging level
+
+Per default, logging level is set to `INFO` level for all tests. The `DEBUG`
+log level can be enabled for the tests.
+
+In IDE, set `-Dgerrit.logLevel=debug` as a VM argument. With `bazel`, pass
+`GERRIT_LOG_LEVEL=debug` environment variable:
+
+----
+  bazel test --test_filter=com.google.gerrit.server.notedb.ChangeNotesTest \
+  --test_env=GERRIT_LOG_LEVEL=debug \
+  javatests/com/google/gerrit/server:server_tests
+----
+
+The log results can be found in:
+`bazel-testlogs/javatests/com/google/gerrit/server/server_tests/test.log`.
+
 
 == Dependencies
 
@@ -566,7 +604,6 @@ To use the binary from the Bazel build, you need to use the `run_npm_binary.py`
 wrapper script. For an example, see the use of `crisper` in `tools/bzl/js.bzl`.
 
 
-
 [[RBE]]
 == Google Remote Build Support
 
@@ -599,8 +636,6 @@ bazel test --config=remote \
     --remote_instance_name=projects/${PROJECT}/instances/default_instance \
     javatests/...
 ```
-
-
 
 
 GERRIT

@@ -45,20 +45,27 @@ import org.eclipse.jgit.lib.Config;
 @Singleton
 class SshLog implements LifecycleListener, GerritConfigListener {
   private static final Logger log = Logger.getLogger(SshLog.class);
-  private static final String LOG_NAME = "sshd_log";
-  private static final String P_SESSION = "session";
-  private static final String P_USER_NAME = "userName";
-  private static final String P_ACCOUNT_ID = "accountId";
-  private static final String P_WAIT = "queueWaitTime";
-  private static final String P_EXEC = "executionTime";
-  private static final String P_STATUS = "status";
-  private static final String P_AGENT = "agent";
+
+  private static final String JSON_SUFFIX = ".json";
+
+  protected static final String LOG_NAME = "sshd_log";
+  protected static final String P_SESSION = "session";
+  protected static final String P_USER_NAME = "userName";
+  protected static final String P_ACCOUNT_ID = "accountId";
+  protected static final String P_WAIT = "queueWaitTime";
+  protected static final String P_EXEC = "executionTime";
+  protected static final String P_STATUS = "status";
+  protected static final String P_AGENT = "agent";
+  protected static final String P_MESSAGE = "message";
 
   private final Provider<SshSession> session;
   private final Provider<Context> context;
   private volatile AsyncAppender async;
   private final GroupAuditService auditService;
   private final SystemLog systemLog;
+
+  private final boolean json;
+  private final boolean text;
 
   private final Object lock = new Object();
 
@@ -74,6 +81,9 @@ class SshLog implements LifecycleListener, GerritConfigListener {
     this.auditService = auditService;
     this.systemLog = systemLog;
 
+    this.json = config.getBoolean("log", "jsonLogging", false);
+    this.text = config.getBoolean("log", "textLogging", true) || !json;
+
     if (config.getBoolean("sshd", "requestLog", true)) {
       enableLogging();
     }
@@ -83,7 +93,16 @@ class SshLog implements LifecycleListener, GerritConfigListener {
   public boolean enableLogging() {
     synchronized (lock) {
       if (async == null) {
-        async = systemLog.createAsyncAppender(LOG_NAME, new SshLogLayout());
+        async = new AsyncAppender();
+
+        if (text) {
+          async.addAppender(systemLog.createAsyncAppender(LOG_NAME, new SshLogLayout()));
+        }
+
+        if (json) {
+          async.addAppender(
+              systemLog.createAsyncAppender(LOG_NAME + JSON_SUFFIX, new SshLogJsonLayout()));
+        }
         return true;
       }
       return false;
@@ -147,6 +166,10 @@ class SshLog implements LifecycleListener, GerritConfigListener {
   }
 
   void onExecute(DispatchCommand dcmd, int exitValue, SshSession sshSession) {
+    onExecute(dcmd, exitValue, sshSession, null);
+  }
+
+  void onExecute(DispatchCommand dcmd, int exitValue, SshSession sshSession, String message) {
     final Context ctx = context.get();
     ctx.finished = TimeUtil.nowMs();
 
@@ -178,6 +201,10 @@ class SshLog implements LifecycleListener, GerritConfigListener {
     String peerAgent = sshSession.getPeerAgent();
     if (peerAgent != null) {
       event.setProperty(P_AGENT, peerAgent);
+    }
+
+    if (message != null) {
+      event.setProperty(P_MESSAGE, message);
     }
 
     if (async != null) {
@@ -250,7 +277,7 @@ class SshLog implements LifecycleListener, GerritConfigListener {
             TimeUtil.nowMs(), // when
             Level.INFO, // level
             msg, // message text
-            "SSHD", // thread name
+            Thread.currentThread().getName(), // thread name
             null, // exception information
             null, // current NDC string
             null, // caller location

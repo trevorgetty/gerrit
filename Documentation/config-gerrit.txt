@@ -9,7 +9,7 @@ config file that controls many host specific settings for Gerrit.
 The contents of the `etc/gerrit.config` file are cached at startup
 by Gerrit. For most properties, if they are modified in this file, Gerrit
 needs to be restarted before it will use the new values. Some properties
-support being link:#reloadConfig[`reloaded`]' without restart.
+support being link:#reloadConfig[`reloaded`] without restart.
 
 Sample `etc/gerrit.config`:
 ----
@@ -688,6 +688,13 @@ If not absolute, the path is resolved relative to `$site_path`.
 +
 Default is unset, no disk cache.
 
+[[cache.enableDiskStatMetrics]]cache.enableDiskStatMetrics::
++
+Whether to enable the computation of disk statistics of persistent caches.
+This computation is expensive and requires a long time on larger installations.
++
+By default, false.
+
 [[cache.h2CacheSize]]cache.h2CacheSize::
 +
 The size of the in-memory cache for each opened H2 cache database, in bytes.
@@ -1180,18 +1187,6 @@ used.
 +
 Default is true.
 
-[[change.api.allowedIdentifier]]change.api.allowedIdentifier::
-+
-Change identifier(s) that are allowed on the API. See
-link:rest-api-changes.html#change-id[Change Id] for more information.
-+
-Possible values are `ALL`, `TRIPLET`, `NUMERIC_ID`, `I_HASH`, and
-`COMMIT_HASH` or any combination of those as a string list.
-`PROJECT_NUMERIC_ID` is always allowed and doesn't need to be listed
-explicitly.
-+
-Default is `ALL`.
-
 [[change.allowDrafts]]change.allowDrafts::
 +
 Legacy support for drafts workflow. If set to true, pushing a new change
@@ -1205,7 +1200,7 @@ Default is false.
 
 [[change.cacheAutomerge]]change.cacheAutomerge::
 +
-When reviewing diff commits, the left-hand side shows the output of the
+When reviewing merge commits, the left-hand side shows the output of the
 result of JGit's automatic merge algorithm. This option controls whether
 this output is cached in the change repository, or if only the diff is
 cached in the persistent `diff` cache.
@@ -1313,7 +1308,7 @@ The default limit is 1024kB.
 [[change.strictLabels]]change.strictLabels::
 +
 Reject invalid label votes: invalid labels or invalid values. This
-configuration option is provided for backwards compaitbility and may
+configuration option is provided for backwards compatibility and may
 be removed in future gerrit versions.
 +
 Default is false.
@@ -1500,13 +1495,14 @@ a suitable JRE.  Overrides the environment variable 'JAVA_HOME'.
 
 [[container.javaOptions]]container.javaOptions::
 +
-Additional options to pass along to the Java runtime.  If multiple
-values are configured, they are passed in order on the command line,
-separated by spaces.  These options are appended onto 'JAVA_OPTIONS'.
-
+Additional options to pass along to the Java runtime. May be specified
+multiple times to configure multiple values. If multiple values are
+configured, they are passed in order on the command line, separated by
+spaces.  These options are appended onto 'JAVA_OPTIONS'.
++
 For example, it is possible to overwrite Gerrit's default log4j
 configuration:
-
++
 ----
   javaOptions = -Dlog4j.configuration=file:///home/gerrit/site/etc/log4j.properties
 ----
@@ -1576,6 +1572,21 @@ Default on JGit is 10 MiB on all platforms.
 +
 Common unit suffixes of 'k', 'm', or 'g' are supported.
 
+[[core.packedGitUseStrongRefs]]core.packedGitUseStrongRefs::
++
+Set to `true` in order to use strong references to reference packfile
+pages cached in the WindowCache. Otherwise SoftReferences are used.
+If this option is set to `false`, the Java garbage collector will
+flush the WindowCache to free memory if the used heap comes close to
+the maximum heap size. This has the advantage that it can quickly
+reclaim memory which was used by the WindowCache but comes at the
+price that the previously cached pack file content needs to be again
+copied from the file system cache to the Gerrit process.
+Setting this option to `true` prevents flushing the WindowCache
+which provides more predictable performance.
++
+Default is `false`.
+
 [[core.deltaBaseCaseLimit]]core.deltaBaseCacheLimit::
 +
 Maximum number of bytes to reserve for caching base objects
@@ -1617,7 +1628,7 @@ Setting this too high may cause the JVM to run out of heap space
 when handling very big binary files, such as device firmware or
 CD-ROM ISO images.
 +
-Defaults to 25% of the available JVM heap, limited to 2048m.
+Defaults to 25% of the available JVM heap, limited to 2g.
 +
 Common unit suffixes of 'k', 'm', or 'g' are supported.
 
@@ -2218,7 +2229,7 @@ should set this to the URL of their issue tracker, if necessary.
 +
 Text to be displayed in the link to the bug report URL.
 +
-Only used when `gerrit.reportBugUrl` is set.
+Only used when `gerrit.reportBugUrl` is set and only supported in GWT (Old UI).
 +
 Defaults to "Report Bug".
 
@@ -2276,11 +2287,12 @@ NoteDb, Gerrit will not be able to use that instance of NoteDb. The serverId
 used to create the NoteDb will show in the resulting exception message in case
 the value differs.
 
-[[gerrit.ui]]gerrit.ui::
+[[gerrit.enableGwtUi]]gerrit.enableGwtUi::
 +
-Configure which UI is the default. Valid values are `polygerrit` and `gwt`.
+Allow to switch to the GWT UI. When this option is enabled, the user can switch
+the UI from PolyGerrit (the default) to GWT.
 +
-Defaults to `polygerrit`.
+Defaults to true.
 
 [[gitweb]]
 === Section gitweb
@@ -2502,57 +2514,122 @@ The httpd section configures the embedded servlet container.
 
 [[httpd.listenUrl]]httpd.listenUrl::
 +
-Specifies the URLs the internal HTTP daemon should listen for
-connections on.  The special hostname '*' may be used to listen
-on all local addresses.  A context path may optionally be included,
-placing Gerrit Code Review's web address within a subdirectory of
-the server.
+Configuration for the listening sockets of the internal HTTP daemon.
+Each entry of `listenUrl` combines the following options for a
+listening socket: protocol, network address, port and context path.
 +
-Multiple protocol schemes are supported:
+_Protocol_ can be either `http://`, `https://`, `proxy-http://` or
+`proxy-https://`. The latter two are special forms of `http://` with
+awareness of a reverse proxy (see below). _Network address_ selects
+the interface and/or scope of the listening socket. For notes
+examples, see below. _Port_ is the TCP port number and is optional
+(default value depends on the protocol). _Context path_ is the
+optional "base URI" for the Gerrit Code Review as application to
+serve on.
 +
-* `http://`'hostname'`:`'port'
+**Protocol** schemes:
++
+* `http://`
 +
 Plain-text HTTP protocol.  If port is not supplied, defaults to 80,
 the standard HTTP port.
 +
-* `https://`'hostname'`:`'port'
+* `https://`
 +
 SSL encrypted HTTP protocol.  If port is not supplied, defaults to
 443, the standard HTTPS port.
 +
-Externally facing production sites are encouraged to use a reverse
-proxy configuration and `proxy-https://` (below), rather than using
-the embedded servlet container to implement the SSL processing.
-The proxy server with SSL support is probably easier to configure,
-provides more configuration options to control cipher usage, and
-is likely using natively compiled encryption algorithms, resulting
-in higher throughput.
+For configuration of the certificate and private key, see
+<<httpd.sslKeyStore,httpd.sslKeyStore>>.
 +
-* `proxy-http://`'hostname'`:`'port'
+[NOTE]
+SSL/TLS configuration capabilities of Gerrit internal HTTP daemon
+are very limited. Externally facing production sites are strongly
+encouraged to use a reverse proxy configuration to handle SSL/TLS
+and use a `proxy-https://` scheme here (below) for security and
+performance reasons.
++
+* `proxy-http://`
 +
 Plain-text HTTP relayed from a reverse proxy.  If port is not
 supplied, defaults to 8080.
 +
-Like http, but additional header parsing features are
-enabled to honor X-Forwarded-For, X-Forwarded-Host and
-X-Forwarded-Server.  These headers are typically set by Apache's
-link:http://httpd.apache.org/docs/2.2/mod/mod_proxy.html#x-headers[mod_proxy].
+Like `http://`, but additional header parsing features are
+enabled to honor `X-Forwarded-For`, `X-Forwarded-Host` and
+`X-Forwarded-Server`.  These headers are typically set by Apache's
+link:https://httpd.apache.org/docs/2.4/mod/mod_proxy.html#x-headers[mod_proxy].
 +
-* `proxy-https://`'hostname'`:`'port'
+[NOTE]
+--
+For secruity reasons, make sure to only allow connections from a
+trusted reverse proxy in your network, as clients could otherwise
+easily spoof these headers and thus spoof their originating IP
+address effectively. If the reverse proxy is running on the same
+machine as Gerrit daemon, the use of a _loopback_ network address
+to bind to (see below) is strongly recommended to mitigate this.
+
+If not using Apache's mod_proxy, validate that your reverse proxy
+sets these headers on all requests. If not, either configure it to
+sanitize them from the origin, or use the `http://` scheme instead.
+--
 +
-Plain text HTTP relayed from a reverse proxy that has already
+* `proxy-https://`
++
+Plain-text HTTP relayed from a reverse proxy that has already
 handled the SSL encryption/decryption.  If port is not supplied,
 defaults to 8080.
 +
-Behaves exactly like proxy-http, but also sets the scheme to assume
-'https://' is the proper URL back to the server.
+Behaves exactly like `proxy-http://`, but also sets the scheme to
+assume `https://` is the proper URL back to the server.
 
 +
 --
+**Network address** forms:
+
+* Loopback (localhost): `127.0.0.1` (IPv4) or `[::1]` (IPv6).
+* All (unspecified): `0.0.0.0` (IPv4), `[::]` (IPv6) or `*`
+  (IPv4 and IPv6)
+* Interface IP address, e.g. `1.2.3.4` (IPv4) or
+  `[2001:db8::a00:20ff:fea7:ccea]` (IPv6)
+* Hostname, resolved at startup time to an address.
+
+**Context path** is the local part of the URL to be used to access
+Gerrit on ('base URL'). E.g. `/gerrit/` to serve Gerrit on that URI
+as base. If set, consider to align this with the
+<<gerrit.canonicalWebUrl,gerrit.canonicalWebUrl>> setting. Correct
+settings may depend on the reverse proxy configuration as well. By
+default, this is `/` so that Gerrit serves requests on the root.
+
 If multiple values are supplied, the daemon will listen on all
 of them.
 
-By default, http://*:8080.
+Examples:
+
+----
+[httpd]
+    listenUrl = proxy-https://127.0.0.1:9999/gerrit/
+[gerrit]
+    # Reverse proxy is configured to serve with SSL/TLS on
+    # example.com and to relay requests on /gerrit/ onto
+    # http://127.0.0.1:9999/gerrit/
+    canonicalWebUrl = https://example.com/gerrit/
+----
+
+----
+[httpd]
+    # Listen on specific external interface with plaintext
+    # HTTP on IPv6.
+    listenUrl = http://[2001:db8::a00:20ff:fea7:ccea]
+
+    # Also listen on specific internal interface for use with
+    # reverse proxy run on another host.
+    listenUrl = proxy-https://192.168.100.123
+----
+
+See also the page on link:config-reverseproxy.html[reverse proxy]
+configuration.
+
+By default, `\http://*:8080`.
 --
 
 [[httpd.reuseAddress]]httpd.reuseAddress::
@@ -2744,7 +2821,7 @@ Example of using a security library secure.jar under $GERRIT_SITE/lib
 that provides a org.anyorg.MySecureHeaderFilter Servlet Filter that enforces
 a trusted username in the `TRUSTED_USER` HTTP Header and
 org.anyorg.MySecureIPFilter that performs source IP security filtering:
-
++
 ----
 [auth]
 	type = HTTP
@@ -3073,11 +3150,9 @@ WARNING: Support for Elasticsearch is still experimental and is not recommended
 for production use. For compatibility information, please refer to the
 link:https://www.gerritcodereview.com/elasticsearch.html[project homepage].
 
-When using Elasticsearch version 5.6, the open and closed changes are
-indexed in a single index, separated into types `open_changes` and `closed_changes`
-respectively. When using version 6.2 or later, the open and closed changes are
-merged into the default `_doc` type. The latter is also used for the accounts and
-groups indices starting with Elasticsearch 6.2.
+In Elasticsearch version 6.2 or later, the open and closed changes are merged
+into the default `_doc` type. The latter is also used for the accounts and groups
+indices starting with Elasticsearch 6.2.
 
 Note that when Gerrit is configured to use Elasticsearch, the Elasticsearch
 server(s) must be reachable during the site initialization.
@@ -3105,7 +3180,7 @@ manually.
 [[elasticsearch.numberOfShards]]elasticsearch.numberOfShards::
 +
 Sets the number of shards to use per index. Refer to the
-link:https://www.elastic.co/guide/en/elasticsearch/reference/current/getting-started-concepts.html#getting-started-shards-and-replicas[
+link:https://www.elastic.co/guide/en/elasticsearch/reference/current/index-modules.html#_static_index_settings[
 Elasticsearch documentation] for details.
 +
 Defaults to 5 for Elasticsearch versions 5 and 6, and to 1 starting with Elasticsearch 7.
@@ -3113,10 +3188,18 @@ Defaults to 5 for Elasticsearch versions 5 and 6, and to 1 starting with Elastic
 [[elasticsearch.numberOfReplicas]]elasticsearch.numberOfReplicas::
 +
 Sets the number of replicas to use per index. Refer to the
-link:https://www.elastic.co/guide/en/elasticsearch/reference/current/getting-started-concepts.html#getting-started-shards-and-replicas[
+link:https://www.elastic.co/guide/en/elasticsearch/reference/current/index-modules.html#dynamic-index-settings[
 Elasticsearch documentation] for details.
 +
 Defaults to 1.
+
+[[elasticsearch.maxResultWindow]]elasticsearch.maxResultWindow::
++
+Sets the maximum value of `from + size` for searches to use per index. Refer to the
+link:https://www.elastic.co/guide/en/elasticsearch/reference/current/index-modules.html#dynamic-index-settings[
+Elasticsearch documentation] for details.
++
+Defaults to 10000.
 
 ==== Elasticsearch Security
 
@@ -3125,11 +3208,6 @@ Note that the same username and password are used for all servers.
 
 For further information about Elasticsearch security, please refer to the documentation:
 
-* link:https://www.elastic.co/guide/en/x-pack/5.6/security-getting-started.html[Elasticsearch 5.6]
-* link:https://www.elastic.co/guide/en/x-pack/6.2/security-getting-started.html[Elasticsearch 6.2]
-* link:https://www.elastic.co/guide/en/elastic-stack-overview/6.3/security-getting-started.html[Elasticsearch 6.3]
-* link:https://www.elastic.co/guide/en/elastic-stack-overview/6.4/security-getting-started.html[Elasticsearch 6.4]
-* link:https://www.elastic.co/guide/en/elastic-stack-overview/6.5/security-getting-started.html[Elasticsearch 6.5]
 * link:https://www.elastic.co/guide/en/elastic-stack-overview/6.6/security-getting-started.html[Elasticsearch 6.6]
 
 [[elasticsearch.username]]elasticsearch.username::
@@ -3560,7 +3638,8 @@ By default unset.
 
 [[log.jsonLogging]]log.jsonLogging::
 +
-If set to true, enables error logging in JSON format (file name: "logs/error_log.json").
+If set to true, enables error, ssh and http logging in JSON format (file name:
+"logs/{error|sshd|httpd}_log.json").
 +
 Defaults to false.
 
@@ -3632,6 +3711,13 @@ each process retrieves at once.
 +
 By default, 1.
 
+[[notedb.onlineMigrationThreads]] notedb.onlineMigrationThreads::
++
+The number of threads used to run the online migration from reviewDb to noteDb.
+This allows to speed up online migration from reviewDb to noteDb at the expense
+of imposing a higher load on the running server.
++
+By default, 1.
 
 [[oauth]]
 === Section oauth
@@ -4087,7 +4173,8 @@ Default is 256.
 The default size of the background execution thread pool in
 which miscellaneous tasks are handled.
 +
-Default is 1.
+Default and minimum is 2 so that a single, potentially longer executing
+task (e.g. GC), is not blocking the entire execution.
 
 [[execution.fanOutThreadPoolSize]]execution.fanOutThreadPoolSize::
 +
@@ -4309,6 +4396,19 @@ email address, that one address is added to the white list.
 If set to a domain name, any address at that domain can receive
 email from Gerrit.
 +
+If allowrcpt is configured, The set of allowed recipients is:
+`allowrcpt - denyrcpt`.
++
+By default, unset, permitting delivery to any email address.
+
+[[sendemail.denyrcpt]]sendemail.denyrcpt::
++
+If present, each value adds one entry to the blacklist of email
+addresses that Gerrit can send email to.  If set to a complete
+email address, that one address is added to the blacklist.
+If set to a domain name, any address at that domain can *not* receive
+email from Gerrit.
++
 By default, unset, permitting delivery to any email address.
 
 [[sendemail.includeDiff]]sendemail.includeDiff::
@@ -4432,8 +4532,8 @@ By default, `false`.
 [[sshd.backend]]sshd.backend::
 +
 Starting from version 0.9.0 Apache SSHD project added support for NIO2
-IoSession. To use the new NIO2 session the `backend` option must be set
-to `NIO2`. Otherwise, this option must be set to `MINA`.
+IoSession. To use the old MINA session the `backend` option must be set
+to `MINA`.
 +
 By default, `NIO2`.
 
@@ -4974,11 +5074,22 @@ account deactivations.
 The link:#schedule-configuration-interval[interval] for running
 account deactivations.
 
+Note that the task will only be scheduled if the
+link:#autoUpdateAccountActiveStatus[auth.autoUpdateAccountActiveStatus]
+is set to true.
+
 link:#schedule-configuration-examples[Schedule examples] can be found
 in the link:#schedule-configuration[Schedule Configuration] section.
 
 [[urlAlias]]
 === Section urlAlias
+
+[NOTE]
+urlAlias settings are only supported in GWT (Old UI) and only effective
+in GWT pages. Plugins that serve their own pages (e.g. gitiles) may
+ignore these settings. An alternative is serving Gerrit behind a
+link:config-reverseproxy.html[reverse proxy] and configure URL rewriting
+in the proxy configuration.
 
 URL aliases define regular expressions for URL tokens that are mapped
 to target URL tokens.

@@ -40,8 +40,10 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Streams;
 import com.google.common.truth.ThrowableSubject;
 import com.google.gerrit.common.Nullable;
+import com.google.gerrit.common.data.AccessSection;
 import com.google.gerrit.common.data.LabelType;
 import com.google.gerrit.common.data.Permission;
+import com.google.gerrit.common.data.PermissionRule;
 import com.google.gerrit.extensions.api.GerritApi;
 import com.google.gerrit.extensions.api.changes.AddReviewerInput;
 import com.google.gerrit.extensions.api.changes.AssigneeInput;
@@ -74,6 +76,7 @@ import com.google.gerrit.index.Schema;
 import com.google.gerrit.lifecycle.LifecycleManager;
 import com.google.gerrit.reviewdb.client.Account;
 import com.google.gerrit.reviewdb.client.Account.Id;
+import com.google.gerrit.reviewdb.client.AccountGroup;
 import com.google.gerrit.reviewdb.client.Branch;
 import com.google.gerrit.reviewdb.client.Change;
 import com.google.gerrit.reviewdb.client.Patch;
@@ -109,6 +112,7 @@ import com.google.gerrit.server.notedb.NoteDbChangeState;
 import com.google.gerrit.server.notedb.NoteDbChangeState.PrimaryStorage;
 import com.google.gerrit.server.project.ProjectCache;
 import com.google.gerrit.server.project.ProjectConfig;
+import com.google.gerrit.server.project.testing.Util;
 import com.google.gerrit.server.schema.SchemaCreator;
 import com.google.gerrit.server.update.BatchUpdate;
 import com.google.gerrit.server.util.ManualRequestContext;
@@ -127,6 +131,7 @@ import com.google.inject.Inject;
 import com.google.inject.Injector;
 import com.google.inject.Provider;
 import com.google.inject.util.Providers;
+import java.io.IOException;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -139,6 +144,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import org.eclipse.jgit.errors.ConfigInvalidException;
+import org.eclipse.jgit.errors.RepositoryNotFoundException;
 import org.eclipse.jgit.junit.TestRepository;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.ObjectInserter;
@@ -460,7 +467,7 @@ public abstract class AbstractQueryChangesTest extends GerritServerTests {
 
     gApi.changes().id(change1.getChangeId()).setPrivate(true, null);
 
-    // Change1 is not private, but should be still visible to its owner.
+    // Change1 is private, but should be still visible to its owner.
     assertQuery("is:open", change1, change2);
     assertQuery("is:private", change1);
 
@@ -995,11 +1002,11 @@ public abstract class AbstractQueryChangesTest extends GerritServerTests {
   public void byLabel() throws Exception {
     accountManager.authenticate(AuthRequest.forUser("anotheruser"));
     TestRepository<Repo> repo = createProject("repo");
-    ChangeInserter ins = newChange(repo, null, null, null, null, false);
-    ChangeInserter ins2 = newChange(repo, null, null, null, null, false);
-    ChangeInserter ins3 = newChange(repo, null, null, null, null, false);
-    ChangeInserter ins4 = newChange(repo, null, null, null, null, false);
-    ChangeInserter ins5 = newChange(repo, null, null, null, null, false);
+    ChangeInserter ins = newChange(repo);
+    ChangeInserter ins2 = newChange(repo);
+    ChangeInserter ins3 = newChange(repo);
+    ChangeInserter ins4 = newChange(repo);
+    ChangeInserter ins5 = newChange(repo);
 
     Change reviewMinus2Change = insert(repo, ins);
     gApi.changes().id(reviewMinus2Change.getId().get()).current().review(ReviewInput.reject());
@@ -1096,11 +1103,11 @@ public abstract class AbstractQueryChangesTest extends GerritServerTests {
     projectCache.evict(cfg.getProject());
 
     ReviewInput reviewVerified = new ReviewInput().label("Verified", 1);
-    ChangeInserter ins = newChange(repo, null, null, null, null, false);
-    ChangeInserter ins2 = newChange(repo, null, null, null, null, false);
-    ChangeInserter ins3 = newChange(repo, null, null, null, null, false);
-    ChangeInserter ins4 = newChange(repo, null, null, null, null, false);
-    ChangeInserter ins5 = newChange(repo, null, null, null, null, false);
+    ChangeInserter ins = newChange(repo);
+    ChangeInserter ins2 = newChange(repo);
+    ChangeInserter ins3 = newChange(repo);
+    ChangeInserter ins4 = newChange(repo);
+    ChangeInserter ins5 = newChange(repo);
 
     // CR+1
     Change reviewCRplus1 = insert(repo, ins);
@@ -1141,7 +1148,7 @@ public abstract class AbstractQueryChangesTest extends GerritServerTests {
   @Test
   public void byLabelNotOwner() throws Exception {
     TestRepository<Repo> repo = createProject("repo");
-    ChangeInserter ins = newChange(repo, null, null, null, null, false);
+    ChangeInserter ins = newChange(repo);
     Account.Id user1 = createAccount("user1");
 
     Change reviewPlus1Change = insert(repo, ins);
@@ -1698,26 +1705,92 @@ public abstract class AbstractQueryChangesTest extends GerritServerTests {
   public void visible() throws Exception {
     TestRepository<Repo> repo = createProject("repo");
     Change change1 = insert(repo, newChange(repo));
-    Change change2 = insert(repo, newChange(repo));
-
-    gApi.changes().id(change2.getChangeId()).setPrivate(true, "private");
+    Change change2 = insert(repo, newChangePrivate(repo));
 
     String q = "project:repo";
-    assertQuery(q, change2, change1);
 
-    // Second user cannot see first user's private change.
-    Account.Id user2 =
-        accountManager.authenticate(AuthRequest.forUser("anotheruser")).getAccountId();
+    // Bad request for query with non-existent user
+    assertThatQueryException(q + " visibleto:notexisting");
+
+    // Current user can see all changes
+    assertQuery(q, change2, change1);
+    assertQuery(q + " visibleto:self", change2, change1);
+
+    // Second user cannot see first user's private change
+    Account.Id user2 = createAccount("user2");
     assertQuery(q + " visibleto:" + user2.get(), change1);
+    assertQuery(q + " visibleto:user2", change1);
 
     String g1 = createGroup("group1", "Administrators");
-    gApi.groups().id(g1).addMembers("anotheruser");
+    gApi.groups().id(g1).addMembers("user2");
+
+    // By default when a group is created without any permission granted,
+    // nothing is visible to it; having members or not has nothing to do with it
+    assertQuery(q + " visibleto:" + g1);
+
+    // change is visible to group ONLY when access is granted
+    grant(
+        new Project.NameKey("repo"),
+        "refs/*",
+        Permission.READ,
+        false,
+        new AccountGroup.UUID(gApi.groups().id(g1).get().id));
     assertQuery(q + " visibleto:" + g1, change1);
 
-    requestContext.setContext(
-        newRequestContext(
-            accountManager.authenticate(AuthRequest.forUser("anotheruser")).getAccountId()));
+    // Both changes are visible to InternalUser
+    try (ManualRequestContext ctx = oneOffRequestContext.open()) {
+      assertQuery(q, change2, change1);
+    }
+
+    requestContext.setContext(newRequestContext(user2));
     assertQuery("is:visible", change1);
+
+    Account.Id user3 = createAccount("user3");
+
+    // Explicitly authenticate user2 and user3 so that display name gets set
+    AuthRequest authRequest = AuthRequest.forUser("user2");
+    authRequest.setDisplayName("Another User");
+    authRequest.setEmailAddress("user2@example.com");
+    accountManager.authenticate(authRequest);
+    authRequest = AuthRequest.forUser("user3");
+    authRequest.setDisplayName("Another User");
+    authRequest.setEmailAddress("user3@example.com");
+    accountManager.authenticate(authRequest);
+
+    // Switch to user3
+    requestContext.setContext(newRequestContext(user3));
+    Change change3 = insert(repo, newChange(repo), user3);
+    Change change4 = insert(repo, newChangePrivate(repo), user3);
+
+    // User3 can see both their changes and the first user's change
+    assertQuery(q + " visibleto:" + user3.get(), change4, change3, change1);
+
+    // User2 cannot see user3's private change
+    assertQuery(q + " visibleto:" + user2.get(), change3, change1);
+
+    // Query as user3 by display name matching user2 and user3; bad request
+    assertFailingQuery(
+        q + " visibleto:\"Another User\"", "\"Another User\" resolves to multiple accounts");
+  }
+
+  protected void grant(
+      Project.NameKey project,
+      String ref,
+      String permission,
+      boolean force,
+      AccountGroup.UUID groupUUID)
+      throws RepositoryNotFoundException, IOException, ConfigInvalidException {
+    try (MetaDataUpdate md = metaDataUpdateFactory.create(project)) {
+      md.setMessage(String.format("Grant %s on %s", permission, ref));
+      ProjectConfig config = ProjectConfig.read(md);
+      AccessSection s = config.getAccessSection(ref, true);
+      Permission p = s.getPermission(permission, true);
+      PermissionRule rule = Util.newRule(config, groupUUID);
+      rule.setForce(force);
+      p.add(rule);
+      config.commit(md);
+      projectCache.evict(config.getProject());
+    }
   }
 
   @Test
@@ -3126,31 +3199,35 @@ public abstract class AbstractQueryChangesTest extends GerritServerTests {
   }
 
   protected ChangeInserter newChange(TestRepository<Repo> repo) throws Exception {
-    return newChange(repo, null, null, null, null, false);
+    return newChange(repo, null, null, null, null, false, false);
   }
 
   protected ChangeInserter newChangeForCommit(TestRepository<Repo> repo, RevCommit commit)
       throws Exception {
-    return newChange(repo, commit, null, null, null, false);
+    return newChange(repo, commit, null, null, null, false, false);
   }
 
   protected ChangeInserter newChangeForBranch(TestRepository<Repo> repo, String branch)
       throws Exception {
-    return newChange(repo, null, branch, null, null, false);
+    return newChange(repo, null, branch, null, null, false, false);
   }
 
   protected ChangeInserter newChangeWithStatus(TestRepository<Repo> repo, Change.Status status)
       throws Exception {
-    return newChange(repo, null, null, status, null, false);
+    return newChange(repo, null, null, status, null, false, false);
   }
 
   protected ChangeInserter newChangeWithTopic(TestRepository<Repo> repo, String topic)
       throws Exception {
-    return newChange(repo, null, null, null, topic, false);
+    return newChange(repo, null, null, null, topic, false, false);
   }
 
   protected ChangeInserter newChangeWorkInProgress(TestRepository<Repo> repo) throws Exception {
-    return newChange(repo, null, null, null, null, true);
+    return newChange(repo, null, null, null, null, true, false);
+  }
+
+  protected ChangeInserter newChangePrivate(TestRepository<Repo> repo) throws Exception {
+    return newChange(repo, null, null, null, null, false, true);
   }
 
   protected ChangeInserter newChange(
@@ -3159,7 +3236,8 @@ public abstract class AbstractQueryChangesTest extends GerritServerTests {
       @Nullable String branch,
       @Nullable Change.Status status,
       @Nullable String topic,
-      boolean workInProgress)
+      boolean workInProgress,
+      boolean isPrivate)
       throws Exception {
     if (commit == null) {
       commit = repo.parseBody(repo.commit().message("message").create());
@@ -3177,7 +3255,8 @@ public abstract class AbstractQueryChangesTest extends GerritServerTests {
             .setValidate(false)
             .setStatus(status)
             .setTopic(topic)
-            .setWorkInProgress(workInProgress);
+            .setWorkInProgress(workInProgress)
+            .setPrivate(isPrivate);
     return ins;
   }
 

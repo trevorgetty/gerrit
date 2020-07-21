@@ -87,6 +87,7 @@
 
     /**
      * Opens the create overlay if the route has a hash 'create'
+     *
      * @param {!Object} params
      */
     _maybeOpenCreateOverlay(params) {
@@ -119,11 +120,11 @@
               return;
             }
             this._groups = Object.keys(groups)
-             .map(key => {
-               const group = groups[key];
-               group.name = key;
-               return group;
-             });
+                .map(key => {
+                  const group = groups[key];
+                  group.name = key;
+                  return group;
+                });
             this._loading = false;
           });
     },

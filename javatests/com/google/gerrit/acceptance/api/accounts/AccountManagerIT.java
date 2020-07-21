@@ -16,11 +16,15 @@ package com.google.gerrit.acceptance.api.accounts;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth8.assertThat;
+import static java.util.stream.Collectors.toSet;
 
+import com.google.common.collect.ImmutableSet;
 import com.google.gerrit.acceptance.AbstractDaemonTest;
 import com.google.gerrit.acceptance.GerritConfig;
 import com.google.gerrit.common.Nullable;
+import com.google.gerrit.extensions.client.AccountFieldName;
 import com.google.gerrit.reviewdb.client.Account;
+import com.google.gerrit.server.IdentifiedUser;
 import com.google.gerrit.server.Sequences;
 import com.google.gerrit.server.ServerInitiated;
 import com.google.gerrit.server.account.AccountException;
@@ -29,12 +33,17 @@ import com.google.gerrit.server.account.AccountState;
 import com.google.gerrit.server.account.AccountsUpdate;
 import com.google.gerrit.server.account.AuthRequest;
 import com.google.gerrit.server.account.AuthResult;
+import com.google.gerrit.server.account.SetInactiveFlag;
 import com.google.gerrit.server.account.externalids.ExternalId;
 import com.google.gerrit.server.account.externalids.ExternalIdNotes;
 import com.google.gerrit.server.account.externalids.ExternalIds;
 import com.google.gerrit.server.git.meta.MetaDataUpdate;
+import com.google.gerrit.server.group.db.GroupsUpdate;
+import com.google.gerrit.server.ssh.SshKeyCache;
 import com.google.inject.Inject;
+import com.google.inject.util.Providers;
 import java.util.Optional;
+import java.util.Set;
 import org.eclipse.jgit.lib.Repository;
 import org.junit.Test;
 
@@ -44,6 +53,12 @@ public class AccountManagerIT extends AbstractDaemonTest {
   @Inject private Sequences seq;
   @Inject @ServerInitiated private AccountsUpdate accountsUpdate;
   @Inject private ExternalIdNotes.Factory extIdNotesFactory;
+
+  @Inject private Sequences sequences;
+  @Inject private IdentifiedUser.GenericFactory userFactory;
+  @Inject private SshKeyCache sshKeyCache;
+  @Inject private GroupsUpdate.Factory groupsUpdateFactory;
+  @Inject private SetInactiveFlag setInactiveFlag;
 
   @Test
   public void authenticateNewAccountWithEmail() throws Exception {
@@ -194,6 +209,31 @@ public class AccountManagerIT extends AbstractDaemonTest {
 
   @Test
   public void authenticateWithUsernameAndUpdateDisplayName() throws Exception {
+    authenticateWithUsernameAndUpdateDisplayName(accountManager);
+  }
+
+  @Test
+  public void readOnlyFullNameField_authenticateWithUsernameAndUpdateDisplayName()
+      throws Exception {
+    TestRealm realm = server.getTestInjector().getInstance(TestRealm.class);
+    realm.denyEdit(AccountFieldName.FULL_NAME);
+    authenticateWithUsernameAndUpdateDisplayName(
+        new AccountManager(
+            sequences,
+            cfg,
+            accounts,
+            Providers.of(accountsUpdate),
+            accountCache,
+            realm,
+            userFactory,
+            sshKeyCache,
+            projectCache,
+            externalIds,
+            groupsUpdateFactory,
+            setInactiveFlag));
+  }
+
+  private void authenticateWithUsernameAndUpdateDisplayName(AccountManager am) throws Exception {
     String username = "foo";
     String email = "foo@example.com";
     Account.Id accountId = new Account.Id(seq.nextAccountId());
@@ -209,7 +249,7 @@ public class AccountManagerIT extends AbstractDaemonTest {
     AuthRequest who = AuthRequest.forUser(username);
     String newName = "Updated Name";
     who.setDisplayName(newName);
-    AuthResult authResult = accountManager.authenticate(who);
+    AuthResult authResult = am.authenticate(who);
     assertAuthResultForExistingAccount(authResult, accountId, gerritExtIdKey);
 
     Optional<AccountState> accountState = accounts.get(accountId);
@@ -434,6 +474,44 @@ public class AccountManagerIT extends AbstractDaemonTest {
   }
 
   @Test
+  public void canFlagExistingExternalIdMailAsPreferred() throws Exception {
+    String email = "foo@example.com";
+
+    // Create an account with a SCHEME_GERRIT external ID
+    String username = "foo";
+    ExternalId.Key gerritExtIdKey = ExternalId.Key.create(ExternalId.SCHEME_GERRIT, username);
+    Account.Id accountId = new Account.Id(seq.nextAccountId());
+    accountsUpdate.insert(
+        "Create Test Account",
+        accountId,
+        u -> u.addExternalId(ExternalId.create(gerritExtIdKey, accountId)));
+
+    // Add the additional mail external ID with SCHEME_EMAIL
+    accountManager.link(accountId, AuthRequest.forEmail(email));
+
+    // Try to authenticate and update the email for the account.
+    // Expect that this to succeed because even if the email already exist
+    // it is associated to the same account-id and thus is not really
+    // a duplicate but simply a promotion of external id to preferred email.
+    AuthRequest who = AuthRequest.forUser(username);
+    who.setEmailAddress(email);
+    AuthResult authResult = accountManager.authenticate(who);
+
+    // Verify that no new accounts have been created
+    assertThat(authResult.isNew()).isFalse();
+
+    // Verify that the account external ids with scheme 'mailto:' contains the email
+    AccountState account = accounts.get(authResult.getAccountId()).get();
+    ImmutableSet<ExternalId> accountExternalIds = account.getExternalIds(ExternalId.SCHEME_MAILTO);
+    assertThat(accountExternalIds).isNotEmpty();
+    Set<String> emails = ExternalId.getEmails(accountExternalIds).collect(toSet());
+    assertThat(emails).contains(email);
+
+    // Verify the preferred email
+    assertThat(account.getAccount().getPreferredEmail()).isEqualTo(email);
+  }
+
+  @Test
   public void linkNewExternalId() throws Exception {
     // Create an account with a SCHEME_GERRIT external ID and no email
     String username = "foo";
@@ -535,7 +613,26 @@ public class AccountManagerIT extends AbstractDaemonTest {
     AuthRequest who = AuthRequest.forEmail(email);
     exception.expect(AccountException.class);
     exception.expectMessage("Email 'foo@example.com' in use by another account");
-    accountManager.link(accountId, who);
+    accountManager.link(accountId2, who);
+  }
+
+  @Test
+  public void allowLinkingExistingExternalIdEmailAsPreferred() throws Exception {
+    String email = "foo@example.com";
+
+    // Create an account with an SCHEME_EXTERNAL external ID that occupies the email.
+    String username = "foo";
+    Account.Id accountId = new Account.Id(seq.nextAccountId());
+    ExternalId.Key externalExtIdKey = ExternalId.Key.create(ExternalId.SCHEME_EXTERNAL, username);
+    accountsUpdate.insert(
+        "Create Test Account",
+        accountId,
+        u -> u.addExternalId(ExternalId.createWithEmail(externalExtIdKey, accountId, email)));
+
+    AuthRequest who = AuthRequest.forEmail(email);
+    AuthResult result = accountManager.link(accountId, who);
+    assertThat(result.isNew()).isFalse();
+    assertThat(result.getAccountId().get()).isEqualTo(accountId.get());
   }
 
   private void assertNoSuchExternalIds(ExternalId.Key... extIdKeys) throws Exception {

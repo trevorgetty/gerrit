@@ -316,6 +316,7 @@ def _bundle_impl(ctx):
         "$p/" + ctx.file._bundler_archive.path,
         "--inline-scripts",
         "--inline-css",
+        "--sourcemaps",
         "--strip-comments",
         "--out-file",
         "$p/" + bundled.path,
@@ -484,6 +485,7 @@ def polygerrit_plugin(name, app, srcs = [], deps = [], assets = None, plugin_nam
         deps = [
             name + "_closure_lib",
         ],
+        dependency_mode = "PRUNE_LEGACY",
     )
 
     if html_plugin:
@@ -524,7 +526,7 @@ def polygerrit_plugin(name, app, srcs = [], deps = [], assets = None, plugin_nam
                 cmd = "cp $(SRCS) $(@D)",
                 output_to_bindir = True,
             )
-            static_files += [":" + name + "_copy_assets"]
+            static_files.append(":" + name + "_copy_assets")
 
     native.filegroup(
         name = name,

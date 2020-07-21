@@ -177,9 +177,8 @@ def gen_classpath(ext):
     def classpathentry(kind, path, src=None, out=None, exported=None):
         e = doc.createElement('classpathentry')
         e.setAttribute('kind', kind)
-        # TODO(davido): Remove this and other exclude BUILD files hack
-        # when this Bazel bug is fixed:
-        # https://github.com/bazelbuild/bazel/issues/1083
+        # Excluding the BUILD file, to avoid the Eclipse warnings:
+        # "The resource is a duplicate of ..."
         if kind == 'src':
             e.setAttribute('excluding', '**/BUILD')
         e.setAttribute('path', path)
@@ -223,8 +222,8 @@ def gen_classpath(ext):
             # Exceptions: both source and lib
             if p.endswith('libquery_parser.jar') or \
                p.endswith('libgerrit-prolog-common.jar') or \
-         p.endswith('com_google_protobuf/libprotobuf_java.jar') or \
-               p.endswith('lucene-core-and-backward-codecs__merged.jar'):
+               p.endswith('com_google_protobuf/libprotobuf_java.jar') or \
+               p.endswith('lucene-core-and-backward-codecs-merged_deploy.jar'):
                 lib.add(p)
             # JGit dependency from external repository
             if 'gerrit-' not in p and 'jgit' in p:

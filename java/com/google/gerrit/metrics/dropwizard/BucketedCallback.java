@@ -21,6 +21,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
 import com.google.gerrit.metrics.Description;
 import com.google.gerrit.metrics.Field;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -66,7 +67,14 @@ abstract class BucketedCallback<V> implements BucketedMetric {
   }
 
   void doPrune() {
-    cells.entrySet().removeIf(objectValueGaugeEntry -> !objectValueGaugeEntry.getValue().set);
+    Iterator<Map.Entry<Object, ValueGauge>> it = cells.entrySet().iterator();
+    while (it.hasNext()) {
+      Map.Entry<Object, ValueGauge> e = it.next();
+      if (!e.getValue().set) {
+        it.remove();
+        registry.remove(submetric(e.getKey()));
+      }
+    }
   }
 
   void doEndSet() {

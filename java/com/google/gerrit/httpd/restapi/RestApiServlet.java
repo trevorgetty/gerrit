@@ -418,7 +418,7 @@ public class RestApiServlet extends HttpServlet {
             if (isPost(req) || isPut(req)) {
               RestView<RestResource> createView = c.views().get(PluginName.GERRIT, "CREATE./");
               if (createView != null) {
-                viewData = new ViewData(null, createView);
+                viewData = new ViewData(viewData.pluginName, createView);
                 status = SC_CREATED;
                 path.add(id);
               } else {
@@ -428,7 +428,7 @@ public class RestApiServlet extends HttpServlet {
               RestView<RestResource> deleteView =
                   c.views().get(PluginName.GERRIT, "DELETE_MISSING./");
               if (deleteView != null) {
-                viewData = new ViewData(null, deleteView);
+                viewData = new ViewData(viewData.pluginName, deleteView);
                 status = SC_NO_CONTENT;
                 path.add(id);
               } else {
@@ -875,7 +875,7 @@ public class RestApiServlet extends HttpServlet {
           try {
             first = json.peek();
           } catch (EOFException e) {
-            throw new BadRequestException("Expected JSON object");
+            throw new BadRequestException("Expected JSON object", e);
           }
           if (first == JsonToken.STRING) {
             return parseString(json.nextString(), type);
@@ -1289,7 +1289,7 @@ public class RestApiServlet extends HttpServlet {
     for (String p : Splitter.on('/').split(path)) {
       out.add(IdString.fromUrl(p));
     }
-    if (out.size() > 0 && out.get(out.size() - 1).isEmpty()) {
+    if (!out.isEmpty() && out.get(out.size() - 1).isEmpty()) {
       out.remove(out.size() - 1);
     }
     return out;
@@ -1351,9 +1351,7 @@ public class RestApiServlet extends HttpServlet {
     // generated.
     TraceContext traceContext =
         TraceContext.newTrace(
-            doTrace,
-            traceId1,
-            (tagName, traceId) -> res.setHeader(X_GERRIT_TRACE, traceId.toString()));
+            doTrace, traceId1, (tagName, traceId) -> res.setHeader(X_GERRIT_TRACE, traceId));
     // If a second trace ID was specified, add a tag for it as well.
     if (traceId2 != null) {
       traceContext.addTag(RequestId.Type.TRACE_ID, traceId2);

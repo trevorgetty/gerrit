@@ -64,6 +64,7 @@ import com.google.gerrit.common.data.GlobalCapability;
 import com.google.gerrit.common.data.GroupReference;
 import com.google.gerrit.common.data.Permission;
 import com.google.gerrit.common.data.PermissionRule.Action;
+import com.google.gerrit.extensions.api.accounts.AccountApi;
 import com.google.gerrit.extensions.api.accounts.AccountInput;
 import com.google.gerrit.extensions.api.accounts.DeleteDraftCommentsInput;
 import com.google.gerrit.extensions.api.accounts.DeletedDraftCommentInfo;
@@ -97,6 +98,7 @@ import com.google.gerrit.extensions.restapi.UnprocessableEntityException;
 import com.google.gerrit.gpg.Fingerprint;
 import com.google.gerrit.gpg.PublicKeyStore;
 import com.google.gerrit.gpg.testing.TestKey;
+import com.google.gerrit.httpd.CacheBasedWebSession;
 import com.google.gerrit.mail.Address;
 import com.google.gerrit.reviewdb.client.Account;
 import com.google.gerrit.reviewdb.client.Branch;
@@ -153,6 +155,14 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+import javax.servlet.http.HttpServletResponse;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.ClientProtocolException;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.BasicCookieStore;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.bouncycastle.bcpg.ArmoredOutputStream;
 import org.bouncycastle.openpgp.PGPPublicKey;
 import org.bouncycastle.openpgp.PGPPublicKeyRing;
@@ -235,6 +245,8 @@ public class AccountIT extends AbstractDaemonTest {
   private RegistrationHandle accountIndexEventCounterHandle;
   private RefUpdateCounter refUpdateCounter;
   private RegistrationHandle refUpdateCounterHandle;
+  private BasicCookieStore httpCookieStore;
+  private CloseableHttpClient httpclient;
 
   @Before
   public void addAccountIndexEventCounter() {
@@ -286,6 +298,16 @@ public class AccountIT extends AbstractDaemonTest {
             .isEqualTo(RefUpdate.Result.FORCED);
       }
     }
+  }
+
+  @Before
+  public void createHttpClient() {
+    httpCookieStore = new BasicCookieStore();
+    httpclient =
+        HttpClientBuilder.create()
+            .disableRedirectHandling()
+            .setDefaultCookieStore(httpCookieStore)
+            .build();
   }
 
   protected void assertLabelPermission(
@@ -546,6 +568,43 @@ public class AccountIT extends AbstractDaemonTest {
     gApi.accounts().id("user").setActive(true);
     assertThat(gApi.accounts().id("user").getActive()).isTrue();
     accountIndexedCounter.assertReindexOf(user);
+  }
+
+  @Test
+  @GerritConfig(name = "auth.type", value = "DEVELOPMENT_BECOME_ANY_ACCOUNT")
+  public void activeUserGetSessionCookieOnLogin() throws Exception {
+    Integer accountId = accountIdApi().get()._accountId;
+    assertThat(accountIdApi().getActive()).isTrue();
+
+    webLogin(accountId);
+    assertThat(getCookiesNames()).contains(CacheBasedWebSession.ACCOUNT_COOKIE);
+  }
+
+  @Test
+  @GerritConfig(name = "auth.type", value = "DEVELOPMENT_BECOME_ANY_ACCOUNT")
+  public void inactiveUserDoesNotGetCookieOnLogin() throws Exception {
+    Integer accountId = accountIdApi().get()._accountId;
+    accountIdApi().setActive(false);
+    assertThat(accountIdApi().getActive()).isFalse();
+
+    webLogin(accountId);
+    assertThat(getCookiesNames()).isEmpty();
+  }
+
+  @Test
+  @GerritConfig(name = "auth.type", value = "DEVELOPMENT_BECOME_ANY_ACCOUNT")
+  public void userDeactivatedAfterLoginDoesNotGetCookie() throws Exception {
+    Integer accountId = accountIdApi().get()._accountId;
+    assertThat(accountIdApi().getActive()).isTrue();
+
+    webLogin(accountId);
+    assertThat(getCookiesNames()).contains(CacheBasedWebSession.ACCOUNT_COOKIE);
+    httpGetAndAssertStatus("accounts/self/detail", HttpServletResponse.SC_OK);
+
+    accountIdApi().setActive(false);
+    assertThat(accountIdApi().getActive()).isFalse();
+
+    httpGetAndAssertStatus("accounts/self/detail", HttpServletResponse.SC_FORBIDDEN);
   }
 
   @Test
@@ -825,6 +884,99 @@ public class AccountIT extends AbstractDaemonTest {
   }
 
   @Test
+  public void addExistingReviewersUsingPostReview() throws Exception {
+    PushOneCommit.Result r = createChange();
+
+    // First reviewer added to the change
+    ReviewInput input = new ReviewInput();
+    input.reviewers = new ArrayList<>(1);
+    AddReviewerInput addReviewerInput = new AddReviewerInput();
+    addReviewerInput.reviewer = user.email;
+    input.reviewers.add(addReviewerInput);
+    gApi.changes().id(r.getChangeId()).current().review(input);
+    List<Message> messages = sender.getMessages();
+    assertThat(messages).hasSize(1);
+    Message message = messages.get(0);
+    assertThat(message.rcpt()).containsExactly(user.emailAddress);
+    assertMailReplyTo(message, admin.email);
+
+    sender.clear();
+
+    // Second reviewer and existing reviewer added to the change
+    ReviewInput input2 = new ReviewInput();
+    input2.reviewers = new ArrayList<>(2);
+    AddReviewerInput addReviewerInput2 = new AddReviewerInput();
+    addReviewerInput2.reviewer = user.email;
+    input2.reviewers.add(addReviewerInput2);
+    AddReviewerInput addReviewerInput3 = new AddReviewerInput();
+
+    TestAccount user2 = accountCreator.user2();
+    addReviewerInput3.reviewer = user2.email;
+    input2.reviewers.add(addReviewerInput3);
+
+    gApi.changes().id(r.getChangeId()).current().review(input2);
+    List<Message> messages2 = sender.getMessages();
+    assertThat(messages2).hasSize(1);
+    Message message2 = messages2.get(0);
+    assertThat(message2.rcpt()).containsExactly(user.emailAddress, user2.emailAddress);
+    assertMailReplyTo(message, admin.email);
+
+    sender.clear();
+
+    // Existing reviewers re-added to the change: no notifications
+    ReviewInput input3 = new ReviewInput();
+    input3.reviewers = new ArrayList<>(2);
+    AddReviewerInput addReviewerInput4 = new AddReviewerInput();
+    addReviewerInput4.reviewer = user.email;
+    input3.reviewers.add(addReviewerInput4);
+    AddReviewerInput addReviewerInput5 = new AddReviewerInput();
+
+    addReviewerInput5.reviewer = user2.email;
+    input3.reviewers.add(addReviewerInput5);
+
+    gApi.changes().id(r.getChangeId()).current().review(input3);
+    List<Message> messages3 = sender.getMessages();
+    assertThat(messages3).isEmpty();
+  }
+
+  @Test
+  public void addExistingReviewersUsingAddReviewer() throws Exception {
+    PushOneCommit.Result r = createChange();
+
+    // First reviewer added to the change
+    AddReviewerInput addReviewerInput = new AddReviewerInput();
+    addReviewerInput.reviewer = user.email;
+    gApi.changes().id(r.getChangeId()).addReviewer(addReviewerInput);
+    List<Message> messages = sender.getMessages();
+    assertThat(messages).hasSize(1);
+    Message message = messages.get(0);
+    assertThat(message.rcpt()).containsExactly(user.emailAddress);
+    assertMailReplyTo(message, admin.email);
+
+    sender.clear();
+
+    // Second reviewer added to the change
+    TestAccount user2 = accountCreator.user2();
+    AddReviewerInput addReviewerInput2 = new AddReviewerInput();
+    addReviewerInput2.reviewer = user2.email;
+    gApi.changes().id(r.getChangeId()).addReviewer(addReviewerInput2);
+    List<Message> messages2 = sender.getMessages();
+    assertThat(messages2).hasSize(1);
+    Message message2 = messages2.get(0);
+    assertThat(message2.rcpt()).containsExactly(user.emailAddress, user2.emailAddress);
+    assertMailReplyTo(message2, admin.email);
+
+    sender.clear();
+
+    // Exiting reviewer re-added to the change: no notifications
+    AddReviewerInput addReviewerInput3 = new AddReviewerInput();
+    addReviewerInput3.reviewer = user2.email;
+    gApi.changes().id(r.getChangeId()).addReviewer(addReviewerInput3);
+    List<Message> messages3 = sender.getMessages();
+    assertThat(messages3).isEmpty();
+  }
+
+  @Test
   public void suggestAccounts() throws Exception {
     String adminUsername = "admin";
     List<AccountInfo> result = gApi.accounts().suggestAccounts().withQuery(adminUsername).get();
@@ -998,7 +1150,7 @@ public class AccountIT extends AbstractDaemonTest {
   @Test
   @GerritConfig(
       name = "auth.registerEmailPrivateKey",
-      value = "HsOc6l+2lhS9G7sE/RsnS7Z6GJjdRDX14co=")
+      value = "HsOc6l_2lhS9G7sE_RsnS7Z6GJjdRDX14co=")
   public void addEmailSendsConfirmationEmail() throws Exception {
     String email = "new.email@example.com";
     EmailInput input = newEmailInput(email, false);
@@ -1012,7 +1164,7 @@ public class AccountIT extends AbstractDaemonTest {
   @Test
   @GerritConfig(
       name = "auth.registerEmailPrivateKey",
-      value = "HsOc6l+2lhS9G7sE/RsnS7Z6GJjdRDX14co=")
+      value = "HsOc6l_2lhS9G7sE_RsnS7Z6GJjdRDX14co=")
   public void addEmailToBeConfirmedToOwnAccount() throws Exception {
     TestAccount user = accountCreator.create();
     setApiUser(user);
@@ -1036,7 +1188,7 @@ public class AccountIT extends AbstractDaemonTest {
   @Test
   @GerritConfig(
       name = "auth.registerEmailPrivateKey",
-      value = "HsOc6l+2lhS9G7sE/RsnS7Z6GJjdRDX14co=")
+      value = "HsOc6l_2lhS9G7sE_RsnS7Z6GJjdRDX14co=")
   public void addEmailToBeConfirmedToOtherAccount() throws Exception {
     TestAccount user = accountCreator.create();
     String email = "me@example.com";
@@ -1155,6 +1307,76 @@ public class AccountIT extends AbstractDaemonTest {
     assertThat(
             gApi.accounts().self().getExternalIds().stream().map(e -> e.identity).collect(toSet()))
         .containsNoneOf(extId1, extId2);
+  }
+
+  @Test
+  @GerritConfig(name = "auth.type", value = "LDAP")
+  public void deleteEmailShouldNotRemoveLdapExternalIdScheme() throws Exception {
+    String ldapEmail = "foo@company.com";
+    String ldapExternalId = ExternalId.SCHEME_GERRIT + ":foo";
+    accountsUpdateProvider
+        .get()
+        .update(
+            "Add External IDs",
+            admin.id,
+            u ->
+                u.addExternalId(
+                    ExternalId.createWithEmail(
+                        ExternalId.Key.parse(ldapExternalId), admin.id, ldapEmail)));
+    accountIndexedCounter.assertReindexOf(admin);
+    assertThat(
+            gApi.accounts().self().getExternalIds().stream().map(e -> e.identity).collect(toSet()))
+        .contains(ldapExternalId);
+
+    resetCurrentApiUser();
+    assertThat(getEmails()).contains(ldapEmail);
+
+    ResourceConflictException exception =
+        assertThrows(
+            ResourceConflictException.class, () -> gApi.accounts().self().deleteEmail(ldapEmail));
+    assertThat(exception).hasMessageThat().contains(ldapEmail);
+
+    resetCurrentApiUser();
+    assertThat(getEmails()).contains(ldapEmail);
+    assertThat(
+            gApi.accounts().self().getExternalIds().stream().map(e -> e.identity).collect(toSet()))
+        .contains(ldapExternalId);
+  }
+
+  @Test
+  @GerritConfig(name = "auth.type", value = "LDAP")
+  public void deleteEmailShouldRemoveNonLdapExternalIdScheme() throws Exception {
+    String ldapEmail = "foo@company.com";
+    String ldapExternalId = ExternalId.SCHEME_GERRIT + ":foo";
+    String nonLdapEMail = "foo@example.com";
+    String nonLdapExternalId = ExternalId.SCHEME_MAILTO + ":foo@example.com";
+    accountsUpdateProvider
+        .get()
+        .update(
+            "Add External IDs",
+            admin.id,
+            u ->
+                u.addExternalId(
+                        ExternalId.createWithEmail(
+                            ExternalId.Key.parse(nonLdapExternalId), admin.id, nonLdapEMail))
+                    .addExternalId(
+                        ExternalId.createWithEmail(
+                            ExternalId.Key.parse(ldapExternalId), admin.id, ldapEmail)));
+    accountIndexedCounter.assertReindexOf(admin);
+    assertThat(
+            gApi.accounts().self().getExternalIds().stream().map(e -> e.identity).collect(toSet()))
+        .containsAllOf(ldapExternalId, nonLdapExternalId);
+
+    resetCurrentApiUser();
+    assertThat(getEmails()).containsAllOf(ldapEmail, nonLdapEMail);
+
+    gApi.accounts().self().deleteEmail(nonLdapEMail);
+
+    resetCurrentApiUser();
+    assertThat(getEmails()).doesNotContain(nonLdapEMail);
+    assertThat(
+            gApi.accounts().self().getExternalIds().stream().map(e -> e.identity).collect(toSet()))
+        .contains(ldapExternalId);
   }
 
   @Test
@@ -3193,6 +3415,30 @@ public class AccountIT extends AbstractDaemonTest {
               UTF_8));
     }
     return ac;
+  }
+
+  private AccountApi accountIdApi() throws RestApiException {
+    return gApi.accounts().id(user.id.get());
+  }
+
+  private Set<String> getCookiesNames() {
+    Set<String> cookieNames =
+        httpCookieStore.getCookies().stream()
+            .map(cookie -> cookie.getName())
+            .collect(Collectors.toSet());
+    return cookieNames;
+  }
+
+  private void webLogin(Integer accountId) throws IOException, ClientProtocolException {
+    httpGetAndAssertStatus(
+        "login?account_id=" + accountId, HttpServletResponse.SC_MOVED_TEMPORARILY);
+  }
+
+  private void httpGetAndAssertStatus(String urlPath, int expectedHttpStatus)
+      throws ClientProtocolException, IOException {
+    HttpGet httpGet = new HttpGet(canonicalWebUrl.get() + urlPath);
+    HttpResponse loginResponse = httpclient.execute(httpGet);
+    assertThat(loginResponse.getStatusLine().getStatusCode()).isEqualTo(expectedHttpStatus);
   }
 
   /** Checks if an account is indexed the correct number of times. */

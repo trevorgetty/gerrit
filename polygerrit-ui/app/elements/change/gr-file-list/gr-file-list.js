@@ -299,11 +299,11 @@
     },
 
     _calculatePatchChange(files) {
-      const filesNoCommitMsg = files.filter(files => {
-        return files.__path !== '/COMMIT_MSG';
+      const magicFilesExcluded = files.filter(files => {
+        return files.__path !== '/COMMIT_MSG' && files.__path !== '/MERGE_LIST';
       });
 
-      return filesNoCommitMsg.reduce((acc, obj) => {
+      return magicFilesExcluded.reduce((acc, obj) => {
         const inserted = obj.lines_inserted ? obj.lines_inserted : 0;
         const deleted = obj.lines_deleted ? obj.lines_deleted : 0;
         const total_size = (obj.size && obj.binary) ? obj.size : 0;
@@ -498,6 +498,7 @@
     /**
      * The closure compiler doesn't realize this.specialFilePathCompare is
      * valid.
+     *
      * @suppress {checkTypes}
      */
     _normalizeChangeFilesResponse(response) {
@@ -809,7 +810,7 @@
 
     _computeShowHideIcon(path, expandedFilesRecord) {
       return this._isFileExpanded(path, expandedFilesRecord) ?
-          'gr-icons:expand-less' : 'gr-icons:expand-more';
+        'gr-icons:expand-less' : 'gr-icons:expand-more';
     },
 
     _computeFiles(filesByPath, changeComments, patchRange, reviewed, loading) {
@@ -833,7 +834,7 @@
 
     _computeFilesShown(numFilesShown, files) {
       const previousNumFilesShown = this._shownFiles ?
-          this._shownFiles.length : 0;
+        this._shownFiles.length : 0;
 
       const filesShown = files.base.slice(0, numFilesShown);
       this.fire('files-shown-changed', {length: filesShown.length});
@@ -900,19 +901,20 @@
     _computePatchSetDescription(revisions, patchNum) {
       const rev = this.getRevisionByPatchNum(revisions, patchNum);
       return (rev && rev.description) ?
-          rev.description.substring(0, PATCH_DESC_MAX_LENGTH) : '';
+        rev.description.substring(0, PATCH_DESC_MAX_LENGTH) : '';
     },
 
     /**
      * Get a descriptive label for use in the status indicator's tooltip and
      * ARIA label.
+     *
      * @param {string} status
      * @return {string}
      */
     _computeFileStatusLabel(status) {
       const statusCode = this._computeFileStatus(status);
       return FileStatus.hasOwnProperty(statusCode) ?
-          FileStatus[statusCode] : 'Status Unknown';
+        FileStatus[statusCode] : 'Status Unknown';
     },
 
     _isFileExpanded(path, expandedFilesRecord) {
@@ -938,13 +940,14 @@
      * entries in the expanded list, then render each diff corresponding in
      * order by waiting for the previous diff to finish before starting the next
      * one.
+     *
      * @param {!Array} record The splice record in the expanded paths list.
      */
     _expandedPathsChanged(record) {
       // Clear content for any diffs that are not open so if they get re-opened
       // the stale content does not flash before it is cleared and reloaded.
       const collapsedDiffs = this.diffs.filter(diff =>
-          this._expandedFilePaths.indexOf(diff.path) === -1);
+        this._expandedFilePaths.indexOf(diff.path) === -1);
       this._clearCollapsedDiffs(collapsedDiffs);
 
       if (!record) { return; } // Happens after "Collapse all" clicked.
@@ -954,9 +957,9 @@
 
       // Find the paths introduced by the new index splices:
       const newPaths = record.indexSplices
-            .map(splice => splice.object.slice(
-                splice.index, splice.index + splice.addedCount))
-            .reduce((acc, paths) => acc.concat(paths), []);
+          .map(splice => splice.object.slice(
+              splice.index, splice.index + splice.addedCount))
+          .reduce((acc, paths) => acc.concat(paths), []);
 
       // Required so that the newly created diff view is included in this.diffs.
       Polymer.dom.flush();
@@ -982,6 +985,7 @@
      * Given an array of paths and a NodeList of diff elements, render the diff
      * for each path in order, awaiting the previous render to complete before
      * continung.
+     *
      * @param  {!Array<string>} paths
      * @param  {!NodeList<!Object>} diffElements (GrDiffHostElement)
      * @param  {number} initialCount The total number of paths in the pass. This
@@ -1027,6 +1031,7 @@
 
     /**
      * In the given NodeList of diff elements, find the diff for the given path.
+     *
      * @param  {string} path
      * @param  {!NodeList<!Object>} diffElements (GrDiffElement)
      * @return {!Object|undefined} (GrDiffElement)
@@ -1041,6 +1046,7 @@
 
     /**
      * Reset the comments of a modified thread
+     *
      * @param  {string} rootId
      * @param  {string} path
      */
@@ -1087,6 +1093,7 @@
      * Update the loading class for the file list rows. The update is inside a
      * debouncer so that the file list doesn't flash gray when the API requests
      * are reasonably fast.
+     *
      * @param {boolean} loading
      */
     _loadingChanged(loading) {
@@ -1112,6 +1119,7 @@
     /**
      * Given a file path, return whether that path should have visible size bars
      * and be included in the size bars calculation.
+     *
      * @param {string} path
      * @return {boolean}
      */
@@ -1121,6 +1129,7 @@
 
     /**
      * Compute size bar layout values from the file list.
+     *
      * @return {Defs.LayoutStats|undefined}
      */
     _computeSizeBarLayout(shownFilesRecord) {
@@ -1155,6 +1164,7 @@
 
     /**
      * Get the width of the addition bar for a file.
+     *
      * @param {Object} file
      * @param {Defs.LayoutStats} stats
      * @return {number}
@@ -1172,6 +1182,7 @@
 
     /**
      * Get the x-offset of the addition bar for a file.
+     *
      * @param {Object} file
      * @param {Defs.LayoutStats} stats
      * @return {number}
@@ -1183,6 +1194,7 @@
 
     /**
      * Get the width of the deletion bar for a file.
+     *
      * @param {Object} file
      * @param {Defs.LayoutStats} stats
      * @return {number}
@@ -1200,6 +1212,7 @@
 
     /**
      * Get the x-offset of the deletion bar for a file.
+     *
      * @param {Defs.LayoutStats} stats
      * @return {number}
      */
@@ -1223,6 +1236,7 @@
 
     /**
      * Returns true if none of the inline diffs have been expanded.
+     *
      * @return {boolean}
      */
     _noDiffsExpanded() {
@@ -1233,6 +1247,7 @@
      * Method to call via binding when each file list row is rendered. This
      * allows approximate detection of when the dom-repeat has completed
      * rendering.
+     *
      * @param {number} index The index of the row being rendered.
      * @return {string} an empty string.
      */

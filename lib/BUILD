@@ -1,17 +1,4 @@
-
-#/********************************************************************************
-# * Copyright (c) 2014-2018 WANdisco
-# *
-# * Licensed under the Apache License, Version 2.0 (the "License");
-# * you may not use this file except in compliance with the License.
-# * You may obtain a copy of the License at
-# * http://www.apache.org/licenses/LICENSE-2.0
-# *
-# * Apache License, Version 2.0
-# *
-# ********************************************************************************/
- 
-load("@rules_java//java:defs.bzl", "java_library")
+load("@rules_java//java:defs.bzl", "java_import", "java_library")
 
 exports_files(glob([
     "LICENSE-*",
@@ -109,6 +96,29 @@ java_library(
         ":j2objc",
         "@guava//jar",
     ],
+)
+
+java_library(
+    name = "caffeine",
+    data = ["//lib:LICENSE-Apache2.0"],
+    visibility = [
+        "//java/com/google/gerrit/server/cache/mem:__pkg__",
+    ],
+    exports = ["@caffeine//jar"],
+)
+
+java_import(
+    name = "caffeine-guava-renamed",
+    jars = ["@caffeine-guava-renamed//file"],
+)
+
+java_library(
+    name = "caffeine-guava",
+    data = ["//lib:LICENSE-Apache2.0"],
+    visibility = [
+        "//java/com/google/gerrit/server/cache/mem:__pkg__",
+    ],
+    exports = [":caffeine-guava-renamed"],
 )
 
 java_library(

@@ -91,7 +91,7 @@
 
   // All of the ops, with corresponding negations.
   const SEARCH_OPERATORS_WITH_NEGATIONS =
-      SEARCH_OPERATORS.concat(SEARCH_OPERATORS.map(op => `-${op}`));
+    SEARCH_OPERATORS.concat(SEARCH_OPERATORS.map(op => `-${op}`));
 
   const MAX_AUTOCOMPLETE_RESULTS = 10;
 
@@ -185,7 +185,16 @@
       } else {
         target.blur();
       }
-      if (this._inputVal) {
+      const trimmedInput = this._inputVal && this._inputVal.trim();
+      if (trimmedInput) {
+        const predefinedOpOnlyQuery = SEARCH_OPERATORS_WITH_NEGATIONS.some(
+            op => {
+              return op.endsWith(':') && op === trimmedInput;
+            }
+        );
+        if (predefinedOpOnlyQuery) {
+          return;
+        }
         this.dispatchEvent(new CustomEvent('handle-search', {
           detail: {inputVal: this._inputVal},
         }));
@@ -195,6 +204,7 @@
     /**
      * Determine what array of possible suggestions should be provided
      *     to _getSearchSuggestions.
+     *
      * @param {string} input - The full search term, in lowercase.
      * @return {!Promise} This returns a promise that resolves to an array of
      *     suggestion objects.
@@ -236,6 +246,7 @@
 
     /**
      * Get the sorted, pruned list of suggestions for the current search query.
+     *
      * @param {string} input - The complete search query.
      * @return {!Promise} This returns a promise that resolves to an array of
      *     suggestions.

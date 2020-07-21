@@ -14,13 +14,14 @@
 
 package com.google.gerrit.elasticsearch.builders;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.time.format.DateTimeFormatter.ISO_INSTANT;
 
 import com.fasterxml.jackson.core.JsonEncoding;
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.core.JsonParser;
-import com.google.common.base.Charsets;
+import com.fasterxml.jackson.core.json.JsonReadFeature;
+import com.fasterxml.jackson.core.json.JsonWriteFeature;
 import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.IOException;
@@ -38,14 +39,14 @@ public final class XContentBuilder implements Closeable {
    * Inspired from org.elasticsearch.common.xcontent.json.JsonXContent static block.
    */
   public XContentBuilder() throws IOException {
-    JsonFactory jsonFactory = new JsonFactory();
-    jsonFactory.configure(JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES, true);
-    jsonFactory.configure(JsonGenerator.Feature.QUOTE_FIELD_NAMES, true);
-    jsonFactory.configure(JsonParser.Feature.ALLOW_COMMENTS, true);
-    jsonFactory.configure(
-        JsonFactory.Feature.FAIL_ON_SYMBOL_HASH_OVERFLOW,
-        false); // this trips on many mappings now...
-    this.generator = jsonFactory.createGenerator(bos, JsonEncoding.UTF8);
+    this.generator =
+        JsonFactory.builder()
+            .configure(JsonReadFeature.ALLOW_UNQUOTED_FIELD_NAMES, true)
+            .configure(JsonWriteFeature.QUOTE_FIELD_NAMES, true)
+            .configure(JsonReadFeature.ALLOW_JAVA_COMMENTS, true)
+            .configure(JsonFactory.Feature.FAIL_ON_SYMBOL_HASH_OVERFLOW, false)
+            .build()
+            .createGenerator(bos, JsonEncoding.UTF8);
   }
 
   public XContentBuilder startObject(String name) throws IOException {
@@ -138,7 +139,7 @@ public final class XContentBuilder implements Closeable {
   public String string() {
     close();
     byte[] bytesArray = bos.toByteArray();
-    return new String(bytesArray, Charsets.UTF_8);
+    return new String(bytesArray, UTF_8);
   }
 
   private void writeValue(Object value) throws IOException {

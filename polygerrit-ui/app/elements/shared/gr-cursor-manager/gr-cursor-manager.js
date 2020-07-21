@@ -34,7 +34,7 @@
         observer: '_updateIndex',
       },
       /**
-       * @type (?Object)
+       * @type {?Object}
        */
       target: {
         type: Object,
@@ -43,7 +43,8 @@
       },
       /**
        * The height of content intended to be included with the target.
-       * @type (?number)
+       *
+       * @type {?number}
        */
       _targetHeight: Number,
 
@@ -69,7 +70,8 @@
        * 'keep-visible'. 'keep-visible' will only scroll if the cursor is beyond
        * the viewport.
        * TODO (beckysiegel) figure out why it can be undefined
-       * @type (string|undefined)
+       *
+       * @type {string|undefined}
        */
       scrollBehavior: {
         type: String,
@@ -99,6 +101,7 @@
 
     /**
      * Set the cursor to an arbitrary element.
+     *
      * @param {!HTMLElement} element
      * @param {boolean=} opt_noScroll prevent any potential scrolling in response
      *   setting the cursor.
@@ -146,6 +149,7 @@
     /**
      * Move the cursor forward or backward by delta. Noop if moving past either
      * end of the stop list.
+     *
      * @param {number} delta either -1 or 1.
      * @param {!Function=} opt_condition Optional stop condition. If a condition
      *    is passed the cursor will continue to move in the specified direction
@@ -200,6 +204,7 @@
 
     /**
      * Get the next stop index indicated by the delta direction.
+     *
      * @param {number} delta either -1 or 1.
      * @param {!Function=} opt_condition Optional stop condition.
      * @return {number} the new index.
@@ -248,14 +253,15 @@
 
     /**
      * Calculate where the element is relative to the window.
+     *
      * @param {!Object} target Target to scroll to.
      * @return {number} Distance to top of the target.
      */
     _getTop(target) {
       let top = target.offsetTop;
       for (let offsetParent = target.offsetParent;
-           offsetParent;
-           offsetParent = offsetParent.offsetParent) {
+        offsetParent;
+        offsetParent = offsetParent.offsetParent) {
         top += offsetParent.offsetTop;
       }
       return top;
@@ -284,7 +290,7 @@
       const dims = this._getWindowDims();
       const top = this._getTop(this.target);
       const bottomIsVisible = this._targetHeight ?
-          this._targetIsVisible(top + this._targetHeight) : true;
+        this._targetIsVisible(top + this._targetHeight) : true;
       const scrollToValue = this._calculateScrollToValue(top, this.target);
 
       if (this._targetIsVisible(top)) {

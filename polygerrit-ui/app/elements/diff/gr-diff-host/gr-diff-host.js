@@ -57,6 +57,7 @@
 
     /**
      * Fired when the user selects a line.
+     *
      * @event line-selected
      */
 
@@ -94,7 +95,7 @@
       },
       isImageDiff: {
         type: Boolean,
-        computed: '_computeIsImageDiff(_diff)',
+        computed: '_computeIsImageDiff(diff)',
         notify: true,
       },
       commitRange: Object,
@@ -123,6 +124,7 @@
 
       /**
        * Special line number which should not be collapsed into a shared region.
+       *
        * @type {{
        *  number: number,
        *  leftSide: {boolean}
@@ -164,8 +166,13 @@
       _baseImage: Object,
       /** @type {?Object} */
       _revisionImage: Object,
-
-      _diff: Object,
+      /**
+       * This is a DiffInfo object.
+       */
+      diff: {
+        type: Object,
+        notify: true,
+      },
 
       /** @type {?Object} */
       _blame: {
@@ -237,7 +244,7 @@
                 this.removeEventListener('render', callback);
               };
               this.addEventListener('render', callback);
-              this._diff = diff;
+              this.diff = diff;
             });
           })
           .catch(err => {
@@ -279,6 +286,7 @@
 
     /**
      * Load and display blame information for the base of the diff.
+     *
      * @return {Promise} A promise that resolves when blame finishes rendering.
      */
     loadBlame() {
@@ -389,7 +397,7 @@
       // digits. Diffs with no delta are considered 0%.
       const totalDelta = rebaseDelta + nonRebaseDelta;
       const percentRebaseDelta = !totalDelta ? 0 :
-          Math.round(100 * rebaseDelta / totalDelta);
+        Math.round(100 * rebaseDelta / totalDelta);
 
       // Report the due_to_rebase percentage in the "diff" category when
       // applicable.
@@ -453,6 +461,7 @@
      * Take a diff that was loaded with a ignore-whitespace other than
      * IGNORE_NONE, and convert delta chunks labeled as common into shared
      * chunks.
+     *
      * @param {!Object} diff
      * @returns {!Object}
      */

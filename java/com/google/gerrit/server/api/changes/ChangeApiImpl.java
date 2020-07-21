@@ -44,7 +44,6 @@ import com.google.gerrit.extensions.common.ChangeInfo;
 import com.google.gerrit.extensions.common.ChangeMessageInfo;
 import com.google.gerrit.extensions.common.CommentInfo;
 import com.google.gerrit.extensions.common.CommitMessageInput;
-import com.google.gerrit.extensions.common.EditInfo;
 import com.google.gerrit.extensions.common.Input;
 import com.google.gerrit.extensions.common.MergePatchSetInput;
 import com.google.gerrit.extensions.common.PureRevertInfo;
@@ -416,12 +415,6 @@ class ChangeApiImpl implements ChangeApi {
     }
   }
 
-  @Deprecated
-  @Override
-  public void publish() throws RestApiException {
-    throw new UnsupportedOperationException("draft workflow is discontinued");
-  }
-
   @Override
   public void rebase() throws RestApiException {
     rebase(new RebaseInput());
@@ -535,11 +528,6 @@ class ChangeApiImpl implements ChangeApi {
     return get(
         EnumSet.complementOf(
             EnumSet.of(ListChangesOption.CHECK, ListChangesOption.SKIP_MERGEABLE)));
-  }
-
-  @Override
-  public EditInfo getEdit() throws RestApiException {
-    return edit().get().orElse(null);
   }
 
   @Override

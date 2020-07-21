@@ -4,16 +4,8 @@ load(
     "default_java_toolchain",
 )
 load("@rules_java//java:defs.bzl", "java_package_configuration")
-load("@rules_python//python:defs.bzl", "py_binary")
 
 exports_files(["nongoogle.bzl"])
-
-py_binary(
-    name = "merge_jars",
-    srcs = ["merge_jars.py"],
-    main = "merge_jars.py",
-    visibility = ["//visibility:public"],
-)
 
 default_java_toolchain(
     name = "error_prone_warnings_toolchain",
@@ -33,11 +25,8 @@ java_package_configuration(
     name = "error_prone",
     javacopts = [
         "-XepDisableWarningsInGeneratedCode",
-        "-Xep:MissingCasesInEnumSwitch:ERROR",
-        "-Xep:ReferenceEquality:WARN",
-        "-Xep:StringEquality:WARN",
-        "-Xep:WildcardImport:WARN",
         "-Xep:AmbiguousMethodReference:WARN",
+        "-Xep:AutoValueFinalMethods:ERROR",
         "-Xep:BadAnnotationImplementation:WARN",
         "-Xep:BadComparable:WARN",
         "-Xep:BoxedPrimitiveConstructor:ERROR",
@@ -67,31 +56,37 @@ java_package_configuration(
         "-Xep:JUnit3FloatingPointComparisonWithoutDelta:WARN",
         "-Xep:JUnitAmbiguousTestClass:WARN",
         "-Xep:LiteralClassName:WARN",
+        "-Xep:MissingCasesInEnumSwitch:ERROR",
         "-Xep:MissingFail:ERROR",
         "-Xep:MissingOverride:WARN",
-        "-Xep:MutableConstantField:WARN",
+        "-Xep:MutableConstantField:ERROR",
         "-Xep:NarrowingCompoundAssignment:WARN",
         "-Xep:NonAtomicVolatileUpdate:WARN",
         "-Xep:NonOverridingEquals:WARN",
         "-Xep:NullableConstructor:WARN",
         "-Xep:NullablePrimitive:WARN",
         "-Xep:NullableVoid:WARN",
-        "-Xep:OperatorPrecedence:WARN",
+        "-Xep:ObjectToString:ERROR",
+        "-Xep:OperatorPrecedence:ERROR",
         "-Xep:OverridesGuiceInjectableMethod:WARN",
         "-Xep:PreconditionsInvalidPlaceholder:WARN",
         "-Xep:ProtoFieldPreconditionsCheckNotNull:WARN",
         "-Xep:ProtocolBufferOrdinal:WARN",
+        "-Xep:ReferenceEquality:WARN",
         "-Xep:RequiredModifiers:WARN",
         "-Xep:ShortCircuitBoolean:WARN",
         "-Xep:SimpleDateFormatConstant:WARN",
         "-Xep:StaticGuardedByInstance:WARN",
+        "-Xep:StringEquality:WARN",
         "-Xep:SynchronizeOnNonFinalField:WARN",
         "-Xep:TruthConstantAsserts:WARN",
         "-Xep:TypeParameterShadowing:WARN",
         "-Xep:TypeParameterUnusedInFormals:WARN",
         "-Xep:URLEqualsHashCode:WARN",
         "-Xep:UnsynchronizedOverridesSynchronized:WARN",
+        "-Xep:UnusedException:ERROR",
         "-Xep:WaitNotInLoop:WARN",
+        "-Xep:WildcardImport:WARN",
     ],
     packages = ["error_prone_packages"],
 )

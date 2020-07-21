@@ -59,8 +59,8 @@ limitations under the License.
 
     getActiveElement = () => {
       return document.activeElement.shadowRoot ?
-          document.activeElement.shadowRoot.activeElement :
-          document.activeElement;
+        document.activeElement.shadowRoot.activeElement :
+        document.activeElement;
     };
 
     test('enter in search input fires event', done => {
@@ -89,6 +89,42 @@ limitations under the License.
       MockInteractions.pressAndReleaseKeyOn(element.$.searchInput.$.input, 13,
           null, 'enter');
       assert.isFalse(searchSpy.called);
+    });
+
+    test('Predefined query op with no predication doesnt trigger nav', () => {
+      const searchSpy = sandbox.spy();
+      element.addEventListener('handle-search', searchSpy);
+      element.value = 'added:';
+      MockInteractions.pressAndReleaseKeyOn(element.$.searchInput.$.input, 13,
+          null, 'enter');
+      assert.isFalse(searchSpy.called);
+    });
+
+    test('predefined predicate query triggers nav', () => {
+      const searchSpy = sandbox.spy();
+      element.addEventListener('handle-search', searchSpy);
+      element.value = 'age:1week';
+      MockInteractions.pressAndReleaseKeyOn(element.$.searchInput.$.input, 13,
+          null, 'enter');
+      assert.isTrue(searchSpy.called);
+    });
+
+    test('undefined predicate query triggers nav', () => {
+      const searchSpy = sandbox.spy();
+      element.addEventListener('handle-search', searchSpy);
+      element.value = 'random:1week';
+      MockInteractions.pressAndReleaseKeyOn(element.$.searchInput.$.input, 13,
+          null, 'enter');
+      assert.isTrue(searchSpy.called);
+    });
+
+    test('empty undefined predicate query triggers nav', () => {
+      const searchSpy = sandbox.spy();
+      element.addEventListener('handle-search', searchSpy);
+      element.value = 'random:';
+      MockInteractions.pressAndReleaseKeyOn(element.$.searchInput.$.input, 13,
+          null, 'enter');
+      assert.isTrue(searchSpy.called);
     });
 
     test('keyboard shortcuts', () => {

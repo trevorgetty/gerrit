@@ -613,8 +613,8 @@ public class ChangeIndexer {
       // change ID.
       for (ChangeIndex i : getWriteIndexes()) {
         try (TraceTimer traceTimer =
-                 TraceContext.newTimer(
-                     "Deleteing change %d in index version %d", id.get(), i.getSchema().getVersion())) {
+            TraceContext.newTimer(
+                "Deleting change %d in index version %d", id.get(), i.getSchema().getVersion())) {
           i.delete(id);
         }
       }

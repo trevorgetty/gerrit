@@ -43,6 +43,7 @@ import java.util.concurrent.TimeUnit;
 import javax.servlet.DispatcherType;
 import javax.servlet.Filter;
 import org.eclipse.jetty.http.HttpScheme;
+import org.eclipse.jetty.io.ConnectionStatistics;
 import org.eclipse.jetty.jmx.MBeanContainer;
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.ForwardedRequestCustomizer;
@@ -67,7 +68,6 @@ import org.eclipse.jetty.util.BlockingArrayQueue;
 import org.eclipse.jetty.util.log.Log;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
-import org.eclipse.jetty.util.thread.ThreadPool;
 import org.eclipse.jgit.lib.Config;
 
 @Singleton
@@ -116,10 +116,89 @@ public class JettyServer {
     }
   }
 
+  static class Metrics {
+    private final QueuedThreadPool threadPool;
+    private ConnectionStatistics connStats;
+
+    Metrics(QueuedThreadPool threadPool, ConnectionStatistics connStats) {
+      this.threadPool = threadPool;
+      this.connStats = connStats;
+    }
+
+    public int getIdleThreads() {
+      return threadPool.getIdleThreads();
+    }
+
+    public int getBusyThreads() {
+      return threadPool.getBusyThreads();
+    }
+
+    public int getReservedThreads() {
+      return threadPool.getReservedThreads();
+    }
+
+    public int getMinThreads() {
+      return threadPool.getMinThreads();
+    }
+
+    public int getMaxThreads() {
+      return threadPool.getMaxThreads();
+    }
+
+    public int getThreads() {
+      return threadPool.getThreads();
+    }
+
+    public int getQueueSize() {
+      return threadPool.getQueueSize();
+    }
+
+    public boolean isLowOnThreads() {
+      return threadPool.isLowOnThreads();
+    }
+
+    public long getConnections() {
+      return connStats.getConnections();
+    }
+
+    public long getConnectionsTotal() {
+      return connStats.getConnectionsTotal();
+    }
+
+    public long getConnectionDurationMax() {
+      return connStats.getConnectionDurationMax();
+    }
+
+    public double getConnectionDurationMean() {
+      return connStats.getConnectionDurationMean();
+    }
+
+    public double getConnectionDurationStdDev() {
+      return connStats.getConnectionDurationStdDev();
+    }
+
+    public long getReceivedMessages() {
+      return connStats.getReceivedMessages();
+    }
+
+    public long getSentMessages() {
+      return connStats.getSentMessages();
+    }
+
+    public long getReceivedBytes() {
+      return connStats.getReceivedBytes();
+    }
+
+    public long getSentBytes() {
+      return connStats.getSentBytes();
+    }
+  }
+
   private final SitePaths site;
   private final Server httpd;
-
+  private final Metrics metrics;
   private boolean reverseProxy;
+  private ConnectionStatistics connStats;
 
   @Inject
   JettyServer(
@@ -130,8 +209,14 @@ public class JettyServer {
       HttpLogFactory httpLogFactory) {
     this.site = site;
 
-    httpd = new Server(threadPool(cfg, threadSettingsConfig));
+    QueuedThreadPool pool = threadPool(cfg, threadSettingsConfig);
+    httpd = new Server(pool);
     httpd.setConnectors(listen(httpd, cfg));
+    connStats = new ConnectionStatistics();
+    for (Connector connector : httpd.getConnectors()) {
+      connector.addBean(connStats);
+    }
+    metrics = new Metrics(pool, connStats);
 
     Handler app = makeContext(env, cfg);
     if (cfg.getBoolean("httpd", "requestLog", !reverseProxy)) {
@@ -158,6 +243,10 @@ public class JettyServer {
 
     httpd.setHandler(app);
     httpd.setStopAtShutdown(false);
+  }
+
+  Metrics getMetrics() {
+    return metrics;
   }
 
   private Connector[] listen(Server server, Config cfg) {
@@ -197,7 +286,7 @@ public class JettyServer {
         c = newServerConnector(server, acceptors, config);
 
       } else if ("https".equals(u.getScheme())) {
-        SslContextFactory ssl = new SslContextFactory();
+        SslContextFactory.Server ssl = new SslContextFactory.Server();
         final Path keystore = getFile(cfg, "sslkeystore", "etc/keystore");
         String password = cfg.getString("httpd", null, "sslkeypassword");
         if (password == null) {
@@ -339,7 +428,7 @@ public class JettyServer {
     return site.resolve(path);
   }
 
-  private ThreadPool threadPool(Config cfg, ThreadSettingsConfig threadSettingsConfig) {
+  private QueuedThreadPool threadPool(Config cfg, ThreadSettingsConfig threadSettingsConfig) {
     int maxThreads = threadSettingsConfig.getHttpdMaxThreads();
     int minThreads = cfg.getInt("httpd", null, "minthreads", 5);
     int maxQueued = cfg.getInt("httpd", null, "maxqueued", 200);

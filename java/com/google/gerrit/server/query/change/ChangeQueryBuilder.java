@@ -22,6 +22,7 @@ import static java.util.stream.Collectors.toSet;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Enums;
 import com.google.common.base.Splitter;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.primitives.Ints;
 import com.google.gerrit.common.data.GroupDescription;
@@ -499,7 +500,7 @@ public class ChangeQueryBuilder extends QueryBuilder<ChangeData> {
     return ChangeStatusPredicate.parse(statusName);
   }
 
-  public Predicate<ChangeData> status_open() {
+  public Predicate<ChangeData> statusOpen() {
     return ChangeStatusPredicate.open();
   }
 
@@ -548,7 +549,7 @@ public class ChangeQueryBuilder extends QueryBuilder<ChangeData> {
     }
 
     if ("visible".equalsIgnoreCase(value)) {
-      return is_visible();
+      return isVisible();
     }
 
     if ("reviewed".equalsIgnoreCase(value)) {
@@ -910,15 +911,13 @@ public class ChangeQueryBuilder extends QueryBuilder<ChangeData> {
   public Predicate<ChangeData> visibleto(String who)
       throws QueryParseException, OrmException, IOException, ConfigInvalidException {
     if (isSelf(who)) {
-      return is_visible();
+      return isVisible();
     }
     Set<Account.Id> m = args.accountResolver.findAll(who);
-    if (!m.isEmpty()) {
-      List<Predicate<ChangeData>> p = Lists.newArrayListWithCapacity(m.size());
-      for (Account.Id id : m) {
-        return visibleto(args.userFactory.create(id));
-      }
-      return Predicate.or(p);
+    if (m.size() == 1) {
+      return visibleto(args.userFactory.create(Iterables.getOnlyElement(m)));
+    } else if (m.size() > 1) {
+      throw error(String.format("\"%s\" resolves to multiple accounts", who));
     }
 
     // If its not an account, maybe its a group?
@@ -944,7 +943,7 @@ public class ChangeQueryBuilder extends QueryBuilder<ChangeData> {
         args.anonymousUserProvider);
   }
 
-  public Predicate<ChangeData> is_visible() throws QueryParseException {
+  public Predicate<ChangeData> isVisible() throws QueryParseException {
     return visibleto(args.getUser());
   }
 

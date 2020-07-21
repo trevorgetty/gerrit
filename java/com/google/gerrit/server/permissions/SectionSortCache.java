@@ -167,7 +167,7 @@ public class SectionSortCache {
     }
 
     @Override
-    public int hashCode() {
+    public final int hashCode() {
       return cachedHashCode();
     }
   }

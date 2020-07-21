@@ -14,6 +14,15 @@
 
 package com.google.gerrit.sshd;
 
+import static com.google.gerrit.sshd.SshLog.P_ACCOUNT_ID;
+import static com.google.gerrit.sshd.SshLog.P_AGENT;
+import static com.google.gerrit.sshd.SshLog.P_EXEC;
+import static com.google.gerrit.sshd.SshLog.P_MESSAGE;
+import static com.google.gerrit.sshd.SshLog.P_SESSION;
+import static com.google.gerrit.sshd.SshLog.P_STATUS;
+import static com.google.gerrit.sshd.SshLog.P_USER_NAME;
+import static com.google.gerrit.sshd.SshLog.P_WAIT;
+
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.TimeZone;
@@ -22,14 +31,6 @@ import org.apache.log4j.spi.LoggingEvent;
 import org.eclipse.jgit.util.QuotedString;
 
 public final class SshLogLayout extends Layout {
-
-  private static final String P_SESSION = "session";
-  private static final String P_USER_NAME = "userName";
-  private static final String P_ACCOUNT_ID = "accountId";
-  private static final String P_WAIT = "queueWaitTime";
-  private static final String P_EXEC = "executionTime";
-  private static final String P_STATUS = "status";
-  private static final String P_AGENT = "agent";
 
   private final Calendar calendar;
   private long lastTimeMillis;
@@ -54,6 +55,12 @@ public final class SshLogLayout extends Layout {
     buf.append(']');
 
     req(P_SESSION, buf, event);
+
+    buf.append(' ');
+    buf.append('[');
+    buf.append(event.getThreadName());
+    buf.append(']');
+
     req(P_USER_NAME, buf, event);
     req(P_ACCOUNT_ID, buf, event);
 
@@ -62,6 +69,7 @@ public final class SshLogLayout extends Layout {
 
     opt(P_WAIT, buf, event);
     opt(P_EXEC, buf, event);
+    opt(P_MESSAGE, buf, event);
     opt(P_STATUS, buf, event);
     opt(P_AGENT, buf, event);
 

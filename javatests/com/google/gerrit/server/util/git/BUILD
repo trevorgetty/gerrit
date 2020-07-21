@@ -10,8 +10,6 @@ junit_tests(
     deps = [
         "//java/com/google/gerrit/reviewdb:server",
         "//java/com/google/gerrit/server/util/git",
-        "//java/com/google/gerrit/truth",
-        "//java/org/eclipse/jgit:server",
         "//lib:gson",
         "//lib:guava",
         "//lib:guava-retrying",

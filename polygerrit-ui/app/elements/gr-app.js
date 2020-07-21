@@ -51,6 +51,7 @@
       /**
        * The last time the g key was pressed in milliseconds (or a keydown event
        * was handled if the key is held down).
+       *
        * @type {number|null}
        */
       _lastGKeyPressTimestamp: {
@@ -338,6 +339,10 @@
           config.gerrit.web_uis && config.gerrit.web_uis.includes('GWT');
     },
 
+    _getMessages(config) {
+      return config.messages ? config.messages : [];
+    },
+
     _handlePageError(e) {
       const props = [
         '_showChangeListView',
@@ -450,7 +455,9 @@
       }
       const renderTime = new Date(window.performance.timing.loadEventStart);
       console.log(`Document loaded at: ${renderTime}`);
-      console.log(`Please file bugs and feedback at: ${this._feedbackUrl}`);
+      if (this._feedbackUrl) {
+        console.log(`Please file bugs and feedback at: ${this._feedbackUrl}`);
+      }
       console.groupEnd();
     },
 
@@ -462,14 +469,6 @@
     _handleRpcLog(e) {
       this.$.reporting.reportRpcTiming(e.detail.anonymizedUrl,
           e.detail.elapsed);
-    },
-
-    _showFeedbackUrl(feedbackUrl) {
-      if (feedbackUrl) {
-        return feedbackUrl;
-      }
-
-      return false;
     },
   });
 })();
