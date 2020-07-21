@@ -251,7 +251,12 @@ public class CreateProject
 
   @UsedAt(UsedAt.Project.COLLABNET)
   public ProjectState createProject(CreateProjectArgs args)
-      throws BadRequestException, ResourceConflictException, IOException, ConfigInvalidException {
+          throws
+          BadRequestException,
+          ResourceConflictException,
+          IOException,
+          ConfigInvalidException,
+          PreconditionFailedException {
     final Project.NameKey nameKey = args.getProject();
     try {
       final String head = args.permissionsOnly ? RefNames.REFS_CONFIG : args.branch.get(0);

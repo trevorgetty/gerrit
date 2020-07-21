@@ -4,7 +4,7 @@ _JGIT_VANILLA_VERS = "5.1.13"
 _DOC_VERS = "5.1.13.202002110435-r"  # Set to _JGIT_VANILA_VERS unless using a snapshot
 
 # Defines the WD postfix
-_POSTFIX_WD = "-WDv1-TC5-SNAPSHOT"
+_POSTFIX_WD = "-WDv1-SNAPSHOT"
 
 # Defines the version of jgit, even the replicated version of jgit, should be no external use of the vanilla version.
 _JGIT_VERS = _JGIT_VANILLA_VERS + _POSTFIX_WD
@@ -67,7 +67,7 @@ def jgit_maven_repos():
         name = "jgit-junit",
         artifact = "org.eclipse.jgit:org.eclipse.jgit.junit:" + _JGIT_VERS,
         repository = _JGIT_REPO,
-        sha1 = "35f4b77f8e8339da192120ee0b037944b94b4194",
+#        sha1 = "35f4b77f8e8339da192120ee0b037944b94b4194",
         unsign = True,
     )
 

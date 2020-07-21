@@ -19,6 +19,7 @@ import com.google.common.cache.LoadingCache;
 
 import com.google.gerrit.extensions.events.LifecycleListener;
 import com.google.gerrit.extensions.registration.DynamicMap;
+import com.google.gerrit.server.cache.CacheBackend;
 import com.google.gerrit.server.cache.CacheBinding;
 import com.google.gerrit.server.cache.PersistentCacheDef;
 import com.google.gerrit.server.cache.PersistentCacheFactory;
@@ -62,14 +63,14 @@ public class NonPersistanceCacheFactory implements PersistentCacheFactory, Lifec
 
   @SuppressWarnings({"unchecked"})
   @Override
-  public <K, V> Cache<K, V> build(PersistentCacheDef<K, V> def) {
-    throw new RuntimeException(new NotSupportedException("NonPersistanceCache should not be called, use persist=false"));
+  public <K, V> Cache<K, V> build(PersistentCacheDef<K, V> def, CacheBackend backend) {
+    return null;
   }
 
   @SuppressWarnings({"unchecked"})
   @Override
-  public <K, V> LoadingCache<K, V> build(PersistentCacheDef<K, V> def, CacheLoader<K, V> loader) {
-    throw new RuntimeException(new NotSupportedException("NonPersistanceCache should not be called, use persist=false"));
+  public <K, V> LoadingCache<K, V> build(PersistentCacheDef<K, V> def, CacheLoader<K, V> loader, CacheBackend backend) {
+    return null;
   }
 
   @Override

@@ -1,12 +1,10 @@
 [submodule "plugins/codemirror-editor"]
 	path = plugins/codemirror-editor
 	url = https://gerrit.googlesource.com/plugins/codemirror-editor
-	branch = stable-2.16
 
 [submodule "plugins/commit-message-length-validator"]
 	path = plugins/commit-message-length-validator
 	url = https://gerrit.googlesource.com/plugins/commit-message-length-validator
-	branch = stable-2.16
 
 [submodule "plugins/download-commands"]
 	path = plugins/download-commands
@@ -19,9 +17,9 @@
 	branch = stable-2.16
 
 [submodule "plugins/replication"]
-        path = plugins/replication
+    path = plugins/replication
 	url = https://gerrit.googlesource.com/plugins/replication
-        branch = stable-2.16
+    branch = stable-2.16
 
 [submodule "plugins/reviewnotes"]
 	path = plugins/reviewnotes
@@ -37,7 +35,8 @@
 	path = plugins/lfs
 	url = ../gerrit-lfs-plugin
 	branch = .
+
 [submodule "plugins/delete-project"]
 	path = plugins/delete-project
 	url = ../gerrit-delete-project-plugin
-        branch = .
+    branch = .

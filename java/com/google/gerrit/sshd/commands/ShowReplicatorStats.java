@@ -75,7 +75,7 @@ final class ShowReplicatorStats extends SshCommand {
 
     try {
       permissionBackend.user(currentUser).check(VIEW_REPLICATOR_STATS);
-    } catch (AuthException | PermissionBackendException ex) {
+    } catch (@SuppressWarnings("UnusedException") AuthException | PermissionBackendException ex) {
       String msg = String.format("fatal: %s does not have \"View Replicator Stats\" capability.",
           currentUser.getUserName());
       throw new UnloggedFailure(msg);
