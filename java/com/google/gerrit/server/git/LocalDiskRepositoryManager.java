@@ -232,7 +232,7 @@ public class LocalDiskRepositoryManager implements GitRepositoryManager {
         || name.contains("/+") // delimiter in /changes/
         || name.contains("~") // delimiter in /changes/
         // no path segments that end with '.git' as "foo.git/bar", if nesting disabled
-        || (!isNestedEnabled) && name.contains(".git");
+        || ((!isNestedEnabled) && name.contains(".git"));
   }
 
   @Override

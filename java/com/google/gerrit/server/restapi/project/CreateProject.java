@@ -283,6 +283,7 @@ public class CreateProject
         return projectCache.get(nameKey);
       }
     } catch (RepositoryCaseMismatchException e) {
+      logger.atSevere().withCause(e).log();
       throw new ResourceConflictException(
           "Cannot create "
               + nameKey.get()

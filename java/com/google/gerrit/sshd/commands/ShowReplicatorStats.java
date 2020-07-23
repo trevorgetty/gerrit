@@ -14,6 +14,7 @@
 package com.google.gerrit.sshd.commands;
 
 import com.google.common.collect.ImmutableMultiset;
+import com.google.common.flogger.FluentLogger;
 import com.google.gerrit.extensions.restapi.AuthException;
 import com.google.gerrit.server.permissions.PermissionBackend;
 import com.google.gerrit.server.permissions.PermissionBackendException;
@@ -47,6 +48,7 @@ import java.util.Date;
     runsAt = MASTER_OR_SLAVE)
 final class ShowReplicatorStats extends SshCommand {
   private static volatile long serverStarted;
+  private static final FluentLogger logger = FluentLogger.forEnclosingClass();
 
   @Inject
   private IdentifiedUser currentUser;
@@ -78,6 +80,7 @@ final class ShowReplicatorStats extends SshCommand {
     } catch (@SuppressWarnings("UnusedException") AuthException | PermissionBackendException ex) {
       String msg = String.format("fatal: %s does not have \"View Replicator Stats\" capability.",
           currentUser.getUserName());
+      logger.atSevere().withCause(ex).log(msg);
       throw new UnloggedFailure(msg);
     }
 
