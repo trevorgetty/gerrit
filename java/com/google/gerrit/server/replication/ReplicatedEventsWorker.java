@@ -19,6 +19,7 @@ import com.google.gerrit.reviewdb.client.Change;
 import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.reviewdb.server.ReviewDb;
 import com.google.gerrit.server.events.*;
+import com.google.gerrit.server.notedb.ChangeNotes;
 import com.google.gerrit.server.permissions.PermissionBackendException;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -288,7 +289,12 @@ public class ReplicatedEventsWorker implements Runnable, Replicator.GerritPublis
       try (ReviewDb db = replicatedEventsManager.getReviewDbProvider().get()) {
         if (changeEventInfo.getChangeAttr() != null) {
           logger.atFiner().log("RE using changeAttr: %s...", changeEventInfo.getChangeAttr());
-          Change change = db.changes().get(new Change.Id(changeEventInfo.getChangeAttr().number));
+          // As this is a replicated event, and we are raising to listeners create without auto rebuilding of the
+          // index, this stops us potentially rebuilding the index twice.  If we raise a changed event, we later
+          // check for reindexing again which could rebuild a missing index (used during online migration only )
+          ChangeNotes changeNotes = replicatedEventsManager.getChangeNotesFactory().createWithAutoRebuildingDisabled(
+                  db, new Project.NameKey(changeEventInfo.getProjectName()), new Change.Id(changeEventInfo.getChangeAttr().number));
+          Change change = changeNotes.getChange();
           logger.atFiner().log("RE got change from db: %s", change);
           changeHookRunner.postEvent(change, (ChangeEvent) newEvent);
         } else if (changeEventInfo.getBranchName() != null) {

@@ -25,6 +25,7 @@ import com.google.gerrit.lifecycle.LifecycleModule;
 import com.google.gerrit.reviewdb.server.ReviewDb;
 import com.google.gerrit.server.config.GerritServerConfig;
 import com.google.gerrit.server.events.*;
+import com.google.gerrit.server.notedb.ChangeNotes;
 import com.google.gwtorm.server.OrmException;
 import com.google.gwtorm.server.SchemaFactory;
 
@@ -138,6 +139,9 @@ public final class ReplicatedEventsManager implements LifecycleListener {
   // Use schemaFactory directly as we can't use Request Scoped Providers
   private final SchemaFactory<ReviewDb> schemaFactory;
 
+  // use changeNotesFactory to abstract away the loading of changes from reviewDB or notesDB.
+  private final ChangeNotes.Factory changeNotesFactory;
+
   /**
    * Please note as this returns a Provider of a ReviewDB.  As such the instance of the DB isn't really open until
    * the provider.get() is used.  Allowing tidy try( ReviewDb db = provider.get() ) blocks to be used.
@@ -149,14 +153,21 @@ public final class ReplicatedEventsManager implements LifecycleListener {
     return Providers.of(schemaFactory.open());
   }
 
+  public ChangeNotes.Factory getChangeNotesFactory() {
+    return changeNotesFactory;
+  }
+
   @Inject
   public ReplicatedEventsManager(
       EventBroker changeHookRunner,
       SchemaFactory<ReviewDb> schemaFactory,
+      ChangeNotes.Factory changeNotesFactory,
       @GerritServerConfig Config config
   ) {
     this.changeHookRunner = changeHookRunner;
     this.schemaFactory = schemaFactory;
+    this.changeNotesFactory = changeNotesFactory;
+
     Replicator.setGerritConfig(config == null ? new Config() : config);
 
     logger.atInfo().log("RE ReplicatedEvents instance added");
