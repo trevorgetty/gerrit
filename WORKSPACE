@@ -1045,19 +1045,6 @@ maven_jar(
     sha1 = "485de3a253e23f645037828c07f1d7f1af40763a",
 )
 
-# Joda Assets
-maven_jar(
-    name = "joda_time",
-    artifact = "joda-time:joda-time:2.8",
-    sha1 = "9f2785d7184b97d005a44241ccaf980f43b9ccdb",
-)
-
-maven_jar(
-    name = "joda_convert",
-    artifact = "org.joda:joda-convert:1.2",
-    sha1 = "35ec554f0cd00c956cc69051514d9488b1374dec",
-)
-
 # WANdisco maven assets
 _GERRIT_GITMS_VERSION = "1.1.0.1-TC14-SNAPSHOT"
 
