@@ -240,7 +240,7 @@ class RevisionApiImpl implements RevisionApi {
     try {
       return review.apply(revision, in).value();
     } catch (Exception e) {
-      throw asRestApiException("Cannot post review", e);
+      throw asRestApiException("Cannot post review, conflict detected - please try again after a minute", e);
     }
   }
 
