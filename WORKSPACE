@@ -1023,21 +1023,26 @@ maven_jar(
     sha1 = "8e8c1d8fc6144405700dd8df3b177f2801ac5987",
 )
 
-# TODO: trevorg tidy post - 2.16.16.
-#  I have explicitally put the jackson codehaus ones into a codehaus- prefix'd naming convention and into the
-#  //lib/jackson folder.  I do note a new nongoogle.bzl coming in later gerrit post 2.16.15,
-#  so this may move once we get there..
-maven_jar(
-    name = "codehaus-jackson-mapper-asl",
-    artifact = "org.codehaus.jackson:jackson-mapper-asl:1.9.13",
-    #    sha1 = "0f5a654e4675769c716e5b387830d19b501ca191",
-)
+
 
 maven_jar(
-    name = "codehaus-jackson-core-asl",
-    artifact = "org.codehaus.jackson:jackson-core-asl:1.9.13",
-    #    sha1 = "0f5a654e4675769c716e5b387830d19b501ca191",
+    name = "jackson-core",
+    artifact = "com.fasterxml.jackson.core:jackson-core:2.11.2",
+    sha1 = "bc022ab0f0c83c07f9c52c5ab9a6a4932b15cc35",
 )
+
+#jackson-databind contains all appropriate classes we require in gerrit-gitms-interface
+#such as ObjectMapper, JsonNode etc
+maven_jar(
+    name = "jackson-databind",
+    artifact = "com.fasterxml.jackson.core:jackson-databind:2.11.2",
+)
+#This is required by jackson databind ObjectMapper
+maven_jar(
+    name = "jackson-annotations",
+    artifact = "com.fasterxml.jackson.core:jackson-annotations:2.11.2",
+)
+
 
 maven_jar(
     name = "javax-activation",
