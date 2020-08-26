@@ -53,7 +53,7 @@ public class HelpCommand extends CliCommandItemBase {
     // Workaround!
     // This is because args4j does not display subcommand useage /examples
     // at the moment. see https://github.com/kohsuke/args4j/issues/106
-    logger.debug(String.format("Help on command: %s" + helpOnCommand));
+    logger.debug(String.format("Help on command: %s", helpOnCommand));
 
     // get the appropriate command class now and call.
     // TODO Find some way of looking up the command name, and obtaining the command class from annotations
