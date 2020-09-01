@@ -31,9 +31,15 @@ import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.GE
 import javax.inject.Singleton;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.lang.reflect.Field;
 import java.nio.file.Files;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -315,9 +321,13 @@ public class ReplicatedEventsWorker implements Runnable, Replicator.GerritPublis
   }
 
   /**
-   * isEventToBeSkipped uses 2 things.
+   * isEventToBeSkipped uses 3 things.
    * 1) has the event previously been replicated - if so we dont do it again!!
    * 2) IS the event in a list of events we are not to replicate ( a skip list )
+   * 3) Is the event annotated with the @SkipReplication annotation, if it is, skip it.
+   *    Using the SkipReplication annotation should be used with caution as their are normally
+   *    multiple events associated with a given operation in Gerrit and skipping one could
+   *    leave the repository in a bad state.
    *
    * @param event
    * @return
@@ -325,6 +335,13 @@ public class ReplicatedEventsWorker implements Runnable, Replicator.GerritPublis
   public boolean isEventToBeSkipped(Event event) {
     if (event.hasBeenReplicated) {
       // dont cause cyclic loop replicating forever./
+      return true;
+    }
+
+    //If the event contains a skipReplication annotation then we skip the event
+    Class eventClass = EventTypes.getClass(event.type);
+
+    if(eventClass.isAnnotationPresent(SkipReplication.class)){
       return true;
     }
 

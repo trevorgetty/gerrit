@@ -52,6 +52,16 @@ public class EventTypes {
     typesByString.put(eventType, eventClass);
   }
 
+
+  /**
+   * Unregister an event type
+   *
+   * @param eventType The event type to unregister.
+   */
+  public static void unregister(String eventType) {
+    typesByString.remove(eventType);
+  }
+
   /**
    * Get the class for an event type.
    *
