@@ -41,7 +41,7 @@ public class CLI_Launcher {
     List<String> args = Arrays.asList(arguments);
     if (args.contains("--verbose")) {
       Logging.setVerbose();
-      logger.warn("Verbose mode enabled, ignoring log4j.configuration system property");
+      logger.warn("Verbose mode enabled, overriding log4j.configuration system property");
     }
 
     // Execute the command
@@ -50,15 +50,15 @@ public class CLI_Launcher {
       instance.doMain(arguments);
     } catch(LogAndExitException ex1) {
       // console-api internal exceptions
-      Logging.logerror(logger,"Gerrit Error: ", ex1);
+      Logging.logerror(logger,"Gerrit Error: " + ex1.getMessage(), ex1);
       System.exit(ex1.getExitCode());
     } catch(RuntimeException ex2) {
       // java runtime exceptions
-      Logging.logerror(logger,"Runtime Error: ", ex2);
+      Logging.logerror(logger,"Runtime Error: " + ex2.getMessage(), ex2);
       System.exit(GENERAL_RUNTIME_ERROR.getCode());
     } catch(Exception ex3){
       // general exceptions not handled by above
-      Logging.logerror(logger,"General Error:", ex3);
+      Logging.logerror(logger,"General Error:" + ex3.getMessage(), ex3);
       System.exit(DEFAULT_ERROR.getCode());
     }
 

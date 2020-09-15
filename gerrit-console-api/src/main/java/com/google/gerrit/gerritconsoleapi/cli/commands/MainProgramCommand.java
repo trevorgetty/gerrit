@@ -110,7 +110,7 @@ public class MainProgramCommand implements CommandItem {
       parser.parseArgument(arguments);
     } catch (CmdLineException ex) {
       // Write error to STDERR
-      Logging.logerror(logger, "console-api: ERROR: ", ex);
+      Logging.logerror(logger, "console-api: ERROR: " + ex.getMessage(), ex);
 
       // Sneak a peak at which command we are running, if its the main program and an error ocurred,
       // it could be cause it was trying to create a subcommmand and failed, use its error information, as it is much

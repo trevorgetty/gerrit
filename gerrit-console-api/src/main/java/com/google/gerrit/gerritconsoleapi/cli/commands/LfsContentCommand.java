@@ -61,7 +61,7 @@ public class LfsContentCommand extends CliCommandItemBase {
     try {
       applicationProperties = new GitMsApplicationProperties();
     } catch (IOException e) {
-      Logging.logerror(logger, "console-api: ERROR: " , e);
+      Logging.logerror(logger, "console-api: ERROR: " + e.getMessage(), e);
       // Throw exception to write out additional stack trace if --verbose enabled , and exit cons
       throw new LogAndExitException(LFS_CONTENT_ERROR.getDescription() + " : Unable to obtain LFS configuration information.", e, LFS_CONTENT_ERROR.getCode());
     }
@@ -72,7 +72,7 @@ public class LfsContentCommand extends CliCommandItemBase {
 
       configFactory.setAllProjectsLoaderCallback(allProjectsLoader);
     } catch (Exception e) {
-      Logging.logerror(logger, "console-api: ERROR: ", e);
+      Logging.logerror(logger, "console-api: ERROR: " + e.getMessage(), e);
       // Throw exception to write out additional stack trace if --verbose enabled , and exit cons
       throw new LogAndExitException(LFS_CONTENT_ERROR.getDescription() + " : Unable to obtain LFS configuration information.", e, LFS_CONTENT_ERROR.getCode());
     }

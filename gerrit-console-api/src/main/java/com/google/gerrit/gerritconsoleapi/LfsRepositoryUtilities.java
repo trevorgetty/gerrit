@@ -53,7 +53,7 @@ public class LfsRepositoryUtilities extends Logging {
       try {
         configFactory = LfsConfigFactory.getInstance();
       } catch (Exception e) {
-        Logging.logerror(logger, "console-api: ERROR: " , e);
+        Logging.logerror(logger, "console-api: ERROR: " + e.getMessage(), e);
         throw new LogAndExitException(LFS_STORAGE_BACKEND_ERROR.getDescription() + " : Failed to obtain the LfsConfigFactory instance. ", e, LFS_STORAGE_BACKEND_ERROR.getCode());
       }
     }
