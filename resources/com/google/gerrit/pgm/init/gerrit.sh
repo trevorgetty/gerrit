@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # Launch Gerrit Code Review as a daemon process.
 
@@ -98,7 +98,7 @@ get_config() {
 
 #Required to determine the version of the
 #gerrit.war file before attempting to start it
-function check_is_replicated_war(){
+check_is_replicated_war() {
   version=$(check_war_version $1)
   if [[ $version =~ "RP" ]]; then
       return 0
@@ -108,7 +108,7 @@ function check_is_replicated_war(){
 }
 
 #Return the war version.
-function check_war_version(){
+check_war_version() {
   version=$($JAVA -jar $1 version)
   echo $version
 }
