@@ -35,3 +35,4 @@
 release.war
 target
 env\.properties
+/node_modules/**
