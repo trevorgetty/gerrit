@@ -17,8 +17,7 @@ package com.google.gerrit.server.events;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.collect.Sets;
-import com.google.gerrit.reviewdb.client.Change;
-import com.google.gwt.thirdparty.guava.common.base.Strings;
+import org.eclipse.jgit.util.StringUtils;
 import org.junit.Test;
 
 import java.lang.reflect.Field;
@@ -117,7 +116,7 @@ public class EventTypesTest {
       msg = String.format("Old events have been removed: %s", Sets.difference(knownSet, foundSet));
     }
 
-    if(!Strings.isNullOrEmpty(msg)){
+    if(!StringUtils.isEmptyOrNull(msg)){
       throw new AssertionError(msg);
     }
   }
