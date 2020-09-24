@@ -246,6 +246,9 @@ public class RetryHelper {
           t -> {
             if (t instanceof UpdateException) {
               t = t.getCause();
+              if(t.getMessage().contains("REJECTED_OTHER_REASON: lock error")) {
+                return true;
+              }
             }
             return t instanceof LockFailureException;
           });
@@ -281,7 +284,7 @@ public class RetryHelper {
       return executeWithTimeoutCount(actionType, action, retryerBuilder.build());
     } finally {
       if (listener.getAttemptCount() > 1) {
-        logger.atFine().log("%s was attempted %d times", actionType, listener.getAttemptCount());
+        logger.atInfo().log("%s was attempted %d times", actionType, listener.getAttemptCount());
       }
       metrics.attemptCounts.record(actionType, listener.getAttemptCount());
     }
