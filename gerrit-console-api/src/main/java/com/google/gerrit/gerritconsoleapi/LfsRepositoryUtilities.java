@@ -19,6 +19,7 @@ import com.google.gerrit.gerritconsoleapi.exceptions.LogAndExitException;
 import com.wandisco.gerrit.gitms.shared.config.lfs.LfsConfigFactory;
 import com.wandisco.gerrit.gitms.shared.config.lfs.LfsProjectConfigSection;
 import com.wandisco.gerrit.gitms.shared.config.lfs.LfsStorageBackend;
+import com.wandisco.gerrit.gitms.shared.exception.ConfigurationException;
 import com.wandisco.gerrit.gitms.shared.lfs.LfsFsRepository;
 import com.wandisco.gerrit.gitms.shared.lfs.LfsFsRepositoryFactory;
 import com.wandisco.gerrit.gitms.shared.properties.GitMsApplicationProperties;
@@ -91,7 +92,7 @@ public class LfsRepositoryUtilities extends Logging {
     GitMsApplicationProperties applicationProperties = null;
     try {
       applicationProperties = gitMsApplicationProperties == null ? new GitMsApplicationProperties() : gitMsApplicationProperties;
-    } catch (IOException e) {
+    } catch (final IOException | ConfigurationException e) {
       throw new LogAndExitException(LFS_CONFIG_INFO_ERROR.getDescription() + " : Failed to get GitMS application properties. Details: ", e, LFS_CONFIG_INFO_ERROR.getCode());
     }
 

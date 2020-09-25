@@ -21,6 +21,7 @@ import com.google.gerrit.gerritconsoleapi.exceptions.LogAndExitException;
 import com.google.gerrit.sshd.CommandMetaData;
 import com.wandisco.gerrit.gitms.shared.config.lfs.LfsConfigFactory;
 import com.wandisco.gerrit.gitms.shared.config.lfs.LfsProjectConfigSection;
+import com.wandisco.gerrit.gitms.shared.exception.ConfigurationException;
 import com.wandisco.gerrit.gitms.shared.properties.GitMsApplicationProperties;
 import org.kohsuke.args4j.Option;
 import org.slf4j.Logger;
@@ -60,7 +61,7 @@ public class LfsContentCommand extends CliCommandItemBase {
 
     try {
       applicationProperties = new GitMsApplicationProperties();
-    } catch (IOException e) {
+    } catch (final IOException | ConfigurationException e) {
       Logging.logerror(logger, "console-api: ERROR: " + e.getMessage(), e);
       // Throw exception to write out additional stack trace if --verbose enabled , and exit cons
       throw new LogAndExitException(LFS_CONTENT_ERROR.getDescription() + " : Unable to obtain LFS configuration information.", e, LFS_CONTENT_ERROR.getCode());

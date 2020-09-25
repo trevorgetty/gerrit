@@ -22,6 +22,7 @@ import com.google.common.flogger.FluentLogger;
 import com.google.gerrit.lifecycle.LifecycleManager;
 import com.google.gerrit.server.events.Event;
 import com.google.gerrit.server.events.EventDeserializer;
+import com.google.gerrit.server.exceptions.ReplicationConfigException;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.google.gerrit.server.events.SupplierDeserializer;
@@ -54,6 +55,7 @@ import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator;
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.DELETE_PROJECT_MESSAGE_EVENT;
 
+import com.wandisco.gerrit.gitms.shared.exception.ConfigurationException;
 import com.wandisco.gerrit.gitms.shared.properties.GitMsApplicationProperties;
 import net.minidev.json.JSONObject;
 import net.minidev.json.JSONValue;
@@ -209,15 +211,8 @@ public class Replicator implements Runnable {
             logger.atInfo().log("Ignoring request for Replicator Instance - replication is disabled." );
             return null;
           }
-
-          boolean configOk = readConfiguration();
-          logger.atInfo().log("RE Configuration read: ok? %s", configOk);
-
-          if (configOk == false) {
-            // either there was an issue, or we have had GitMS Disabled, either way we should not continue
-            // with any more replication thread enablement - allows vanilla testing with this war.
-            return null;
-          }
+          readConfiguration();
+          logger.atInfo().log("RE Configuration read successfully");
 
           replicatedEventsBaseDirectory = new File(defaultBaseDir);
           outgoingReplEventsDirectory = new File(replicatedEventsBaseDirectory, OUTGOING_DIR);
@@ -934,9 +929,8 @@ public class Replicator implements Runnable {
 
   /**
    * @return
-   * @throws IOException
    */
-  public static GitMsApplicationProperties getApplicationProperties() throws IOException {
+  public static GitMsApplicationProperties getApplicationProperties() {
     if (applicationProperties != null) {
       return applicationProperties;
     }
@@ -955,8 +949,12 @@ public class Replicator implements Runnable {
         internalLogFile = new File(new File(DEFAULT_BASE_DIR), "replEvents.log"); // used for debug
       }
 
-      applicationProperties = new GitMsApplicationProperties();
-      return applicationProperties;
+      try {
+        applicationProperties = new GitMsApplicationProperties();
+        return applicationProperties;
+      } catch (final IOException | ConfigurationException ex) {
+        throw new ReplicationConfigException("Unable to initialise application properties", ex);
+      }
     }
   }
 
