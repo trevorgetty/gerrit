@@ -19,6 +19,7 @@ import com.google.gerrit.gerritconsoleapi.bindings.GuiceConfigurator;
 import com.google.gerrit.gerritconsoleapi.cli.commands.LfsInformationCommand;
 import com.google.gerrit.gerritconsoleapi.exceptions.LogAndExitException;
 import com.google.inject.Injector;
+import com.wandisco.gerrit.gitms.shared.exception.ConfigurationException;
 import com.wandisco.gerrit.gitms.shared.properties.GitMsApplicationProperties;
 import com.wandisco.gerrit.gitms.shared.util.ReplicationUtils;
 import org.slf4j.Logger;
@@ -106,7 +107,7 @@ public class LocalGuiceContextLoader {
     GitMsApplicationProperties confProps;
     try {
       confProps = ReplicationUtils.parseGitMSConfig();
-    } catch (IOException e) {
+    } catch (final IOException | ConfigurationException e) {
       throw new LogAndExitException(LFS_CONFIG_INFO_ERROR.getDescription() + " : Problem occurred when retrieving GitMS configuration. Error Details: ", e, LFS_CONFIG_INFO_ERROR.getCode());
     }
 
