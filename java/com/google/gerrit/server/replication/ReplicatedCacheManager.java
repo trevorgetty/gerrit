@@ -1,6 +1,6 @@
 
 /********************************************************************************
- * Copyright (c) 2014-2018 WANdisco
+ * Copyright (c) 2014-2020 WANdisco
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -202,8 +202,7 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
   }
 
   public static synchronized ReplicatedCacheManager watchCache(String cacheName, Cache cache) {
-    if ( Replicator.isReplicationDisabled() )
-    {
+    if (Replicator.isReplicationDisabled()) {
       logger.atWarning().log("Replication is disabled, watchCache should not be getting called in this instance.");
       return null;
     }
@@ -255,10 +254,10 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
     if (Replicator.isReplicationDisabled()) {
       return;
     }
-    CacheObjectCallWrapper cacheMehodCall = new CacheObjectCallWrapper(cacheName, methodName, key);
-    logger.atInfo().log("CACHE About to call replicated cache method: %s,%s,%s", cacheName, methodName, key);
+    CacheObjectCallWrapper cacheMethodCall = new CacheObjectCallWrapper(cacheName, methodName, key);
+    logger.atInfo().log("CACHE About to call replicated cache method: %s, %s, %s", cacheName, methodName, key);
     Replicator.getInstance().queueEventForReplication(
-        GerritEventFactory.createReplicatedAllProjectsCacheEvent(cacheMehodCall));
+        GerritEventFactory.createReplicatedAllProjectsCacheEvent(cacheMethodCall));
     evictionsSent.add(cacheName);
   }
 

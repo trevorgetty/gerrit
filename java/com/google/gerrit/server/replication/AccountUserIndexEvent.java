@@ -34,10 +34,15 @@ import java.io.Serializable;
 public class AccountUserIndexEvent extends AccountIndexEventBase {
   public Account.Id id;
 
-  public AccountUserIndexEvent(Account.Id id, String nodeIdentity) {
+  public AccountUserIndexEvent(final String nodeIdentity) {
+    super(nodeIdentity);
+  }
+
+  public AccountUserIndexEvent(Account.Id id, final String nodeIdentity) {
     super(nodeIdentity);
     this.id=id;
   }
+
   @Override
   public Serializable getIdentifier(){
     return this.id;
@@ -45,7 +50,10 @@ public class AccountUserIndexEvent extends AccountIndexEventBase {
 
   @Override
   public String toString() {
-    return String.format("AccountUserIndexEvent{AccountID=%s, eventTimestamp=%s, nodeIdentity=%s}",
-        id, eventTimestamp, nodeIdentity);
+    final StringBuilder sb = new StringBuilder("AccountGroupIndexEvent{");
+    sb.append("AccountID=").append(id);
+    sb.append(", ").append(super.toString());
+    sb.append('}');
+    return sb.toString();
   }
 }

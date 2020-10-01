@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2014-2018 WANdisco
+ * Copyright (c) 2014-2020 WANdisco
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,20 @@ import com.google.gerrit.reviewdb.client.Branch;
 import com.google.gerrit.reviewdb.client.Change;
 import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.reviewdb.server.ReviewDb;
-import com.google.gerrit.server.events.*;
+import com.google.gerrit.server.events.ChangeEvent;
+import com.google.gerrit.server.events.Event;
+import com.google.gerrit.server.events.EventBroker;
+import com.google.gerrit.server.events.EventDeserializer;
+import com.google.gerrit.server.events.EventListener;
+import com.google.gerrit.server.events.EventTypes;
+import com.google.gerrit.server.events.PatchSetEvent;
+import com.google.gerrit.server.events.ProjectCreatedEvent;
+import com.google.gerrit.server.events.ProjectEvent;
+import com.google.gerrit.server.events.RefEvent;
+import com.google.gerrit.server.events.RefUpdatedEvent;
+import com.google.gerrit.server.events.SkipReplication;
+import com.google.gerrit.server.events.SupplierDeserializer;
+import com.google.gerrit.server.events.SupplierSerializer;
 import com.google.gerrit.server.notedb.ChangeNotes;
 import com.google.gerrit.server.permissions.PermissionBackendException;
 import com.google.gson.Gson;
@@ -26,24 +39,19 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
 import com.google.gwtorm.server.OrmException;
 import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
+
+import static com.google.gerrit.server.replication.ReplicationConstants.EVENTS_REPLICATION_THREAD_NAME;
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.GERRIT_EVENT;
 
 import javax.inject.Singleton;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.lang.reflect.Field;
 import java.nio.file.Files;
-import java.util.Arrays;
 import java.util.Date;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
-import static com.google.gerrit.server.replication.ReplicationConstants.*;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.nio.file.StandardOpenOption.APPEND;
 import static java.nio.file.StandardOpenOption.CREATE;
@@ -93,7 +101,7 @@ public class ReplicatedEventsWorker implements Runnable, Replicator.GerritPublis
 
     if (eventReaderAndPublisherThread == null) {
       replicatorInstance = Replicator.getInstance();
-      replicatorInstance.subscribeEvent(GERRIT_EVENT, this);
+      Replicator.subscribeEvent(GERRIT_EVENT, this);
       // initialize our state, so we can use this to signal shutdown / finish.
       finished = false;
       // Passed in via lifecycle manager, to avoid a cyclic dependency in eventbroker->repEventManager->eventBroker

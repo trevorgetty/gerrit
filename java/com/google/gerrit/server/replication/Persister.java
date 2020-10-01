@@ -1,6 +1,6 @@
 
 /********************************************************************************
- * Copyright (c) 2014-2018 WANdisco
+ * Copyright (c) 2014-2020 WANdisco
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
  
 package com.google.gerrit.server.replication;
 
+import com.google.common.flogger.FluentLogger;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 
@@ -26,8 +27,14 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+
+import com.wandisco.gerrit.gitms.shared.events.GerritEventData;
+import com.wandisco.gerrit.gitms.shared.events.exceptions.InvalidEventJsonException;
+import com.wandisco.gerrit.gitms.shared.util.ObjectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static com.wandisco.gerrit.gitms.shared.util.StringUtils.getProjectNameSha1;
 
 
 /**
@@ -50,7 +57,8 @@ import org.slf4j.LoggerFactory;
  */
 public class Persister<T extends Persistable> {
 
-  private static final Logger log = LoggerFactory.getLogger(Persister.class);
+  private static final FluentLogger logger = FluentLogger.forEnclosingClass();
+
   private final PersisterFileFilter fileFilter = new PersisterFileFilter();
   private static final Gson gson = new Gson();
   private final File baseDir;
@@ -58,9 +66,8 @@ public class Persister<T extends Persistable> {
   public static final String FIRST_PART = "Pers-";
   public static final String LAST_PART = ".json";
   public static final String TMP_PART = ".tmp";
+  private static final String PERSIST_FILE=FIRST_PART + "%s_%s_%s_%s" + LAST_PART;
 
-  public static final String PERSIST_FILE="persisted-%s-%s-%02d.json";
-  public static String persistEventsFileName="";
   private static final long GC_NOW = 0;
   private static long lastGCTime = 0;
 
@@ -90,20 +97,25 @@ public class Persister<T extends Persistable> {
     if (listFiles != null) {
       Arrays.sort(listFiles);
       for (File file : listFiles) {
-        try (InputStreamReader fileToRead = new InputStreamReader(new FileInputStream(file),StandardCharsets.UTF_8)) {
-          T fromJson = gson.fromJson(fileToRead,clazz);
+        try (InputStreamReader eventJson = new InputStreamReader(new FileInputStream(file),StandardCharsets.UTF_8)) {
+          //If the event JSON is invalid, then we want to throw
+          T fromJson;
+          try {
+            fromJson = gson.fromJson(eventJson, clazz);
+          } catch(JsonSyntaxException e) {
+            throw new InvalidEventJsonException(String.format("Event file contains Invalid JSON: \"%s\"",
+                                                              eventJson.toString()), e);
+          }
+
          if (fromJson == null) {
-           log.warn("Json file {} only contained an EOF", file);
+           logger.atWarning().log("Json file {} only contained an EOF", file);
            continue;
          }
 
           fromJson.setPersistFile(file);
           result.add(fromJson);
-        } catch (IOException e) {
-          log.error("PR Could not decode json file {}", file, e);
-          moveFileToFailed(baseDir, file);
-        } catch (JsonSyntaxException je) {
-          log.error("PR Could not decode json file {}", file, je);
+        } catch (IOException | JsonSyntaxException | InvalidEventJsonException e) {
+          logger.atSevere().log("PR Could not decode json file {}", file, e);
           moveFileToFailed(baseDir, file);
         }
       }
@@ -117,14 +129,14 @@ public class Persister<T extends Persistable> {
     if (!failedDir.exists()) {
       boolean mkdirs = failedDir.mkdirs();
       if (!mkdirs) {
-        log.error("Could not create directory for failed directory: " + failedDir.getAbsolutePath());
+        logger.atSevere().log("Could not create directory for failed directory: " + failedDir.getAbsolutePath());
       }
     }
 
     result = file.renameTo(new File(failedDir,file.getName()));
 
     if (!result) {
-        log.error("Could not move file in failed directory: " + file);
+        logger.atSevere().log("Could not move file in failed directory: " + file);
       }
 
     return result;
@@ -146,30 +158,58 @@ public class Persister<T extends Persistable> {
     return persistFile.delete();
   }
 
-  public void persistIfNotAlready(T obj) throws IOException {
+  public void persistIfNotAlready(T obj, String projectName) throws IOException {
     if (!obj.hasBeenPersisted()) {
-      persist(obj);
+      persist(obj, projectName);
     }
   }
 
-  public void persist(T obj) throws IOException {
-    final String msg = gson.toJson(obj)+'\n';
+  public void persist(T obj, String projectName) throws IOException {
+    final String json = gson.toJson(obj)+'\n';
 
     File tempFile = File.createTempFile(FIRST_PART, TMP_PART, baseDir);
     try (FileOutputStream writer = new FileOutputStream(tempFile,true)) {
-      writer.write(msg.getBytes(StandardCharsets.UTF_8));
+      writer.write(json.getBytes(StandardCharsets.UTF_8));
     }
 
-    String [] jsonData = Replicator.ParseEventJson.jsonEventParse(msg);
-    persistEventsFileName = String.format(PERSIST_FILE, jsonData[0], jsonData[1], 0);
-    File persistFile = new File(baseDir, persistEventsFileName);
+    //Creating a GerritEventData object from the inner event JSON of the EventWrapper object.
+    GerritEventData eventData = ObjectUtils.createObjectFromJson(json, GerritEventData.class);
+
+    if(eventData == null){
+      logger.atSevere().log("Unable to set event filename, could not create GerritEventData object from JSON {}", json);
+      return;
+    }
+
+    String eventTimestamp = eventData.getEventTimestamp();
+    // The java.lang.System.nanoTime() method returns the current value of
+    // the most precise available system timer, in nanoseconds. The value returned represents
+    // nanoseconds since some fixed but arbitrary time (in the future, so values may be negative)
+    // and provides nanosecond precision, but not necessarily nanosecond accuracy.
+
+    // The long value returned will be represented as a padded hexadecimal value to 16 digits in order to have a
+    //guaranteed fixed length as System.nanoTime() varies in length on each OS.
+    // If we are dealing with older event files where eventNanoTime doesn't exist as part of the event
+    // then we will set the eventNanoTime portion to 16 zeros, same length as a nanoTime represented as HEX.
+    String eventNanoTime = eventData.getEventNanoTime() != null ?
+                           ObjectUtils.getHexStringOfLongObjectHash(Long.parseLong(eventData.getEventNanoTime())) : Replicator.DEFAULT_NANO;
+    String eventTimeStr = String.format("%sx%s", eventTimestamp, eventNanoTime);
+    String objectHash = ObjectUtils.getHexStringOfIntObjectHash(json.hashCode());
+
+    //The persisted events file is the same as an event file except it starts with persisted instead
+    //of event. The format of the file will be persisted_<eventTimestamp>x<eventNanoTime>_<nodeId>_<projectNameSha1>_<hashcode>.json
+    File persistFile = new File(baseDir, String.format(PERSIST_FILE,
+                                                       eventTimeStr,
+                                                       eventData.getNodeIdentity(),
+                                                       getProjectNameSha1(projectName),
+                                                       objectHash));
+
 
     boolean done = tempFile.renameTo(persistFile);
     if (done) {
       obj.setPersistFile(persistFile);
     } else {
       IOException e = new IOException(String.format("PR Unable to rename file %s to %s", tempFile, persistFile));
-      log.error("Unable to rename file", e);
+      logger.atSevere().log("Unable to rename file", e);
       throw e;
     }
   }
@@ -196,13 +236,20 @@ public class Persister<T extends Persistable> {
     @Override
     public boolean accept(File pathname) {
       String name = pathname.getName();
-      try {
-        if (name.startsWith(FIRST_PART) && name.endsWith(LAST_PART)) {
-          return true;
-        }
-      } catch (Exception e) {
-        log.error("PR File {} is not allowed here, remove it please ",pathname,e);
+      // We want to screen out .tmp files as it may be the case that these
+      // files may exist in the directory at the time of the gerrit poll.
+      // We also don't want the file array populated with .tmp files either
+      // as this will affect the sort.
+      if (name.startsWith(FIRST_PART) && name.endsWith(TMP_PART)){
+        return false;
       }
+
+      if (name.startsWith(FIRST_PART) && name.endsWith(LAST_PART)) {
+        return true;
+      }
+
+      logger.atSevere().log("File \"{}\" is not allowed here, remove it please ", pathname);;
+
       return false;
     }
   }

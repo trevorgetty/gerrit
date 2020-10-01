@@ -1,3 +1,16 @@
+
+/********************************************************************************
+ * Copyright (c) 2014-2020 WANdisco
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Apache License, Version 2.0
+ *
+ ********************************************************************************/
+
 package com.google.gerrit.server.replication;
 
 import com.google.common.base.Supplier;
@@ -22,6 +35,8 @@ import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.IN
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.PACKFILE_EVENT;
 
 import com.wandisco.gerrit.gitms.shared.events.PackFileEvent;
+import com.wandisco.gerrit.gitms.shared.events.ReplicatedEvent;
+import com.wandisco.gerrit.gitms.shared.events.exceptions.InvalidEventJsonException;
 import org.eclipse.jgit.lib.NullProgressMonitor;
 import org.eclipse.jgit.lib.ObjectInserter;
 import org.eclipse.jgit.lib.ProgressMonitor;
@@ -46,6 +61,7 @@ import java.util.List;
 import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.Set;
+import java.util.StringJoiner;
 import java.util.TimeZone;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -95,7 +111,7 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
   private ConcurrentLinkedQueue<IndexToReplicateComparable> incomingChangeEventsToIndex = new ConcurrentLinkedQueue<>();
   private final Object indexEventsAreReady = new Object();
   private Persister<IndexToReplicateComparable> persister;
-  private Replicator replicatorInstance;
+  private static Replicator replicatorInstance;
   private ChangeIndexer indexer;
   private ChangeNotes.Factory notesFactory;
 
@@ -210,7 +226,7 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
             break;
           }
           if (sentEvents == 0 && workedChanges <= 0) {
-            Thread.sleep(replicatorInstance.maxSecsToWaitOnPollAndRead); // if we are not doing anything, then we should not clog the CPU
+            Thread.sleep(Replicator.maxSecsToWaitOnPollAndRead); // if we are not doing anything, then we should not clog the CPU
           }
         }
       } catch (InterruptedException e) {
@@ -259,7 +275,6 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
       return -1;
     }
     int numberOfSuccessfullyIndexedChanges = 0;
-    logger.atFiner().log("RC looking for index files...");
     File[] listFiles = indexEventsDirectory.listFiles(indexEventsToRetryFileFilter);
 
     //  listFiles can be null if the directory has disappeared, if it's not readable or if too many files are open!
@@ -274,18 +289,21 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
       // Read each file and create a list with the changes to try reindex
       List<IndexToFile> indexList = new ArrayList<>();
       for (File file : listFiles) {
-        try (InputStreamReader fileToRead = new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8)) {
-          IndexToReplicate index = gson.fromJson(fileToRead, IndexToReplicate.class);
-          if (index == null) {
-            logger.atSevere().log("fromJson method returned null for file %s", fileToRead);
+        try (InputStreamReader eventJson = new InputStreamReader(new FileInputStream(file),StandardCharsets.UTF_8)) {
+          IndexToReplicate index;
+
+          try {
+            index = gson.fromJson(eventJson, IndexToReplicate.class);
+          } catch (JsonSyntaxException e){
+            throw new InvalidEventJsonException(String.format("Index Event file contains Invalid JSON. \"%s\""
+                    , eventJson.toString()), e);
+          }          if (index == null) {
+            logger.atSevere().log("fromJson method returned null for file %s", eventJson);
             continue;
           }
 
           indexList.add(new IndexToFile(index, file));
-        } catch (JsonSyntaxException e) {
-          logger.atSevere().withCause(e).log("RC Could not decode json file %s", file);
-          Persister.moveFileToFailed(indexEventsDirectory, file);
-        } catch (IOException e) {
+        } catch (JsonSyntaxException | IOException | InvalidEventJsonException e) {
           logger.atSevere().withCause(e).log("RC Could not decode json file %s", file);
           Persister.moveFileToFailed(indexEventsDirectory, file);
         }
@@ -391,7 +409,7 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
       // add the data to index the change
       incomingChangeEventsToIndex.add(originalEvent);
       try {
-        persister.persistIfNotAlready(originalEvent);
+        persister.persistIfNotAlready(originalEvent, originalEvent.projectName);
       } catch (IOException e) {
         logger.atSevere().withCause(e).log("RC Could not persist event %s", originalEvent);
       }
@@ -420,8 +438,6 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
 
     return (PackFileEvent) gson.fromJson(event.getEvent(), eventClass);
   }
-
-
 
   // GitMS can tell Gerrit when a new packfile is available. This way Gerrit can read the packfile to cache it avoiding the
   // MissingObjectException. Gerrit will only be notified about packfiles if gitms.copy.packfile.for.gerrit is set to true.
@@ -556,9 +572,10 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
    * This will reindex changes in gerrit. Since it receives a map of changes (changeId -> IndexToReplicate) it will
    * try to understand if the index-to-replicate can be reindexed looking at the timestamp found for that ChangeId on
    * the database.
-   * If it finds that the timestamp on the db is older than the one received from the replicator, then it will wait till the
-   * db is updated. To compare the time we need to look at the Timezone of each modification since the sending gerrit can be
-   * on a different timezone and the timestamp on the database reads differently depending on the database timezone.
+   * If it finds that the timestamp on the db is older than the one received from the replicator, then it will wait
+   * until the db is updated. To compare the time we need to look at the Timezone of each modification since the
+   * sending gerrit can be on a different timezone and the timestamp on the database reads differently depending on
+   * the database timezone.
    *
    * @param mapOfChanges
    */
@@ -570,6 +587,7 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
 
     try (ReviewDb db = replicatedIndexEventsManager.getReviewDbProvider().get()) {
 
+      long startTime = System.currentTimeMillis();
       // This loop does 2 things, one drops all the deletes as they wont be reindex checked, and secondly builds up
       // the actual changes to be reindexed.
       for (IndexToReplicateComparable i : mapOfChanges.values()) {
@@ -587,6 +605,9 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
           changesOnDb.add(c);
         }
       }
+      long endTime = System.currentTimeMillis();
+      long duration = (endTime - startTime);
+      logger.atFiner().log("RC Time taken to drop deletes & fetch changes: %d", duration);
 
       logger.atFiner().log("RC Going to index %s changes...", mapOfChanges.size());
 
@@ -738,7 +759,11 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
 
   private boolean indexSingleChange(ReviewDb db, IndexToReplicate indexEvent, boolean enqueueIfUnsuccessful, boolean forceIndexing) throws OrmException {
 
+    long startTime = System.currentTimeMillis();
     Change change = getChange(db, indexEvent);
+    long endTime = System.currentTimeMillis();
+    long duration = (endTime - startTime);
+    logger.atFiner().log("RC Lookup of change.Id %d took %d",indexEvent.indexNumber, duration);
 
     if (change == null) {
       logger.atInfo().log("RC Change %d not reindexed, not found -- deleted", indexEvent.indexNumber);
@@ -962,107 +987,97 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
   /**
    * Holds information needed to index the change on the nodes, and also to make it replicate across the other nodes
    */
-  public class IndexToReplicate /*implements Comparable<IndexToReplicate>*/ {
-    public final int indexNumber;
-    public final String projectName;
-    public final Timestamp lastUpdatedOn;
-    public final long currentTime;
-    public static final long STANDARD_REINDEX_DELAY = 30 * 1000; // 30 seconds
-    public final int timeZoneRawOffset;
-    public final boolean delete;
-    public long eventTimestamp;
-    public String nodeIdentity;
+  public static class IndexToReplicate extends ReplicatedEvent {
+    public int indexNumber;
+    public String projectName;
+    public Timestamp lastUpdatedOn;
+    public long currentTime;
+    public static long STANDARD_REINDEX_DELAY = 30*1000; // 30 seconds
+    public int timeZoneRawOffset;
+    public boolean delete;
 
-    public IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn) {
-      this(indexNumber, projectName, lastUpdatedOn, System.currentTimeMillis(), getRawOffset(System.currentTimeMillis()), false);
+    IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn) {
+      super(replicatorInstance.getThisNodeIdentity());
+      final long currentTimeMs = super.getEventTimestamp();
+      setBaseMembers(indexNumber, projectName, lastUpdatedOn, currentTimeMs, getRawOffset(currentTimeMs),false);
     }
 
-    public IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, boolean delete) {
-      this(indexNumber, projectName, lastUpdatedOn, System.currentTimeMillis(), getRawOffset(System.currentTimeMillis()), delete);
+    IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, boolean delete) {
+      super(replicatorInstance.getThisNodeIdentity());
+      final long currentTimeMs = super.getEventTimestamp();
+      setBaseMembers(indexNumber, projectName, lastUpdatedOn, currentTimeMs, getRawOffset(currentTimeMs),delete);
     }
 
-    protected IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, long currentTime) {
-      this(indexNumber, projectName, lastUpdatedOn, currentTime, getRawOffset(currentTime), false);
+    IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, long currentTime) {
+      setBaseMembers(indexNumber, projectName, lastUpdatedOn, currentTime, getRawOffset(currentTime), false);
+    }
+
+    IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, long currentTime, int rawOffset, boolean delete) {
+      super(replicatorInstance.getThisNodeIdentity());
+      setBaseMembers(indexNumber, projectName, lastUpdatedOn, currentTime, rawOffset, delete);
     }
 
     private IndexToReplicate(IndexToReplicateDelayed delayed) {
-      this(delayed.indexNumber, delayed.projectName, delayed.lastUpdatedOn, delayed.currentTime, getRawOffset(delayed.currentTime), false);
+      setBaseMembers(delayed.indexNumber, delayed.projectName, delayed.lastUpdatedOn, delayed.currentTime, getRawOffset(delayed.currentTime), false);
     }
 
-    protected IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, long currentTime, int rawOffset) {
-      this(indexNumber, projectName, lastUpdatedOn, currentTime, rawOffset, false);
-    }
-
-    protected IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, long currentTime, int rawOffset, boolean delete) {
+    private void setBaseMembers(int indexNumber, String projectName, Timestamp lastUpdatedOn, long currentTime,
+                           int rawOffset, boolean delete) {
       this.indexNumber = indexNumber;
       this.projectName = projectName;
       this.lastUpdatedOn = new Timestamp(lastUpdatedOn.getTime());
       this.currentTime = currentTime;
       this.timeZoneRawOffset = rawOffset;
       this.delete = delete;
-      this.eventTimestamp = System.currentTimeMillis();
-      this.nodeIdentity = replicatorInstance.getThisNodeIdentity();
     }
 
     @Override
-    public String toString() {
-      return "IndexToReplicate{" +
-          "indexNumber=" + indexNumber +
-          ", projectName='" + projectName + '\'' +
-          ", lastUpdatedOn=" + lastUpdatedOn +
-          ", currentTime=" + currentTime +
-          ", timeZoneRawOffset=" + timeZoneRawOffset +
-          ", delete=" + delete +
-          ", eventTimestamp=" + eventTimestamp +
-          ", nodeIdentity='" + nodeIdentity + '\'' +
-          '}';
+    public boolean equals(Object o) {
+      if (this == o) { return true; }
+      if (!(o instanceof IndexToReplicate)) { return false; }
+
+      IndexToReplicate that = (IndexToReplicate) o;
+
+      if (indexNumber != that.indexNumber) { return false; }
+      if (currentTime != that.currentTime) { return false; }
+      if (timeZoneRawOffset != that.timeZoneRawOffset) { return false; }
+      if (delete != that.delete) { return false; }
+      if (!Objects.equals(projectName, that.projectName)) { return false; }
+      return Objects.equals(lastUpdatedOn, that.lastUpdatedOn);
     }
 
     @Override
     public int hashCode() {
-      int hash = 3;
-      hash = 41 * hash + this.indexNumber;
-      hash = 41 * hash + Objects.hashCode(this.projectName);
-      hash = 41 * hash + Objects.hashCode(this.lastUpdatedOn);
-      hash = 41 * hash + (int) (this.currentTime ^ (this.currentTime >>> 32));
-      return hash;
+      int result = indexNumber;
+      result = 31 * result + (projectName != null ? projectName.hashCode() : 0);
+      result = 31 * result + (lastUpdatedOn != null ? lastUpdatedOn.hashCode() : 0);
+      result = 31 * result + (int) (currentTime ^ (currentTime >>> 32));
+      result = 31 * result + timeZoneRawOffset;
+      result = 31 * result + (delete ? 1 : 0);
+      return result;
     }
 
-
     @Override
-    public boolean equals(Object obj) {
-      if (obj == null) {
-        return false;
-      }
-      if (getClass() != obj.getClass()) {
-        return false;
-      }
-      final IndexToReplicate other = (IndexToReplicate) obj;
-      if (this.indexNumber != other.indexNumber) {
-        return false;
-      }
-      if (!Objects.equals(this.projectName, other.projectName)) {
-        return false;
-      }
-      if (!Objects.equals(this.lastUpdatedOn, other.lastUpdatedOn)) {
-        return false;
-      }
-      return this.currentTime == other.currentTime;
+    public String toString() {
+      return new StringJoiner(", ", IndexToReplicate.class.getSimpleName() + "[", "]")
+              .add("indexNumber=" + indexNumber)
+              .add("projectName='" + projectName + "'")
+              .add("lastUpdatedOn=" + lastUpdatedOn)
+              .add("currentTime=" + currentTime)
+              .add("timeZoneRawOffset=" + timeZoneRawOffset)
+              .add("delete=" + delete)
+              .toString();
     }
   }
 
   /**
    * Implementation which only takes the changeNumber as main comparison operator
    */
-  public final class IndexToReplicateComparable extends IndexToReplicate implements Comparable<IndexToReplicate>, Persistable {
+  public static final class IndexToReplicateComparable extends IndexToReplicate implements Comparable<IndexToReplicate>, Persistable {
     File persistFile = null;
 
     public IndexToReplicateComparable(int indexNumber, String projectName, Timestamp lastUpdatedOn) {
       super(indexNumber, projectName, lastUpdatedOn);
-    }
-
-    public IndexToReplicateComparable(int indexNumber, String projectName, Timestamp lastUpdatedOn, long currentTime) {
-      super(indexNumber, projectName, lastUpdatedOn, currentTime);
     }
 
     public IndexToReplicateComparable(IndexToReplicate index) {

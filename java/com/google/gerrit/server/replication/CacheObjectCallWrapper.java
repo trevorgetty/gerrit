@@ -29,7 +29,11 @@ public class CacheObjectCallWrapper extends CacheKeyWrapper {
 
   @Override
   public String toString() {
-    return "CacheObjectCallWrapper{" + "methodName=" + methodName + "[ "+ super.toString() +" ]" + '}';
+    final StringBuilder sb = new StringBuilder("CacheObjectCallWrapper{");
+    sb.append("methodName='").append(methodName).append('\'');
+    sb.append(", ").append("[").append(super.toString()).append("]").append('\'');
+    sb.append('}');
+    return sb.toString();
   }
 
 }

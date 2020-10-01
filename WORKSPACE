@@ -1051,7 +1051,7 @@ maven_jar(
 )
 
 # WANdisco maven assets
-_GERRIT_GITMS_VERSION = "1.1.0.1-TC15-SNAPSHOT"
+_GERRIT_GITMS_VERSION = "1.1.0.1-TC16-SNAPSHOT"
 
 maven_jar(
     name = "gerrit-gitms-interface",

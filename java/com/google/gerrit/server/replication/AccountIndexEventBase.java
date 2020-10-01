@@ -12,13 +12,11 @@
 
 package com.google.gerrit.server.replication;
 
-public abstract class AccountIndexEventBase implements AccountIndexIdentification{
+import com.wandisco.gerrit.gitms.shared.events.ReplicatedEvent;
 
-  public long eventTimestamp;
-  public String nodeIdentity;
+public abstract class AccountIndexEventBase extends ReplicatedEvent implements AccountIndexIdentification {
 
   public AccountIndexEventBase(String nodeIdentity) {
-    this.eventTimestamp = System.currentTimeMillis();
-    this.nodeIdentity = nodeIdentity;
+    super(nodeIdentity);
   }
 }

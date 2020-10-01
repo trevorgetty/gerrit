@@ -1,6 +1,6 @@
 
 /**
- * Copyright (c) 2014-2018 WANdisco
+ * Copyright (c) 2014-2020 WANdisco
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import com.google.gerrit.extensions.events.LifecycleListener;
 import com.google.gerrit.lifecycle.LifecycleModule;
 import com.google.gerrit.reviewdb.server.ReviewDb;
 import com.google.gerrit.server.config.GerritServerConfig;
-import com.google.gerrit.server.events.*;
+import com.google.gerrit.server.events.EventBroker;
 import com.google.gerrit.server.notedb.ChangeNotes;
 import com.google.gwtorm.server.OrmException;
 import com.google.gwtorm.server.SchemaFactory;
@@ -40,7 +40,12 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import static com.google.gerrit.server.replication.ReplicationConstants.*;
+
+import static com.google.gerrit.server.replication.ReplicationConstants.DEFAULT_MAX_SECS_TO_WAIT_FOR_EVENT_ON_QUEUE;
+import static com.google.gerrit.server.replication.ReplicationConstants.GERRIT_EVENT_TYPES_TO_BE_SKIPPED;
+import static com.google.gerrit.server.replication.ReplicationConstants.GERRIT_MAX_SECS_TO_WAIT_FOR_EVENT_ON_QUEUE;
+import static com.google.gerrit.server.replication.ReplicationConstants.GERRIT_REPLICATED_EVENTS_ENABLED_RECEIVE;
+import static com.google.gerrit.server.replication.ReplicationConstants.GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL;
 
 /**
  * ReplicatedEventsManager is reponsible for the replication of events via GitMS Content Delivery.

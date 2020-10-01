@@ -1,6 +1,6 @@
 
 /********************************************************************************
- * Copyright (c) 2014-2018 WANdisco
+ * Copyright (c) 2014-2020 WANdisco
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,13 +28,15 @@ import com.google.gerrit.common.data.GlobalCapability;
 import com.google.gerrit.extensions.annotations.RequiresCapability;
 import com.google.gerrit.extensions.events.LifecycleListener;
 import com.google.gerrit.server.IdentifiedUser;
-import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
+
 import com.google.gerrit.server.util.time.TimeUtil;
 import com.google.gerrit.sshd.CommandMetaData;
 import com.google.gerrit.sshd.SshCommand;
 
 import com.google.inject.Inject;
 import org.apache.sshd.server.Environment;
+
+import com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator;
 
 import java.io.IOException;
 import java.text.SimpleDateFormat;
@@ -103,10 +105,10 @@ final class ShowReplicatorStats extends SshCommand {
         "Statistic", "Sent", "Received"));
     stdout.print("---------------------------------------------------------------------------+\n");
 
-    ImmutableMultiset<EventWrapper.Originator> totalPublishedForeignEventsByType = repl.getTotalPublishedForeignEventsByType();
-    ImmutableMultiset<EventWrapper.Originator> totalPublishedLocalEventsByType = repl.getTotalPublishedLocalEventsByType();
+    ImmutableMultiset<Originator> totalPublishedForeignEventsByType = repl.getTotalPublishedForeignEventsByType();
+    ImmutableMultiset<Originator> totalPublishedLocalEventsByType = repl.getTotalPublishedLocalEventsByType();
 
-    for (EventWrapper.Originator orig : EventWrapper.Originator.values()) {
+    for (Originator orig : Originator.values()) {
       stdout.print(String.format("%-30s | %19s | %19s |\n", //
           orig + " messages:",
           totalPublishedLocalEventsByType.count(orig),

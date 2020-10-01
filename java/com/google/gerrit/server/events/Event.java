@@ -1,6 +1,6 @@
 
 /********************************************************************************
- * Copyright (c) 2014-2018 WANdisco
+ * Copyright (c) 2014-2020 WANdisco
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,8 +32,8 @@ import com.google.gerrit.server.util.time.TimeUtil;
 
 public abstract class Event {
   public final String type;
-  public long eventCreatedOn = TimeUtil.nowMs() / 1000L;
   public long eventTimestamp = System.currentTimeMillis();
+  public long eventNanoTime = System.nanoTime();
   public String nodeIdentity;
 
   /**
@@ -50,6 +50,7 @@ public abstract class Event {
     if(!Replicator.isReplicationDisabled()) {
       this.eventTimestamp = System.currentTimeMillis();
       this.nodeIdentity = Replicator.getInstance().getThisNodeIdentity();
+      this.eventNanoTime = System.nanoTime();
     }
   }
 

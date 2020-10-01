@@ -38,7 +38,11 @@ import java.io.Serializable;
 public class AccountGroupIndexEvent extends AccountIndexEventBase {
   public AccountGroup.UUID uuid;
 
-  public AccountGroupIndexEvent(AccountGroup.UUID uuid, String nodeIdentity) {
+  public AccountGroupIndexEvent(final String nodeIdentity) {
+    super(nodeIdentity);
+  }
+
+  public AccountGroupIndexEvent(AccountGroup.UUID uuid, final String nodeIdentity) {
     super(nodeIdentity);
     this.uuid=uuid;
   }
@@ -48,10 +52,12 @@ public class AccountGroupIndexEvent extends AccountIndexEventBase {
     return this.uuid;
   }
 
-
   @Override
   public String toString() {
-    return String.format("AccountGroupIndexEvent{UUID=%s, eventTimestamp=%s, nodeIdentity=%s}",
-        uuid, eventTimestamp, nodeIdentity);
+    final StringBuilder sb = new StringBuilder("AccountGroupIndexEvent{");
+    sb.append("UUID=").append(uuid);
+    sb.append(", ").append(super.toString());
+    sb.append('}');
+    return sb.toString();
   }
 }

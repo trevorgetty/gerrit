@@ -268,7 +268,11 @@ public class ProjectCacheImpl implements ProjectCache {
               Sets.union(list.get(ListKey.ALL), ImmutableSet.of(newProjectName))));
 
       if ( replicationEnabled ) {
-        ReplicatedCacheManager.replicateMethodCallFromCache(ReplicatedCacheManager.projectCache, "onCreateProjectNoReplication", newProjectName);
+        // this call is being replicated to the other nodes, but we do not want this further replicated on
+        // the other nodes so this is sent with method 'onCreateProjectNoReplication'
+        ReplicatedCacheManager.replicateMethodCallFromCache(ReplicatedCacheManager.projectCache,
+                                                            "onCreateProjectNoReplication",
+                                                            newProjectName);
       }
     } catch (ExecutionException e) {
       logger.atWarning().withCause(e).log("Cannot list available projects");

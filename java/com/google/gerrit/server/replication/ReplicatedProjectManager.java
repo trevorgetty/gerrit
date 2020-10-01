@@ -1,6 +1,16 @@
-/*
- * Copyright (c) WANdisco 2017
- */
+
+/********************************************************************************
+ * Copyright (c) 2014-2020 WANdisco
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Apache License, Version 2.0
+ *
+ ********************************************************************************/
+
 package com.google.gerrit.server.replication;
 
 import com.google.gerrit.reviewdb.client.Change;
@@ -46,14 +56,15 @@ public class ReplicatedProjectManager implements Replicator.GerritPublishable {
 
   public static void replicateProjectDeletion(String projectName, boolean preserve, String taskUuid) {
     ProjectInfoWrapper projectInfoWrapper = new ProjectInfoWrapper(projectName, preserve, taskUuid, Replicator.getInstance().getThisNodeIdentity());
-    log.info("PROJECT About to call replicated project deletion event: {},{},{}",new Object[] {projectName, preserve, taskUuid});
+    log.info("PROJECT About to call replicated project deletion event: {}, {}, {}", projectName, preserve, taskUuid);
     Replicator.getInstance().queueEventForReplication(GerritEventFactory.createReplicatedDeleteProjectEvent(projectInfoWrapper));
   }
 
   public static void replicateProjectChangeDeletion(Project project, boolean preserve, List<Change.Id> changesToBeDeleted, String taskUuid) {
     DeleteProjectChangeEvent deleteProjectChangeEvent =
         new DeleteProjectChangeEvent(project, preserve, changesToBeDeleted, taskUuid, Replicator.getInstance().getThisNodeIdentity());
-    log.info("PROJECT About to call replicated project change deletion event: {},{},{}",new Object[] {project.getName(), preserve, changesToBeDeleted, taskUuid});
+    log.info("PROJECT About to call replicated project change deletion event: {}, {}, {}, {}",
+             project.getName(), preserve, changesToBeDeleted, taskUuid);
     Replicator.getInstance().queueEventForReplication(GerritEventFactory.createReplicatedDeleteProjectChangeEvent(deleteProjectChangeEvent));
   }
 

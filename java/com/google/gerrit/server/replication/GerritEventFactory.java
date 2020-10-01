@@ -10,7 +10,11 @@ import com.google.gson.GsonBuilder;
 import com.wandisco.gerrit.gitms.shared.events.DeleteProjectMessageEvent;
 import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
 
+import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.CACHE_EVENT;
+import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.DELETE_PROJECT_EVENT;
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.DELETE_PROJECT_MESSAGE_EVENT;
+import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.GERRIT_EVENT;
+import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.INDEX_EVENT;
 
 public class GerritEventFactory {
 
@@ -24,53 +28,73 @@ public class GerritEventFactory {
       .registerTypeAdapter(Supplier.class, new SupplierDeserializer())
       .create();
 
-
-  public static EventWrapper createReplicatedChangeEvent( Event changeEvent, ReplicatedChangeEventInfo info ){
+  public static EventWrapper createReplicatedChangeEvent(Event changeEvent,
+                                                         ReplicatedChangeEventInfo info){
     String eventString = gson.toJson(changeEvent);
-    return new EventWrapper ( eventString, changeEvent.getClass().getName(), info.getProjectName(), EventWrapper.Originator.GERRIT_EVENT );
+    return new EventWrapper(eventString,
+                            changeEvent.getClass().getName(),
+                            info.getProjectName(),
+                            GERRIT_EVENT);
   }
-
 
   //This type of cache eventWrapper is for the All-Projects as projectName is null.
-  public static EventWrapper createReplicatedAllProjectsCacheEvent( CacheKeyWrapper cacheNameAndKey ){
+  public static EventWrapper createReplicatedAllProjectsCacheEvent(CacheKeyWrapper cacheNameAndKey){
     String eventString = gson.toJson(cacheNameAndKey);
-    return new EventWrapper ( eventString, cacheNameAndKey.getClass().getName(), null, EventWrapper.Originator.CACHE_EVENT );
+    return new EventWrapper(eventString,
+                            cacheNameAndKey.getClass().getName(),
+                            null,
+                            CACHE_EVENT);
   }
 
-  public static EventWrapper createReplicatedCacheEvent( String projectName, CacheKeyWrapper cacheNameAndKey ){
+  public static EventWrapper createReplicatedCacheEvent(String projectName, CacheKeyWrapper cacheNameAndKey){
     String eventString = gson.toJson(cacheNameAndKey);
-    return new EventWrapper ( eventString, cacheNameAndKey.getClass().getName(), projectName, EventWrapper.Originator.CACHE_EVENT );
+    return new EventWrapper(eventString,
+                            cacheNameAndKey.getClass().getName(),
+                            projectName,
+                            CACHE_EVENT);
   }
 
-
-  public static EventWrapper createReplicatedIndexEvent( ReplicatedIndexEventsWorker.IndexToReplicate indexToReplicate ){
+  public static EventWrapper createReplicatedIndexEvent(ReplicatedIndexEventsWorker.IndexToReplicate indexToReplicate){
     String eventString = gson.toJson(indexToReplicate);
-    return new EventWrapper ( eventString, indexToReplicate.getClass().getName(), indexToReplicate.projectName, EventWrapper.Originator.INDEX_EVENT );
+    return new EventWrapper(eventString,
+                            indexToReplicate.getClass().getName(),
+                            indexToReplicate.projectName,
+                            INDEX_EVENT);
   }
 
-
-  public static EventWrapper createReplicatedDeleteProjectChangeEvent( DeleteProjectChangeEvent deleteProjectChangeEvent ){
+  public static EventWrapper createReplicatedDeleteProjectChangeEvent(DeleteProjectChangeEvent deleteProjectChangeEvent){
     String eventString = gson.toJson(deleteProjectChangeEvent);
-    return new EventWrapper ( eventString, deleteProjectChangeEvent.getClass().getName(), deleteProjectChangeEvent.project.getName(), EventWrapper.Originator.DELETE_PROJECT_EVENT );
+    return new EventWrapper(eventString,
+                            deleteProjectChangeEvent.getClass().getName(),
+                            deleteProjectChangeEvent.project.getName(),
+                            DELETE_PROJECT_EVENT);
   }
 
-
-  public static EventWrapper createReplicatedDeleteProjectEvent( ProjectInfoWrapper projectInfoWrapper ){
+  public static EventWrapper createReplicatedDeleteProjectEvent(ProjectInfoWrapper projectInfoWrapper){
     String eventString = gson.toJson(projectInfoWrapper);
-    return new EventWrapper ( eventString, projectInfoWrapper.getClass().getName(), projectInfoWrapper.projectName, EventWrapper.Originator.DELETE_PROJECT_EVENT );
+    return new EventWrapper(eventString,
+                            projectInfoWrapper.getClass().getName(),
+                            projectInfoWrapper.projectName,
+                            DELETE_PROJECT_EVENT);
   }
-
 
   public static EventWrapper createReplicatedDeleteProjectMessageEvent(DeleteProjectMessageEvent deleteProjectMessageEvent ){
     String eventString = gson.toJson(deleteProjectMessageEvent);
-    return new EventWrapper ( eventString, deleteProjectMessageEvent.getClass().getName(), deleteProjectMessageEvent.getProject(), DELETE_PROJECT_MESSAGE_EVENT);
+    return new EventWrapper(eventString,
+                            deleteProjectMessageEvent.getClass().getName(),
+                            deleteProjectMessageEvent.getProject(),
+                            DELETE_PROJECT_MESSAGE_EVENT);
   }
 
-
   //Will create an EventWrapper for either an ACCOUNT_USER_INDEX_EVENT or a ACCOUNT_GROUP_INDEX_EVENT
-  public static EventWrapper createReplicatedAccountIndexEvent( String projectName, AccountIndexEventBase accountIndexEventBase, EventWrapper.Originator originator ){
+  public static EventWrapper createReplicatedAccountIndexEvent(String projectName,
+                                                               AccountIndexEventBase accountIndexEventBase,
+                                                               EventWrapper.Originator originator){
     String eventString = gson.toJson(accountIndexEventBase);
-    return new EventWrapper ( eventString, accountIndexEventBase.getClass().getName(), projectName, originator);
+    return new EventWrapper(eventString,
+                            accountIndexEventBase.getClass().getName(),
+                            projectName,
+                            originator);
   }
 
 }
