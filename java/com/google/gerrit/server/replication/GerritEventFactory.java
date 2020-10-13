@@ -42,7 +42,7 @@ public class GerritEventFactory {
     String eventString = gson.toJson(cacheNameAndKey);
     return new EventWrapper(eventString,
                             cacheNameAndKey.getClass().getName(),
-                            null,
+                            cacheNameAndKey.key.toString(),
                             CACHE_EVENT);
   }
 

@@ -59,14 +59,14 @@ public class Persister<T extends Persistable> {
 
   private static final FluentLogger logger = FluentLogger.forEnclosingClass();
 
-  private final PersisterFileFilter fileFilter = new PersisterFileFilter();
   private static final Gson gson = new Gson();
   private final File baseDir;
   // These values are just to do a minimal filtering
-  public static final String FIRST_PART = "Pers-";
+  public static final String FIRST_PART = "persisted_";
   public static final String LAST_PART = ".json";
   public static final String TMP_PART = ".tmp";
   private static final String PERSIST_FILE=FIRST_PART + "%s_%s_%s_%s" + LAST_PART;
+  private static final ReplicatedEventsFileFilter fileFilter = new ReplicatedEventsFileFilter(FIRST_PART);
 
   private static final long GC_NOW = 0;
   private static long lastGCTime = 0;
@@ -228,29 +228,6 @@ public class Persister<T extends Persistable> {
       }
 
       lastGCTime = currentTime;
-    }
-  }
-
-  final static class PersisterFileFilter implements FileFilter {
-
-    @Override
-    public boolean accept(File pathname) {
-      String name = pathname.getName();
-      // We want to screen out .tmp files as it may be the case that these
-      // files may exist in the directory at the time of the gerrit poll.
-      // We also don't want the file array populated with .tmp files either
-      // as this will affect the sort.
-      if (name.startsWith(FIRST_PART) && name.endsWith(TMP_PART)){
-        return false;
-      }
-
-      if (name.startsWith(FIRST_PART) && name.endsWith(LAST_PART)) {
-        return true;
-      }
-
-      logger.atSevere().log("File \"{}\" is not allowed here, remove it please ", pathname);;
-
-      return false;
     }
   }
 }

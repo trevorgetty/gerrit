@@ -31,7 +31,6 @@ import com.google.gson.GsonBuilder;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileFilter;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -117,6 +116,9 @@ public class Replicator implements Runnable {
   //event file is now following the format
   //events_<eventTimeStamp>x<eventNanoTime>_<nodeId>_<repo-sha1>_<hashOfEvent>.json
   public static final String NEXT_EVENTS_FILE = FIRST_PART_FILE_NAME + "%s_%s_%s_%s.json";
+  private static final ReplicatedEventsFileFilter incomingEventsToReplicateFileFilter =
+      new ReplicatedEventsFileFilter(FIRST_PART_FILE_NAME);
+
   public static final String TEMPORARY_FILE_EXTENSION = ".tmp";
   public static String eventsFileName = "";
   public static final String DEFAULT_BASE_DIR = System.getProperty("java.io.tmpdir");
@@ -138,7 +140,6 @@ public class Replicator implements Runnable {
   public static long minutesSinceChangeLastIndexedCheckPeriod;
 
   private static final ArrayList<String> cacheNamesNotToReload = new ArrayList<>();
-  private static final IncomingEventsToReplicateFileFilter incomingEventsToReplicateFileFilter = new IncomingEventsToReplicateFileFilter();
   private static boolean incomingEventsAreGZipped = false; // on the landing node the text maybe already unzipped by the replicator
   private static Thread eventReaderAndPublisherThread = null;
   private static File internalLogFile = null; // used for debug
@@ -991,24 +992,6 @@ public class Replicator implements Runnable {
     }
 
     return failedEvents;
-  }
-
-  final static class IncomingEventsToReplicateFileFilter implements FileFilter {
-    // These values are just to do a minimal filtering
-    static final String JSON_FILE_EXTENSION = ".json";
-
-    @Override
-    public boolean accept(File pathname) {
-      String name = pathname.getName();
-      try {
-        if (name.startsWith(FIRST_PART_FILE_NAME) && name.endsWith(JSON_FILE_EXTENSION)) {
-          return true;
-        }
-      } catch (Exception e) {
-        logger.atSevere().withCause(e).log("File %s is not allowed here, remove it please ", pathname);
-      }
-      return false;
-    }
   }
 
   /**
