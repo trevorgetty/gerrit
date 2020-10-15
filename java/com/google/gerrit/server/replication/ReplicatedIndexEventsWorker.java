@@ -74,7 +74,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritPublishable {
 
-
   private static final FluentLogger logger = FluentLogger.forEnclosingClass();
   // readonly constants
   private static final String INDEX_EVENTS_REPLICATION_THREAD_NAME = "IndexEventsReplicationThread";
@@ -170,9 +169,9 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
   /** Utility method to work out time offset with timezone
    *
    * @param currentTime
-   * @return
+   * @return timezone with offset
    */
-  public static int getRawOffset(final long currentTime) {
+  private static int getRawOffset(final long currentTime) {
     TimeZone tzDefault = TimeZone.getDefault();
 
     if (tzDefault.inDaylightTime(new Date(currentTime))) {
@@ -226,14 +225,12 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
             break;
           }
           if (sentEvents == 0 && workedChanges <= 0) {
-            Thread.sleep(Replicator.maxSecsToWaitOnPollAndRead); // if we are not doing anything, then we should not clog the CPU
+            Thread.sleep(Replicator.getMaxMillisToWaitOnPollAndRead()); // if we are not doing anything, then we should not clog the CPU
           }
         }
       } catch (InterruptedException e) {
         logger.atInfo().withCause(e).log("RC Exiting");
         finished = true;
-      } catch (RuntimeException e) {
-        logger.atSevere().withCause(e).log("RC Unexpected exception");
       } catch (Exception e) {
         logger.atSevere().withCause(e).log("RC Unexpected exception");
       }
@@ -363,7 +360,7 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
    * Puts the events in a queue which will be looked after by the IndexIncomingReplicatedEvents thread
    *
    * @param newEvent
-   * @return success
+   * @return True if successful, otherwise false.
    */
   @Override
   public boolean publishIncomingReplicatedEvents(EventWrapper newEvent) {
@@ -386,6 +383,13 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
     return success;
   }
 
+  /**
+   * Deserialise event from EventWrapper, publish to indexing queue and persist to disk.
+   *
+   * @param newEvent
+   * @return success
+   * @throws JsonSyntaxException
+   */
   private boolean unwrapAndSendIndexEvent(EventWrapper newEvent) throws JsonSyntaxException {
     boolean success = false;
     try {
@@ -425,8 +429,13 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
   }
 
 
-  //We have received an event, ensuring that the wrapped event has an origin of
-  //PACKFILE_EVENT, then returning the rebuilt PackFileEvent object from JSON.
+  /**
+   * We have received an event, ensuring that the wrapped event has an origin of
+   * PACKFILE_EVENT, then returning the rebuilt PackFileEvent object from JSON.
+   *
+   * @param event
+   * @return PackFileEvent
+   */
   private PackFileEvent getPackFileEvent(EventWrapper event) {
 
     Class<?> eventClass = null;
@@ -439,9 +448,14 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
     return (PackFileEvent) gson.fromJson(event.getEvent(), eventClass);
   }
 
-  // GitMS can tell Gerrit when a new packfile is available. This way Gerrit can read the packfile to cache it avoiding the
-  // MissingObjectException. Gerrit will only be notified about packfiles if gitms.copy.packfile.for.gerrit is set to true.
-  // This property is false by default.
+  /**
+   * GitMS can tell Gerrit when a new packfile is available. This way Gerrit can read the packfile to cache it avoiding the
+   * MissingObjectException. Gerrit will only be notified about packfiles if gitms.copy.packfile.for.gerrit is set to true.
+   * This property is false by default.
+   *
+   * @param event
+   * @return True if successful, otherwise false.
+   */
   private boolean unwrapAndReadPackFile(EventWrapper event) {
     boolean success = false;
 
@@ -532,7 +546,7 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
           //If a notifyAll is received from the replicator thread then
           //we will exit the synchronized block.
           synchronized (indexEventsAreReady) {
-            indexEventsAreReady.wait(60 * 1000);
+            indexEventsAreReady.wait(Replicator.getIndexEventsAreReadyMillisWait());
           }
           processIndexChangeCollection();
           // GER-638 : Taking the lock again to hold off the notifyAll in the replicator thread
@@ -668,6 +682,7 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
   /**
    * Get the change, as the change may be in NotesDB / ReviewDb or both we need to abstract away via the NotesFactory
    * which can deal with both cases.
+   *
    * @param db
    * @param i
    * @return
@@ -710,6 +725,7 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
    * is younger that the data read from the current database)
    *
    * @param indexEvent
+   * @return True if successful, otherwise false.
    */
   private boolean indexChange(IndexToReplicate indexEvent, boolean forceIndexing) {
 
@@ -757,6 +773,16 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
     return result;
   }
 
+  /**
+   * Index single change.
+   *
+   * @param db
+   * @param indexEvent
+   * @param enqueueIfUnsuccessful
+   * @param forceIndexing
+   * @return True if successfully indexed change or change was not found, otherwise false.
+   * @throws OrmException
+   */
   private boolean indexSingleChange(ReviewDb db, IndexToReplicate indexEvent, boolean enqueueIfUnsuccessful, boolean forceIndexing) throws OrmException {
 
     long startTime = System.currentTimeMillis();
@@ -791,7 +817,16 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
     return false;
   }
 
-  public boolean addIndexEventToUnfilteredReplicationQueue(int indexNumber, String projectName, Timestamp lastUpdatedOn, boolean deleteIndex) {
+  /**
+   * Add index event to unfiltered replication queue.
+   *
+   * @param indexNumber
+   * @param projectName
+   * @param lastUpdatedOn
+   * @param deleteIndex
+   * @return True if successful, otherwise false.
+   */
+  boolean addIndexEventToUnfilteredReplicationQueue(int indexNumber, String projectName, Timestamp lastUpdatedOn, boolean deleteIndex) {
 
     // we only take the event if it's normal replicated daemon Gerrit functioning. If it's indexing only we ignore them
     if (dontReplicateIndexEvents) {
@@ -828,7 +863,6 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
   private void enqueue(IndexToReplicate indexEvent) {
     String name = String.format("I-%s-%08d.json", indexEvent.indexNumber, counter.incrementAndGet());
 
-
     File newIndexFile = new File(indexEventsDirectory, name);
     if (!checkIndexDirectory()) {
       logger.atSevere().log("RC Cannot enqueue index events, no temp directory available");
@@ -852,7 +886,13 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
     }
   }
 
-  boolean checkIndexDirectory() {
+  /**
+   * Check indexEventsDirectory exists.
+   * If the directory does not exist, attempt to create it.
+   *
+   * @return True if directory already exists or it was successfully created, otherwise false.
+   */
+  private boolean checkIndexDirectory() {
     if (!indexEventsDirectory.exists()) {
       if (!indexEventsDirectory.mkdirs()) {
         logger.atSevere().log("RC %s path cannot be created! Index events will not work!", indexEventsDirectory.getAbsolutePath());

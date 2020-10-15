@@ -62,9 +62,9 @@ public class Persister<T extends Persistable> {
   private static final Gson gson = new Gson();
   private final File baseDir;
   // These values are just to do a minimal filtering
-  public static final String FIRST_PART = "persisted_";
-  public static final String LAST_PART = ".json";
-  public static final String TMP_PART = ".tmp";
+  private static final String FIRST_PART = "persisted_";
+  private static final String LAST_PART = ".json";
+  private static final String TMP_PART = ".tmp";
   private static final String PERSIST_FILE=FIRST_PART + "%s_%s_%s_%s" + LAST_PART;
   private static final ReplicatedEventsFileFilter fileFilter = new ReplicatedEventsFileFilter(FIRST_PART);
 
@@ -191,7 +191,7 @@ public class Persister<T extends Persistable> {
     // If we are dealing with older event files where eventNanoTime doesn't exist as part of the event
     // then we will set the eventNanoTime portion to 16 zeros, same length as a nanoTime represented as HEX.
     String eventNanoTime = eventData.getEventNanoTime() != null ?
-                           ObjectUtils.getHexStringOfLongObjectHash(Long.parseLong(eventData.getEventNanoTime())) : Replicator.DEFAULT_NANO;
+                           ObjectUtils.getHexStringOfLongObjectHash(Long.parseLong(eventData.getEventNanoTime())) : Replicator.getDefaultNano();
     String eventTimeStr = String.format("%sx%s", eventTimestamp, eventNanoTime);
     String objectHash = ObjectUtils.getHexStringOfIntObjectHash(json.hashCode());
 

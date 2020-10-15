@@ -58,14 +58,17 @@ import com.wandisco.gerrit.gitms.shared.events.EventTime;
 import com.wandisco.gerrit.gitms.shared.events.EventTimestampComparator;
 import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
 
+import static com.google.gerrit.server.replication.ReplicationConstants.DEFAULT_INDEX_EVENTS_READY_SECONDS_WAIT_TIME;
 import static com.google.gerrit.server.replication.ReplicationConstants.DEFAULT_MAX_EVENTS_PER_FILE;
 import static com.google.gerrit.server.replication.ReplicationConstants.DEFAULT_MAX_SECS_TO_WAIT_BEFORE_PROPOSING_EVENTS;
 import static com.google.gerrit.server.replication.ReplicationConstants.DEFAULT_MAX_SECS_TO_WAIT_ON_POLL_AND_READ;
 import static com.google.gerrit.server.replication.ReplicationConstants.DEFAULT_MINUTES_SINCE_CHANGE_LAST_INDEXED_CHECK_PERIOD;
 import static com.google.gerrit.server.replication.ReplicationConstants.DEFAULT_REPLICATED_INDEX_UNIQUE_CHANGES_QUEUE_WAIT_TIME;
+import static com.google.gerrit.server.replication.ReplicationConstants.DEFAULT_STATS_UPDATE_TIME;
 import static com.google.gerrit.server.replication.ReplicationConstants.GERRITMS_INTERNAL_LOGGING;
 import static com.google.gerrit.server.replication.ReplicationConstants.GERRIT_CACHE_NAMES_NOT_TO_BE_RELOADED;
 import static com.google.gerrit.server.replication.ReplicationConstants.GERRIT_EVENT_BASEPATH;
+import static com.google.gerrit.server.replication.ReplicationConstants.GERRIT_INDEX_EVENTS_READY_SECONDS_WAIT_TIME;
 import static com.google.gerrit.server.replication.ReplicationConstants.GERRIT_MAX_EVENTS_TO_APPEND_BEFORE_PROPOSING;
 import static com.google.gerrit.server.replication.ReplicationConstants.GERRIT_MAX_MS_TO_WAIT_BEFORE_PROPOSING_EVENTS;
 import static com.google.gerrit.server.replication.ReplicationConstants.GERRIT_MAX_SECS_TO_WAIT_ON_POLL_AND_READ;
@@ -110,18 +113,17 @@ public class Replicator implements Runnable {
   private static final FluentLogger logger = FluentLogger.forEnclosingClass();
 
   public static final String ENC = "UTF-8"; // From BaseCommand
-
-  public static final String DEFAULT_NANO = "0000000000000000";
-  public static final String FIRST_PART_FILE_NAME = "events_";
+  private static final String DEFAULT_NANO = "0000000000000000";
+  private static final String FIRST_PART_FILE_NAME = "events_";
   //event file is now following the format
   //events_<eventTimeStamp>x<eventNanoTime>_<nodeId>_<repo-sha1>_<hashOfEvent>.json
-  public static final String NEXT_EVENTS_FILE = FIRST_PART_FILE_NAME + "%s_%s_%s_%s.json";
+  private static final String NEXT_EVENTS_FILE = FIRST_PART_FILE_NAME + "%s_%s_%s_%s.json";
   private static final ReplicatedEventsFileFilter incomingEventsToReplicateFileFilter =
       new ReplicatedEventsFileFilter(FIRST_PART_FILE_NAME);
 
-  public static final String TEMPORARY_FILE_EXTENSION = ".tmp";
-  public static String eventsFileName = "";
-  public static final String DEFAULT_BASE_DIR = System.getProperty("java.io.tmpdir");
+  private static final String TEMPORARY_FILE_EXTENSION = ".tmp";
+  private static String eventsFileName = "";
+  private static final String DEFAULT_BASE_DIR = System.getProperty("java.io.tmpdir");
 
   private static File replicatedEventsBaseDirectory = null;
   private static File outgoingReplEventsDirectory = null;
@@ -133,11 +135,11 @@ public class Replicator implements Runnable {
   // as shown by statistics this means less than 2K gzipped proposals
   private static int maxNumberOfEventsBeforeProposing;
 
-  //Wait time variables in milliSeconds
-  private static long maxSecsToWaitBeforeProposingEvents;
-  public static long maxSecsToWaitOnPollAndRead;
-  public static long replicatedIndexUniqueChangesQueueWaitTime;
-  public static long minutesSinceChangeLastIndexedCheckPeriod;
+  private static long maxMillisToWaitBeforeProposingEvents;
+  private static long maxMillisToWaitOnPollAndRead;
+  private static long replicatedIndexUniqueChangesQueueWaitTime;
+  private static long minutesSinceChangeLastIndexedCheckPeriod;
+  private static long indexEventsAreReadyMillisWait;
 
   private static final ArrayList<String> cacheNamesNotToReload = new ArrayList<>();
   private static boolean incomingEventsAreGZipped = false; // on the landing node the text maybe already unzipped by the replicator
@@ -148,7 +150,7 @@ public class Replicator implements Runnable {
 
   // A flag, which allow there to be no application properties and for us to behave like a normal vanilla non replicated environment.
   private static Boolean replicationDisabled = null;
-  public static boolean internalLogEnabled = false;
+  private static boolean internalLogEnabled = false;
 
   private static GitMsApplicationProperties applicationProperties = null;
   private static final Object applicationPropertiesLocking = new Object();
@@ -172,7 +174,7 @@ public class Replicator implements Runnable {
   private boolean finished = false;
 
   //Statistics used by ShowReplicatorStats
-  public static class Stats {
+  private static class Stats {
     private static long totalPublishedForeignEventsProsals = 0;
     private static long totalPublishedForeignEvents = 0;
     private static long totalPublishedForeignGoodEvents = 0;
@@ -191,7 +193,6 @@ public class Replicator implements Runnable {
     private static long lastCheckedOutgoingDirTime = 0;
     private static int lastIncomingDirValue = -1;
     private static int lastOutgoingDirValue = -1;
-    public static long DEFAULT_STATS_UPDATE_TIME = 20000L;
   }
 
   /**
@@ -321,12 +322,24 @@ public class Replicator implements Runnable {
     }
   }
 
-  public File getIndexingEventsDirectory() {
+  static String getDefaultNano() {
+    return DEFAULT_NANO;
+  }
+
+  File getIndexingEventsDirectory() {
     return indexingEventsDirectory;
   }
 
-  public File getIncomingPersistedReplEventsDirectory() {
+  File getIncomingPersistedReplEventsDirectory() {
     return incomingPersistedReplEventsDirectory;
+  }
+
+  static long getMaxMillisToWaitOnPollAndRead() {
+    return maxMillisToWaitOnPollAndRead;
+  }
+
+  static long getIndexEventsAreReadyMillisWait() {
+    return indexEventsAreReadyMillisWait;
   }
 
   /**
@@ -387,7 +400,7 @@ public class Replicator implements Runnable {
           boolean published = readAndPublishIncomingEvents();
           //if one of these is true, it will not sleep.
           if (!eventGot && !published) {
-            Thread.sleep(maxSecsToWaitOnPollAndRead);
+            Thread.sleep(maxMillisToWaitOnPollAndRead);
           }
         }
       } catch (InterruptedException e) {
@@ -463,7 +476,7 @@ public class Replicator implements Runnable {
     int result = -1;
     if (incomingReplEventsDirectory != null) {
       long now = System.currentTimeMillis();
-      if (now - Stats.lastCheckedIncomingDirTime > Stats.DEFAULT_STATS_UPDATE_TIME) {
+      if (now - Stats.lastCheckedIncomingDirTime > DEFAULT_STATS_UPDATE_TIME) {
         // we cache the last result for DEFAULT_STATS_UPDATE_TIME ms, so that continuous requests do not disturb
         File[] listFilesResult = incomingReplEventsDirectory.listFiles();
         if (listFilesResult != null) {
@@ -480,7 +493,7 @@ public class Replicator implements Runnable {
     int result = -1;
     if (outgoingReplEventsDirectory != null) {
       long now = System.currentTimeMillis();
-      if (now - Stats.lastCheckedOutgoingDirTime > Stats.DEFAULT_STATS_UPDATE_TIME) {
+      if (now - Stats.lastCheckedOutgoingDirTime > DEFAULT_STATS_UPDATE_TIME) {
         // we cache the last result for DEFAULT_STATS_UPDATE_TIME ms, so that continuous requests do not disturb
         File[] listFilesResult = outgoingReplEventsDirectory.listFiles();
         if (listFilesResult != null) {
@@ -575,7 +588,7 @@ public class Replicator implements Runnable {
    */
   public boolean waitBeforeProposingExpired() {
     long periodOfNoWrites = System.currentTimeMillis() - lastWriteTime;
-    return (periodOfNoWrites >= maxSecsToWaitBeforeProposingEvents);
+    return (periodOfNoWrites >= maxMillisToWaitBeforeProposingEvents);
   }
 
   /**
@@ -1084,12 +1097,12 @@ public class Replicator implements Runnable {
           cleanLforLong(props.getProperty(GERRIT_MAX_EVENTS_TO_APPEND_BEFORE_PROPOSING, DEFAULT_MAX_EVENTS_PER_FILE)));
 
       //Configurable for the maximum amount of seconds to wait before proposing events in the outgoing events file.
-      maxSecsToWaitBeforeProposingEvents = Long.parseLong(
+      maxMillisToWaitBeforeProposingEvents = Long.parseLong(
           cleanLforLongAndConvertToMilliseconds(props.getProperty(GERRIT_MAX_MS_TO_WAIT_BEFORE_PROPOSING_EVENTS,
               DEFAULT_MAX_SECS_TO_WAIT_BEFORE_PROPOSING_EVENTS)));
 
       //Configurable for the wait time for threads waiting on an event to be received and published.
-      maxSecsToWaitOnPollAndRead = Long.parseLong(
+      maxMillisToWaitOnPollAndRead = Long.parseLong(
           cleanLforLongAndConvertToMilliseconds(props.getProperty(GERRIT_MAX_SECS_TO_WAIT_ON_POLL_AND_READ,
               DEFAULT_MAX_SECS_TO_WAIT_ON_POLL_AND_READ)));
 
@@ -1102,6 +1115,13 @@ public class Replicator implements Runnable {
       //if it has been in the queue more than the specified check period. Default is 1 hour.
       minutesSinceChangeLastIndexedCheckPeriod = TimeUnit.MINUTES.toMillis(Long.parseLong(
           props.getProperty(GERRIT_MINUTES_SINCE_CHANGE_LAST_INDEXED_CHECK_PERIOD, DEFAULT_MINUTES_SINCE_CHANGE_LAST_INDEXED_CHECK_PERIOD)));
+
+      //Tunable for wait in ReplicatedIndexEventsManager for synchronized block
+      //i.e, instance.indexEventsAreReady.wait(60*1000) is now instance.indexEventsAreReady.wait(Replicator.indexEventsAreReadySecondsWait)
+      //Default is 60 seconds
+      indexEventsAreReadyMillisWait = Long.parseLong(
+          cleanLforLongAndConvertToMilliseconds(props.getProperty(GERRIT_INDEX_EVENTS_READY_SECONDS_WAIT_TIME,
+              DEFAULT_INDEX_EVENTS_READY_SECONDS_WAIT_TIME)));
 
       logger.atInfo().log("Property %s=%s", new Object[]{GERRIT_REPLICATED_EVENTS_BASEPATH, defaultBaseDir});
 

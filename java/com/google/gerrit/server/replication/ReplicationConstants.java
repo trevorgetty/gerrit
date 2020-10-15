@@ -23,7 +23,7 @@ public final class ReplicationConstants {
   public static final String GERRIT_MAX_SECS_TO_WAIT_ON_POLL_AND_READ = "gerrit.max.secs.to.wait.on.poll.and.read";
   public static final String GERRIT_REPLICATED_INDEX_UNIQUE_CHANGES_QUEUE_WAIT_TIME = "gerrit.replicated.index.unique.changes.queue.wait.time";
   public static final String GERRIT_MINUTES_SINCE_CHANGE_LAST_INDEXED_CHECK_PERIOD = "gerrit.minutes.since.change.last.indexed.check.period";
-
+  public static final String GERRIT_INDEX_EVENTS_READY_SECONDS_WAIT_TIME = "gerrit.index.events.ready.seconds.wait.time";
 
   //Events can be skipped by providing a comma seperated list of event types.
   //e.g, TopicChangedEvent, ReviewerDeletedEvent, ReviewerUpdatedEvent
@@ -31,8 +31,6 @@ public final class ReplicationConstants {
 
   public static final String GERRIT_REPLICATED_EVENTS_ENABLED_RECEIVE = "gerrit.replicated.events.enabled.receive";
   public static final String GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL = "gerrit.replicated.events.enabled.receive.original";
-  public static final String GERRIT_REPLICATED_EVENTS_RECEIVE_DISTINCT = "gerrit.replicated.events.enabled.receive.distinct";
-  public static final String GERRIT_REPLICATED_EVENTS_LOCAL_REPUBLISH_DISTINCT = "gerrit.replicated.events.enabled.local.republish.distinct";
   public static final String GERRIT_MAX_SECS_TO_WAIT_FOR_EVENT_ON_QUEUE = "gerrit.replicated.events.secs.on.queue";
 
   public static final String DEFAULT_BYTE_ENCODING = "UTF-8"; // From BaseCommand
@@ -70,6 +68,8 @@ public final class ReplicationConstants {
   public static final String DEFAULT_MAX_SECS_TO_WAIT_ON_POLL_AND_READ = "1";
   public static final String DEFAULT_REPLICATED_INDEX_UNIQUE_CHANGES_QUEUE_WAIT_TIME = "20";
   public static final String DEFAULT_MINUTES_SINCE_CHANGE_LAST_INDEXED_CHECK_PERIOD = "60";
+  public static final String DEFAULT_INDEX_EVENTS_READY_SECONDS_WAIT_TIME = "60";
 
-
+  // Stats
+  public static long DEFAULT_STATS_UPDATE_TIME = 20000L;
 }
