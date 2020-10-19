@@ -23,6 +23,7 @@ current_dir := $PWD
 # Gerrit repo root can be set to the mkfile path location
 GERRIT_ROOT= $(mkfile_path)
 GERRIT_BAZELCACHE_PATH := $(shell echo $(realpath $(shell echo ~/.gerritcodereview/bazel-cache)))
+GERRIT_BAZEL_BASE_PATH := $(shell bazelisk info output_base 2> /dev/null)
 
 # JENKINS_WORKSPACE is the location where the job puts work by default, and we need to have assets paths relative
 # to the workspace in some occasions.
@@ -122,8 +123,12 @@ clean: | $(testing_location)
 	@echo "************ Clean Phase Starting **************"
 	bazelisk clean
 	rm -rf $(GERRIT_BAZEL_OUT)
-	rm -rf $(GERRIT_TEST_LOCATION)/jgit-update-service
 	rm -f $(GERRIT_ROOT)/env.properties
+
+	@# Clear jgit artifacts from test location, if known.
+	$(if $(GERRIT_TEST_LOCATION), \
+        rm -rf $(GERRIT_TEST_LOCATION)/jgit-update-service, \
+        @echo "GERRIT_TEST_LOCATION not set, skipping.")
 
 	@# we should think about only doing this with a force flag, but for now always wipe the cache - only way to be sure!!
 	@echo cache located here: $(GERRIT_BAZELCACHE_PATH)
@@ -132,15 +137,28 @@ clean: | $(testing_location)
 	@echo
 	@echo "Deleting JGit cached assets.."
 	@ls $(GERRIT_BAZELCACHE_PATH)/downloaded-artifacts/*jgit*
-	@rm -fr $(GERRIT_BAZELCACHE_PATH)/downloaded-artifacts/*jgit*
+	@rm -rf $(GERRIT_BAZELCACHE_PATH)/downloaded-artifacts/*jgit*
 	@echo
 	@echo "Deleting Gerrit-GitMS-Interface cached assets..."
 	@ls $(GERRIT_BAZELCACHE_PATH)/downloaded-artifacts/*gitms*
-	@rm -fr $(GERRIT_BAZELCACHE_PATH)/downloaded-artifacts/*gitms*
+	@rm -rf $(GERRIT_BAZELCACHE_PATH)/downloaded-artifacts/*gitms*
 
 	@echo "************ Clean Phase Finished **************"
 
 .PHONY:clean
+
+nuclear-clean: clean
+	$(if $(GERRIT_BAZEL_BASE_PATH),,$(error GERRIT_BAZEL_BASE_PATH is not set))
+
+	@echo "******** !! Nuclear Clean Starting !! **********"
+	@echo Bazel output base path located here: $(GERRIT_BAZEL_BASE_PATH)
+
+	@# Clear bazel base output directory containing linked bazel-(out|bin|gerrit):
+	@echo "Deleting Bazel output base path..."
+	@rm -rf $(GERRIT_BAZEL_BASE_PATH)
+	@echo "******** !! Nuclear Clean Finished !! **********"
+
+.PHONY:nuclear-clean
 
 list-assets:
 	@echo "************ List Assets Starting **************"
