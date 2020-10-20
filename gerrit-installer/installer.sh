@@ -838,7 +838,7 @@ function get_config_from_user() {
   set_property "gerrit.replicated.cache.enabled" "$GERRIT_REPLICATED_CACHE_ENABLED"
 
   ## Array of caches we do not wish to reload.  We need to deal with fresh install / upgrade scenarios and user changes to this field.
-  CACHE_NAMES_NOT_TO_RELOAD=(changes projects groups_byinclude groups_byname groups_byuuid groups_external groups_members)
+  CACHE_NAMES_NOT_TO_RELOAD=(changes projects groups_byinclude groups_byname groups_byuuid groups_external groups_members groups_bysubgroup groups_bymember)
 
   if [ -z "$GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD" ]; then
     # to avoid keeping 2 lists of same info, just build from our array above.

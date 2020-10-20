@@ -121,7 +121,8 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
       return cacheEvictList;
     }
     cacheEvictList = new ArrayList<>(Arrays.asList("sshkeys", "accounts", "accounts_byname", "accounts_byemail",
-        "groups", "groups_byinclude", "groups_byname", "groups_byuuid", "groups_external", "groups_members"));
+        "groups", "groups_byinclude", "groups_byname", "groups_byuuid", "groups_external", "groups_members",
+        "groups_bysubgroup", "groups_bymember"));
     return cacheEvictList;
   }
 
