@@ -18,7 +18,6 @@ import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 
 import java.io.File;
-import java.io.FileFilter;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -30,10 +29,13 @@ import java.util.List;
 
 import com.wandisco.gerrit.gitms.shared.events.GerritEventData;
 import com.wandisco.gerrit.gitms.shared.events.exceptions.InvalidEventJsonException;
+import com.wandisco.gerrit.gitms.shared.events.filter.EventFileFilter;
 import com.wandisco.gerrit.gitms.shared.util.ObjectUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+import static com.wandisco.gerrit.gitms.shared.events.filter.EventFileFilter.DEFAULT_NANO;
+import static com.wandisco.gerrit.gitms.shared.events.filter.EventFileFilter.EVENT_FILE_NAME_FORMAT;
+import static com.wandisco.gerrit.gitms.shared.events.filter.EventFileFilter.PERSISTED_EVENT_FILE_PREFIX;
+import static com.wandisco.gerrit.gitms.shared.events.filter.EventFileFilter.TEMPORARY_EVENT_FILE_EXTENSION;
 import static com.wandisco.gerrit.gitms.shared.util.StringUtils.getProjectNameSha1;
 
 
@@ -61,12 +63,8 @@ public class Persister<T extends Persistable> {
 
   private static final Gson gson = new Gson();
   private final File baseDir;
-  // These values are just to do a minimal filtering
-  private static final String FIRST_PART = "persisted_";
-  private static final String LAST_PART = ".json";
-  private static final String TMP_PART = ".tmp";
-  private static final String PERSIST_FILE=FIRST_PART + "%s_%s_%s_%s" + LAST_PART;
-  private static final ReplicatedEventsFileFilter fileFilter = new ReplicatedEventsFileFilter(FIRST_PART);
+
+  private static final EventFileFilter fileFilter = new EventFileFilter(PERSISTED_EVENT_FILE_PREFIX);
 
   private static final long GC_NOW = 0;
   private static long lastGCTime = 0;
@@ -167,7 +165,7 @@ public class Persister<T extends Persistable> {
   public void persist(T obj, String projectName) throws IOException {
     final String json = gson.toJson(obj)+'\n';
 
-    File tempFile = File.createTempFile(FIRST_PART, TMP_PART, baseDir);
+    File tempFile = File.createTempFile(PERSISTED_EVENT_FILE_PREFIX, TEMPORARY_EVENT_FILE_EXTENSION, baseDir);
     try (FileOutputStream writer = new FileOutputStream(tempFile,true)) {
       writer.write(json.getBytes(StandardCharsets.UTF_8));
     }
@@ -191,13 +189,14 @@ public class Persister<T extends Persistable> {
     // If we are dealing with older event files where eventNanoTime doesn't exist as part of the event
     // then we will set the eventNanoTime portion to 16 zeros, same length as a nanoTime represented as HEX.
     String eventNanoTime = eventData.getEventNanoTime() != null ?
-                           ObjectUtils.getHexStringOfLongObjectHash(Long.parseLong(eventData.getEventNanoTime())) : Replicator.getDefaultNano();
+                           ObjectUtils.getHexStringOfLongObjectHash(Long.parseLong(eventData.getEventNanoTime())) : DEFAULT_NANO;
     String eventTimeStr = String.format("%sx%s", eventTimestamp, eventNanoTime);
     String objectHash = ObjectUtils.getHexStringOfIntObjectHash(json.hashCode());
 
     //The persisted events file is the same as an event file except it starts with persisted instead
     //of event. The format of the file will be persisted_<eventTimestamp>x<eventNanoTime>_<nodeId>_<projectNameSha1>_<hashcode>.json
-    File persistFile = new File(baseDir, String.format(PERSIST_FILE,
+    File persistFile = new File(baseDir, String.format(EVENT_FILE_NAME_FORMAT,
+                                                       PERSISTED_EVENT_FILE_PREFIX,
                                                        eventTimeStr,
                                                        eventData.getNodeIdentity(),
                                                        getProjectNameSha1(projectName),

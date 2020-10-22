@@ -78,15 +78,17 @@ import static com.google.gerrit.server.replication.ReplicationConstants.GERRIT_R
 import static com.google.gerrit.server.replication.ReplicationConstants.GERRIT_REPLICATED_EVENTS_INCOMING_ARE_GZIPPED;
 import static com.google.gerrit.server.replication.ReplicationConstants.GERRIT_REPLICATED_INDEX_UNIQUE_CHANGES_QUEUE_WAIT_TIME;
 import static com.google.gerrit.server.replication.ReplicationConstants.GERRIT_REPLICATION_THREAD_NAME;
-import static com.google.gerrit.server.replication.ReplicationConstants.INCOMING_DIR;
 import static com.google.gerrit.server.replication.ReplicationConstants.INCOMING_PERSISTED_DIR;
 import static com.google.gerrit.server.replication.ReplicationConstants.INDEXING_DIR;
-import static com.google.gerrit.server.replication.ReplicationConstants.OUTGOING_DIR;
-import static com.google.gerrit.server.replication.ReplicationConstants.REPLICATED_EVENTS_DIRECTORY_NAME;
 import static com.google.gerrit.server.replication.ReplicationConstants.REPLICATION_DISABLED;
+import static com.wandisco.gerrit.gitms.shared.ReplicationConstants.EVENT_FILE_ENCODING;
+import static com.wandisco.gerrit.gitms.shared.ReplicationConstants.INCOMING_DIR;
+import static com.wandisco.gerrit.gitms.shared.ReplicationConstants.OUTGOING_DIR;
+import static com.wandisco.gerrit.gitms.shared.ReplicationConstants.REPLICATED_EVENTS_DIR;
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator;
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.DELETE_PROJECT_MESSAGE_EVENT;
 
+import com.wandisco.gerrit.gitms.shared.events.filter.EventFileFilter;
 import com.wandisco.gerrit.gitms.shared.exception.ConfigurationException;
 import com.wandisco.gerrit.gitms.shared.events.GerritEventData;
 import com.wandisco.gerrit.gitms.shared.events.exceptions.InvalidEventJsonException;
@@ -94,6 +96,10 @@ import com.wandisco.gerrit.gitms.shared.properties.GitMsApplicationProperties;
 import com.wandisco.gerrit.gitms.shared.util.ObjectUtils;
 import org.eclipse.jgit.lib.Config;
 
+import static com.wandisco.gerrit.gitms.shared.events.filter.EventFileFilter.DEFAULT_NANO;
+import static com.wandisco.gerrit.gitms.shared.events.filter.EventFileFilter.EVENT_FILE_NAME_FORMAT;
+import static com.wandisco.gerrit.gitms.shared.events.filter.EventFileFilter.EVENT_FILE_PREFIX;
+import static com.wandisco.gerrit.gitms.shared.events.filter.EventFileFilter.TEMPORARY_EVENT_FILE_EXTENSION;
 import static com.wandisco.gerrit.gitms.shared.util.StringUtils.getProjectNameSha1;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.nio.file.StandardOpenOption.APPEND;
@@ -112,16 +118,9 @@ import static java.nio.file.StandardOpenOption.CREATE;
 public class Replicator implements Runnable {
   private static final FluentLogger logger = FluentLogger.forEnclosingClass();
 
-  public static final String ENC = "UTF-8"; // From BaseCommand
-  private static final String DEFAULT_NANO = "0000000000000000";
-  private static final String FIRST_PART_FILE_NAME = "events_";
-  //event file is now following the format
-  //events_<eventTimeStamp>x<eventNanoTime>_<nodeId>_<repo-sha1>_<hashOfEvent>.json
-  private static final String NEXT_EVENTS_FILE = FIRST_PART_FILE_NAME + "%s_%s_%s_%s.json";
-  private static final ReplicatedEventsFileFilter incomingEventsToReplicateFileFilter =
-      new ReplicatedEventsFileFilter(FIRST_PART_FILE_NAME);
+  private static final EventFileFilter incomingEventsToReplicateFileFilter =
+      new EventFileFilter(EVENT_FILE_PREFIX);
 
-  private static final String TEMPORARY_FILE_EXTENSION = ".tmp";
   private static String eventsFileName = "";
   private static final String DEFAULT_BASE_DIR = System.getProperty("java.io.tmpdir");
 
@@ -320,10 +319,6 @@ public class Replicator implements Runnable {
         logger.atInfo().log("Subscriber removed of type %s", eventType);
       }
     }
-  }
-
-  static String getDefaultNano() {
-    return DEFAULT_NANO;
   }
 
   File getIndexingEventsDirectory() {
@@ -560,7 +555,7 @@ public class Replicator implements Runnable {
       }
       //If the project is the same, write the file
       final String wrappedEvent = gson.toJson(originalEvent) + '\n';
-      byte[] bytes = wrappedEvent.getBytes(ENC);
+      byte[] bytes = wrappedEvent.getBytes(EVENT_FILE_ENCODING);
 
       logger.atFine().log("RE Last json to be sent: %s", wrappedEvent);
       Stats.totalPublishedLocalEventsBytes += bytes.length;
@@ -698,11 +693,15 @@ public class Replicator implements Runnable {
     //event file is now following the format
     //events_<eventTimeStamp>x<eventNanoTime>_<nodeId>_<repo-sha1>_<hashOfEventContents>.json
 
-    //The NEXT_EVENTS_FILE variable is formatted with the timestamp and nodeId of the event and
+    //The EVENT_FILE_NAME_FORMAT variable is formatted with the prefix, time string, nodeId of the event and
     //a sha1 of the project name. This ensures that it will remain unique under heavy load across projects.
     //Note that a project name includes everything below the root so for example /path/subpath/repo01 is a valid project name.
-    eventsFileName = String.format(NEXT_EVENTS_FILE, eventTimeStr, eventData.getNodeIdentity(),
-                                   getProjectNameSha1(originalEvent.getProjectName()), objectHash);
+    eventsFileName = String.format(EVENT_FILE_NAME_FORMAT,
+        EVENT_FILE_PREFIX,
+        eventTimeStr,
+        eventData.getNodeIdentity(),
+        getProjectNameSha1(originalEvent.getProjectName()),
+        objectHash);
   }
 
   /**
@@ -714,7 +713,7 @@ public class Replicator implements Runnable {
     if (lastWriter == null) {
       createOutgoingEventsDir();
       if (outgoingReplEventsDirectory.exists() && outgoingReplEventsDirectory.isDirectory()) {
-        lastWriterFile = File.createTempFile(FIRST_PART_FILE_NAME, TEMPORARY_FILE_EXTENSION,
+        lastWriterFile = File.createTempFile(EVENT_FILE_PREFIX, TEMPORARY_EVENT_FILE_EXTENSION,
                                              outgoingReplEventsDirectory);
         lastWriter = new FileOutputStream(lastWriterFile, true);
         lastProjectName = null;
@@ -1084,7 +1083,7 @@ public class Replicator implements Runnable {
         if (defaultBaseDir == null) {
           defaultBaseDir = DEFAULT_BASE_DIR;
         }
-        defaultBaseDir += File.separator + REPLICATED_EVENTS_DIRECTORY_NAME;
+        defaultBaseDir += File.separator + REPLICATED_EVENTS_DIR;
       }
 
       incomingEventsAreGZipped = props.getPropertyAsBoolean(GERRIT_REPLICATED_EVENTS_INCOMING_ARE_GZIPPED, "false");

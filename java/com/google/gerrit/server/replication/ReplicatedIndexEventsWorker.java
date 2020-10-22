@@ -33,10 +33,13 @@ import com.google.gwtorm.server.OrmException;
 import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.INDEX_EVENT;
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.PACKFILE_EVENT;
+import static com.wandisco.gerrit.gitms.shared.events.filter.EventFileFilter.INDEX_EVENT_FILE_PREFIX;
+import static com.wandisco.gerrit.gitms.shared.events.filter.EventFileFilter.TEMPORARY_EVENT_FILE_EXTENSION;
 
 import com.wandisco.gerrit.gitms.shared.events.PackFileEvent;
 import com.wandisco.gerrit.gitms.shared.events.ReplicatedEvent;
 import com.wandisco.gerrit.gitms.shared.events.exceptions.InvalidEventJsonException;
+import com.wandisco.gerrit.gitms.shared.events.filter.EventFileFilter;
 import org.eclipse.jgit.lib.NullProgressMonitor;
 import org.eclipse.jgit.lib.ObjectInserter;
 import org.eclipse.jgit.lib.ProgressMonitor;
@@ -91,7 +94,7 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
   private ReplicatedIndexEventManager replicatedIndexEventsManager;
   private UniqueChangesQueue uniqueChangesQueue = null;
   private Thread indexEventReaderAndPublisherThread = null;
-  private final IndexEventsToRetryFileFilter indexEventsToRetryFileFilter = new IndexEventsToRetryFileFilter();
+  private final EventFileFilter indexEventsToRetryFileFilter = new EventFileFilter(INDEX_EVENT_FILE_PREFIX);
 
   private boolean finished = false;
   private boolean dontReplicateIndexEvents = false;
@@ -861,7 +864,7 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
    * @param indexEvent
    */
   private void enqueue(IndexToReplicate indexEvent) {
-    String name = String.format("I-%s-%08d.json", indexEvent.indexNumber, counter.incrementAndGet());
+    String name = String.format("%s%s-%08d.json", INDEX_EVENT_FILE_PREFIX, indexEvent.indexNumber, counter.incrementAndGet());
 
     File newIndexFile = new File(indexEventsDirectory, name);
     if (!checkIndexDirectory()) {
@@ -869,7 +872,7 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
     } else {
       logger.atInfo().log("RC queueing no %d", indexEvent.indexNumber);
       try {
-        File tempFile = File.createTempFile("temp", ".txt", indexEventsDirectory);
+        File tempFile = File.createTempFile("temp", TEMPORARY_EVENT_FILE_EXTENSION, indexEventsDirectory);
 
         try (FileOutputStream f = new FileOutputStream(tempFile)) {
           f.write((gson.toJson(indexEvent) + "\n").getBytes(StandardCharsets.UTF_8));
@@ -918,25 +921,6 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
 
     int getIndexNumber() {
       return indexChangeRetrier.indexNumber;
-    }
-  }
-
-  final static class IndexEventsToRetryFileFilter implements FileFilter {
-    // These values are just to do a minimal filtering
-    static final String FIRST_PART = "I-";
-    static final String LAST_PART = ".json";
-
-    @Override
-    public boolean accept(File pathname) {
-      String name = pathname.getName();
-      try {
-        if (name.startsWith(FIRST_PART) && name.endsWith(LAST_PART)) {
-          return true;
-        }
-      } catch (Exception e) {
-        logger.atSevere().withCause(e).log("RC File %s is not allowed here, remove it please ", pathname);
-      }
-      return false;
     }
   }
 

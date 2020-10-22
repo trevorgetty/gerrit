@@ -51,9 +51,6 @@ public final class ReplicationConstants {
   /**********************************
    * Replicated event directories
    */
-  public static final String REPLICATED_EVENTS_DIRECTORY_NAME = "replicated_events";
-  public static final String OUTGOING_DIR = "outgoing";
-  public static final String INCOMING_DIR = "incoming";
   public static final String INDEXING_DIR = "index_events";
   public static final String INCOMING_PERSISTED_DIR = "incoming-persisted";
 
