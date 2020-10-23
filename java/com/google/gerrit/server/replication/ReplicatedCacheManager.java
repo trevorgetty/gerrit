@@ -165,7 +165,7 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
       if (cache instanceof LoadingCache) {
         try {
           Object obj = ((LoadingCache) cache).get(key);
-          logger.atFiner().log("%s loaded into the cache (1).", obj);
+          logger.atFine().log("%s loaded into the cache (1).", obj);
           done = true;
         } catch (Exception ex) {
           logger.atSevere().withCause(ex).log(
@@ -173,7 +173,7 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
         }
       } else if (cache instanceof Cache) {
         Object obj = ((Cache) cache).getIfPresent(key);
-        logger.atFiner().log("%s loaded into the cache (2).", obj);
+        logger.atFine().log("%s loaded into the cache (2).", obj);
         done = true;
       } else {
         logger.atSevere().withCause(new Exception(
@@ -232,11 +232,11 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
 
     CacheKeyWrapper cacheKeyWrapper = new CacheKeyWrapper(cacheName, key, Replicator.getInstance().getThisNodeIdentity());
     EventWrapper eventWrapper = GerritEventFactory.createReplicatedAllProjectsCacheEvent(cacheKeyWrapper);
-    logger.atFiner().log("CACHE About to call replicated cache event: %s,%s", cacheName, key);
+    logger.atFine().log("CACHE About to call replicated cache event: %s,%s", cacheName, key);
 
     //Block to force cache update to the All-Users repo so it is triggered in sequence after event that caused the eviction.
     if(getCacheEvictList().contains(cacheName)){
-      logger.atFiner().log("CACHE User Cache event setting update against All-Users Project %s,%s", cacheName, key);
+      logger.atFine().log("CACHE User Cache event setting update against All-Users Project %s,%s", cacheName, key);
       eventWrapper = GerritEventFactory.createReplicatedCacheEvent("All-Users", cacheKeyWrapper);
     }
     Replicator.getInstance().queueEventForReplication(eventWrapper);
@@ -268,17 +268,17 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
     CacheWrapper wrapper = caches.get(cacheName);
     if (wrapper != null) {
       if (Replicator.isCacheToBeEvicted(cacheName)) {
-        logger.atFiner().log("CACHE %s to evict %s...", cacheName, key);
+        logger.atFine().log("CACHE %s to evict %s...", cacheName, key);
         evicted = wrapper.evict(key);
         // Only reload the key if the cache is to be reloaded and the key is not a wildcard
         if (Replicator.isCacheToBeReloaded(cacheName) && !key.toString().equals(evictAllWildCard)) {
-          logger.atFiner().log("CACHE %s to reload key %s...", cacheName, key);
+          logger.atFine().log("CACHE %s to reload key %s...", cacheName, key);
           reloaded = wrapper.reload(key);
         } else {
-          logger.atFiner().log("CACHE %s *not* to reload key %s...", cacheName, key);
+          logger.atFine().log("CACHE %s *not* to reload key %s...", cacheName, key);
         }
       } else {
-        logger.atFiner().log("CACHE %s to *not* to evict %s...", cacheName, key);
+        logger.atFine().log("CACHE %s to *not* to evict %s...", cacheName, key);
       }
     } else {
       logger.atSevere().log("CACHE %s not found!", cacheName);
@@ -296,10 +296,10 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
     Object obj = cacheObjects.get(cacheName);
     if (obj != null) {
       try {
-        logger.atFiner().log("Looking for method %s...", methodName);
+        logger.atFine().log("Looking for method %s...", methodName);
         Method method = obj.getClass().getMethod(methodName, key.getClass());
         method.invoke(obj, key);
-        logger.atFiner().log("Success for %s!", methodName);
+        logger.atFine().log("Success for %s!", methodName);
         result = true;
       } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException | SecurityException ex) {
         logger.atSevere().withCause(ex).log("CACHE method call has been lost, could not call %s.%s", cacheName, methodName);
@@ -329,7 +329,7 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
         }
 
         originalEvent.rebuildOriginal();
-        logger.atFiner().log("RE Original event: %s", originalEvent.toString());
+        logger.atFine().log("RE Original event: %s", originalEvent.toString());
         originalEvent.replicated = true; // not needed, but makes it clear
         originalEvent.setNodeIdentity(Replicator.getInstance().getThisNodeIdentity());
 

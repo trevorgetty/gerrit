@@ -218,7 +218,7 @@ public class ChangeIndexer {
   @SuppressWarnings("deprecation")
   private com.google.common.util.concurrent.CheckedFuture<?, IOException> indexAsyncImpl(
       Project.NameKey project, Change.Id id, boolean replicationEnabled) {
-    logger.atFiner().log("RC Going ASYNC to index %s replication: %s", id, lazy(() -> getReplicationString(replicationEnabled)));
+    logger.atFine().log("RC Going ASYNC to index %s replication: %s", id, lazy(() -> getReplicationString(replicationEnabled)));
     IndexTask task = new IndexTask(project, id, replicationEnabled);
     if (queuedIndexTasks.add(task)) {
       return submit(task);

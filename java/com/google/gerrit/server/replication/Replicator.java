@@ -549,7 +549,7 @@ public class Replicator implements Runnable {
       // written to be picked up for proposing. We do not want to write multiple events
       // to a file all for different projects.
       if (lastProjectName != null && !lastProjectName.equals(originalEvent.getProjectName())) {
-        logger.atFiner().log("Last project name seen [ %s ], new event project name is [ %s ]",
+        logger.atFine().log("Last project name seen [ %s ], new event project name is [ %s ]",
                              lastProjectName, originalEvent.getProjectName());
         //If the project is different, set a new current-events.json file and set the file ready
         setFileReady();
@@ -562,7 +562,7 @@ public class Replicator implements Runnable {
       final String wrappedEvent = gson.toJson(originalEvent) + '\n';
       byte[] bytes = wrappedEvent.getBytes(ENC);
 
-      logger.atFiner().log("RE Last json to be sent: %s", wrappedEvent);
+      logger.atFine().log("RE Last json to be sent: %s", wrappedEvent);
       Stats.totalPublishedLocalEventsBytes += bytes.length;
       Stats.totalPublishedLocalGoodEventsBytes += bytes.length;
       Stats.totalPublishedLocalGoodEvents++;
@@ -610,11 +610,11 @@ public class Replicator implements Runnable {
    */
   private void setFileReady() {
     if (writtenEventCount == 0) {
-      logger.atFiner().log("RE No events to send. Waiting...");
+      logger.atFine().log("RE No events to send. Waiting...");
       return;
     }
 
-    logger.atFiner().log("RE Closing file and renaming to be picked up");
+    logger.atFine().log("RE Closing file and renaming to be picked up");
     try {
       lastWriter.close();
     } catch (IOException ex) {
@@ -645,7 +645,7 @@ public class Replicator implements Runnable {
       lastWriteTime = System.currentTimeMillis();
       // The write has taken place so increase the writtenEventCount
       writtenEventCount++;
-      logger.atFiner().log("Number of events written to the events file is currently : [ %s ]", writtenEventCount);
+      logger.atFine().log("Number of events written to the events file is currently : [ %s ]", writtenEventCount);
       // Set projectName upon writing the file
       lastProjectName = originalEvent.getProjectName();
       // Here we are setting the events file name based on the last event to be written to the file.
@@ -769,7 +769,7 @@ public class Replicator implements Runnable {
       logger.atSevere().log("RE Could not rename file to be picked up, losing events! %s",
           lastWriterFile.getAbsolutePath());
     } else {
-      logger.atFiner().log("RE Created new file %s to be proposed", newFile.getAbsolutePath());
+      logger.atFine().log("RE Created new file %s to be proposed", newFile.getAbsolutePath());
     }
     //As we are renaming the file and syncing it with the disk,
     //this means it is officially written. We then must reset all the variables
@@ -805,12 +805,12 @@ public class Replicator implements Runnable {
         logger.atSevere().log("RE Cannot read files in directory %s. Too many files open?",
                               incomingReplEventsDirectory, new IllegalStateException("RE Cannot read files"));
       } else if (listFiles.length > 0) {
-        logger.atFiner().log("RE Found %s files", listFiles.length);
+        logger.atFine().log("RE Found %s files", listFiles.length);
 
         Arrays.sort(listFiles);
         for (File file : listFiles) {
           //Adding debug logging to allow for checking the sorting of events files
-          logger.atFiner().log("Reading incoming event file : %s", file.getName());
+          logger.atFine().log("Reading incoming event file : %s", file.getName());
           try {
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             FileInputStream plainFileReader = new FileInputStream(file);
@@ -928,7 +928,7 @@ public class Replicator implements Runnable {
    * @return number of failures
    */
   private int publishEvents(byte[] eventsBytes) {
-    logger.atFiner().log("RE Trying to publish original events...");
+    logger.atFine().log("RE Trying to publish original events...");
     Stats.totalPublishedForeignEventsBytes += eventsBytes.length;
     Stats.totalPublishedForeignEventsProsals++;
     int failedEvents = 0;

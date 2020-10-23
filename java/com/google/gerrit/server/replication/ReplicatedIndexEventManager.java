@@ -275,7 +275,7 @@ public class ReplicatedIndexEventManager implements LifecycleListener {
     //iterate over the list of changes and delete each one
     for (int i : changes) {
       indexer.delete(new Change.Id(i));
-      logger.atFiner().log("Deleted change %d", i);
+      logger.atFine().log("Deleted change %d", i);
     }
   }
 
@@ -289,7 +289,7 @@ public class ReplicatedIndexEventManager implements LifecycleListener {
     //iterate over the list of changes and delete each one
     for (Change.Id id : changes) {
       indexer.delete(id);
-      logger.atFiner().log("Deleted change %s", id.toString());
+      logger.atFine().log("Deleted change %s", id.toString());
     }
   }
 

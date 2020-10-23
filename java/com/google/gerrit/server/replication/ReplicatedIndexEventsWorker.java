@@ -280,7 +280,7 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
           "RC Directory %s cannot have files listed! (too many files open?)", indexEventsDirectory);
 
     } else if (listFiles.length > 0) {
-      logger.atFiner().log("RC Found %s files", listFiles.length);
+      logger.atFine().log("RC Found %s files", listFiles.length);
       Arrays.sort(listFiles);
 
       // Read each file and create a list with the changes to try reindex
@@ -316,7 +316,7 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
               logger.atSevere().withCause(new IllegalStateException("Cannot remove file")).log(
                   "RC Error while deleting file %s. Please remove it!", indexToFile.file);
             } else {
-              logger.atFiner().log("RC Successfully removed file %s", indexToFile.file);
+              logger.atFine().log("RC Successfully removed file %s", indexToFile.file);
             }
           }
         }
@@ -338,19 +338,19 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
     Set<Integer> done = new HashSet<>();
 
     while ((polled = localReindexQueue.poll()) != null) {
-      logger.atFiner().log("RC reindexing local %s", polled.indexNumber);
+      logger.atFine().log("RC reindexing local %s", polled.indexNumber);
       if (!done.contains(polled.indexNumber)) {
         boolean succ = indexChange(new IndexToReplicate(polled), true);
         if (!succ) {
           logger.atSevere().log("RC unexpected problem while trying to reindex local change!");
         }
         done.add(polled.indexNumber);
-        logger.atFiner().log("RC finished reindexing local %s", polled.indexNumber);
+        logger.atFine().log("RC finished reindexing local %s", polled.indexNumber);
         totalDone++;
       }
     }
     if (totalDone > 0) {
-      logger.atFiner().log("RC finished to reindex local amount of %d out of %d", totalDone, size);
+      logger.atFine().log("RC finished to reindex local amount of %d out of %d", totalDone, size);
     }
     return totalDone;
   }
@@ -409,7 +409,7 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
         logger.atSevere().log("PR Could not decode json event %s", newEvent.toString(), je);
         return success;
       }
-      logger.atFiner().log("RC Received this event from replication: %s", originalEvent);
+      logger.atFine().log("RC Received this event from replication: %s", originalEvent);
       // add the data to index the change
       incomingChangeEventsToIndex.add(originalEvent);
       try {
@@ -460,7 +460,7 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
     boolean success = false;
 
     if(event == null) {
-      logger.atFiner().log("RC : Received null event");
+      logger.atFine().log("RC : Received null event");
       return false;
     }
 
@@ -621,13 +621,13 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
       }
       long endTime = System.currentTimeMillis();
       long duration = (endTime - startTime);
-      logger.atFiner().log("RC Time taken to drop deletes & fetch changes: %d", duration);
+      logger.atFine().log("RC Time taken to drop deletes & fetch changes: %d", duration);
 
-      logger.atFiner().log("RC Going to index %s changes...", mapOfChanges.size());
+      logger.atFine().log("RC Going to index %s changes...", mapOfChanges.size());
 
       int totalDone = 0;
       int thisNodeTimeZoneOffset = getRawOffset(System.currentTimeMillis());
-      logger.atFiner().log("thisNodeTimeZoneOffset=%s", thisNodeTimeZoneOffset);
+      logger.atFine().log("thisNodeTimeZoneOffset=%s", thisNodeTimeZoneOffset);
       // compare changes from db with the changes landed from the index change replication
       for (Change changeOnDb : changesOnDb) {
         try {
@@ -635,16 +635,16 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
           // the put it back in the queue
           IndexToReplicateComparable indexToReplicate = mapOfChanges.get(changeOnDb.getId());
           int landedIndexTimeZoneOffset = indexToReplicate.timeZoneRawOffset;
-          logger.atFiner().log("landedIndexTimeZoneOffset=%d", landedIndexTimeZoneOffset);
-          logger.atFiner().log("indexToReplicate.lastUpdatedOn.getTime() = %d", indexToReplicate.lastUpdatedOn.getTime());
+          logger.atFine().log("landedIndexTimeZoneOffset=%d", landedIndexTimeZoneOffset);
+          logger.atFine().log("indexToReplicate.lastUpdatedOn.getTime() = %d", indexToReplicate.lastUpdatedOn.getTime());
 
           boolean changeIndexedMoreThanXMinutesAgo = changeIndexedLastTime(thisNodeTimeZoneOffset, indexToReplicate, landedIndexTimeZoneOffset);
-          logger.atFiner().log("changeOnDb.getLastUpdatedOn().getTime() = %d", changeOnDb.getLastUpdatedOn().getTime());
+          logger.atFine().log("changeOnDb.getLastUpdatedOn().getTime() = %d", changeOnDb.getLastUpdatedOn().getTime());
 
           Timestamp normalisedChangeTimestamp = new Timestamp(changeOnDb.getLastUpdatedOn().getTime() - thisNodeTimeZoneOffset);
           Timestamp normalisedIndexToReplicate = new Timestamp(indexToReplicate.lastUpdatedOn.getTime() - landedIndexTimeZoneOffset);
 
-          logger.atFiner().log("Comparing %s to %s. MoreThan is %s", normalisedChangeTimestamp, normalisedIndexToReplicate, changeIndexedMoreThanXMinutesAgo);
+          logger.atFine().log("Comparing %s to %s. MoreThan is %s", normalisedChangeTimestamp, normalisedIndexToReplicate, changeIndexedMoreThanXMinutesAgo);
           // reindex the change if it's more than an hour it's been in the queue, or if the timestamp on the database is newer than
           // the one in the change itself
           if (normalisedChangeTimestamp.before(normalisedIndexToReplicate) && !changeIndexedMoreThanXMinutesAgo) {
@@ -653,10 +653,10 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
           } else {
             try {
               indexer.indexNoRepl(db, changeOnDb.getProject(), changeOnDb.getId());
-              logger.atFiner().log("RC Change %s INDEXED!", changeOnDb.getChangeId());
+              logger.atFine().log("RC Change %s INDEXED!", changeOnDb.getChangeId());
               totalDone++;
               persister.deleteFileFor(indexToReplicate);
-              logger.atFiner().log("changeOnDb.getId() = %s removed from mapOfChanges", changeOnDb.getId());
+              logger.atFine().log("changeOnDb.getId() = %s removed from mapOfChanges", changeOnDb.getId());
               mapOfChanges.remove(changeOnDb.getId());
             } catch (Exception e) { // could be org.eclipse.jgit.errors.MissingObjectException
               logger.atWarning().withCause(e).log("Got '%s' while trying to reindex change. Requeuing", e.getMessage());
@@ -673,7 +673,7 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
       // because they are no longer found in the database
       persister.gcOldPersistedFiles(replicatedIndexEventsManager.getIncomingPersistedLingerTime());
 
-      logger.atFiner().log("RC Finished indexing %d changes... (%d)", mapOfChanges.size(), totalDone);
+      logger.atFine().log("RC Finished indexing %d changes... (%d)", mapOfChanges.size(), totalDone);
     } catch (OrmException e) {
       logger.atSevere().withCause(e).log("RC Error while trying to reindex change");
     }
@@ -755,7 +755,7 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
       for (IndexToFile indexToFile : indexToFileList) {
         Integer indexNumber = indexToFile.getIndexNumber();
         if (done.contains(indexNumber)) {
-          logger.atFiner().log("RC Change %s has already been INDEXED!", indexNumber);
+          logger.atFine().log("RC Change %s has already been INDEXED!", indexNumber);
           indexToFile.successFul = true;
           result++;
         } else {
@@ -789,7 +789,7 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
     Change change = getChange(db, indexEvent);
     long endTime = System.currentTimeMillis();
     long duration = (endTime - startTime);
-    logger.atFiner().log("RC Lookup of change.Id %d took %d",indexEvent.indexNumber, duration);
+    logger.atFine().log("RC Lookup of change.Id %d took %d",indexEvent.indexNumber, duration);
 
     if (change == null) {
       logger.atInfo().log("RC Change %d not reindexed, not found -- deleted", indexEvent.indexNumber);
@@ -805,10 +805,10 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
         enqueue(indexEvent);
       }
     } else {
-      logger.atFiner().log("RC Change %s can be INDEXED! (%s)", indexEvent.indexNumber, forceIndexing);
+      logger.atFine().log("RC Change %s can be INDEXED! (%s)", indexEvent.indexNumber, forceIndexing);
       try {
         indexer.indexNoRepl(db, change.getProject(), change.getId());
-        logger.atFiner().log("RC Change %s SUCCESSFULLY INDEXED!", indexEvent.indexNumber);
+        logger.atFine().log("RC Change %s SUCCESSFULLY INDEXED!", indexEvent.indexNumber);
         return true;
       } catch (IOException e) {
         logger.atSevere().withCause(e).log("RC Error while trying to reindex change %d", indexEvent.indexNumber);
@@ -837,7 +837,7 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
       try {
         IndexToReplicate indexToReplicate = new IndexToReplicate(indexNumber, projectName, lastUpdatedOn, deleteIndex);
         unfilteredQueue.add(indexToReplicate);
-        logger.atFiner().log("RC Just added %s to cache queue", indexToReplicate);
+        logger.atFine().log("RC Just added %s to cache queue", indexToReplicate);
         return true;
       } catch (IllegalStateException e) {
         // The queue is full, ...
@@ -878,7 +878,7 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
           logger.atSevere().withCause(new IOException("RC Error while renaming!")).log(
               "RC Could not rename %s to %s", tempFile, newIndexFile);
         } else {
-          logger.atFiner().log("RC Created index-event file %s", newIndexFile);
+          logger.atFine().log("RC Created index-event file %s", newIndexFile);
         }
       } catch (IOException e) {
         logger.atSevere().log("RC Error while storing the index event on the file system. Event will not be lost!");
@@ -1212,7 +1212,7 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
             }
           }
           if (eventsGot > 0) {
-            logger.atFiner().log("RC Sent %d elements from the queue", eventsGot);
+            logger.atFine().log("RC Sent %d elements from the queue", eventsGot);
           }
           // The collection (queue) of changes is effective only if many of them are collected for uniqueness.
           // So it's worth waiting in the loop to make them build up in the queue, to avoid sending duplicates around

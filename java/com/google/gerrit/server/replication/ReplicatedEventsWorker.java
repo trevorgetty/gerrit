@@ -260,7 +260,7 @@ public class ReplicatedEventsWorker implements Runnable, Replicator.GerritPublis
           return false;
         }
 
-        logger.atFiner().log("RE Original event: %s", originalEvent.toString());
+        logger.atFine().log("RE Original event: %s", originalEvent.toString());
         // All events we read in are replicated events.
         originalEvent.hasBeenReplicated = true;
 
@@ -276,7 +276,7 @@ public class ReplicatedEventsWorker implements Runnable, Replicator.GerritPublis
         return result;
       } catch (ClassNotFoundException e) {
         logger.atInfo().log(errorReplicatedEventMessage, newEvent.getEvent());
-        logger.atFiner().withCause(e).log(errorReplicatedEventMessage, newEvent.getEvent());
+        logger.atFine().withCause(e).log(errorReplicatedEventMessage, newEvent.getEvent());
         result = false;
       } catch (RuntimeException e) {
         logger.atSevere().withCause(e).log(errorReplicatedEventMessage, newEvent.getEvent());
@@ -298,21 +298,21 @@ public class ReplicatedEventsWorker implements Runnable, Replicator.GerritPublis
     ReplicatedChangeEventInfo changeEventInfo = getChangeEventInfo(newEvent);
 
     if (changeEventInfo.isSupported()) {
-      logger.atFiner().log("RE going to fire event...");
+      logger.atFine().log("RE going to fire event...");
 
       try (ReviewDb db = replicatedEventsManager.getReviewDbProvider().get()) {
         if (changeEventInfo.getChangeAttr() != null) {
-          logger.atFiner().log("RE using changeAttr: %s...", changeEventInfo.getChangeAttr());
+          logger.atFine().log("RE using changeAttr: %s...", changeEventInfo.getChangeAttr());
           // As this is a replicated event, and we are raising to listeners create without auto rebuilding of the
           // index, this stops us potentially rebuilding the index twice.  If we raise a changed event, we later
           // check for reindexing again which could rebuild a missing index (used during online migration only )
           ChangeNotes changeNotes = replicatedEventsManager.getChangeNotesFactory().createWithAutoRebuildingDisabled(
                   db, new Project.NameKey(changeEventInfo.getProjectName()), new Change.Id(changeEventInfo.getChangeAttr().number));
           Change change = changeNotes.getChange();
-          logger.atFiner().log("RE got change from db: %s", change);
+          logger.atFine().log("RE got change from db: %s", change);
           changeHookRunner.postEvent(change, (ChangeEvent) newEvent);
         } else if (changeEventInfo.getBranchName() != null) {
-          logger.atFiner().log("RE using branchName: %s", changeEventInfo.getBranchName());
+          logger.atFine().log("RE using branchName: %s", changeEventInfo.getBranchName());
           changeHookRunner.postEvent(changeEventInfo.getBranchName(), (RefEvent) newEvent);
         } else if (newEvent instanceof ProjectCreatedEvent) {
           changeHookRunner.postEvent(((ProjectCreatedEvent) newEvent));

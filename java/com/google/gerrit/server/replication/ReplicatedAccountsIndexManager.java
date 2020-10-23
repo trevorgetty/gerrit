@@ -128,10 +128,10 @@ public class ReplicatedAccountsIndexManager implements Replicator.GerritPublisha
     AccountIndexEventBase accountIndexEventBase = null;
     if (identifier instanceof Account.Id) {
       accountIndexEventBase = new AccountUserIndexEvent((Account.Id) identifier, replicatorInstance.getThisNodeIdentity());
-      logger.atFiner().log("RC Account User reindex being replicated for Id: %s ", identifier);
+      logger.atFine().log("RC Account User reindex being replicated for Id: %s ", identifier);
     } else if (identifier instanceof AccountGroup.UUID) {
       accountIndexEventBase = new AccountGroupIndexEvent((AccountGroup.UUID) identifier, replicatorInstance.getThisNodeIdentity());
-      logger.atFiner().log("RC Account Group reindex being replicated for UUID: %s ", identifier);
+      logger.atFine().log("RC Account Group reindex being replicated for UUID: %s ", identifier);
     }
     replicatorInstance.queueEventForReplication(
         GerritEventFactory.createReplicatedAccountIndexEvent("All-Users", accountIndexEventBase, originator));
@@ -143,7 +143,7 @@ public class ReplicatedAccountsIndexManager implements Replicator.GerritPublisha
     boolean result = false;
 
     if (newEvent == null) {
-      logger.atFiner().log("RC : Received null event");
+      logger.atFine().log("RC : Received null event");
       return false;
     }
     //If originator is a ACCOUNT_GROUP_INDEX_EVENT or ACCOUNT_USER_INDEX_EVENT.
