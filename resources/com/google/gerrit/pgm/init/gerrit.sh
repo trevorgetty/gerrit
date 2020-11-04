@@ -135,6 +135,10 @@ while test $# -gt 0 ; do
     GERRIT_SITE=${1##--site-path=}
     shift
     ;;
+  --props=*)
+    JAVA_PROPS=${1//--props=}
+    shift
+    ;;
 
   *)
     usage
@@ -368,6 +372,10 @@ fi
 DAEMON_OPTS=`get_config --get-all container.daemonOpt`
 if test -n "$DAEMON_OPTS" ; then
   RUN_ARGS="$RUN_ARGS $DAEMON_OPTS"
+fi
+
+if test -n "$JAVA_PROPS" ; then
+  RUN_ARGS="$JAVA_PROPS $RUN_ARGS"
 fi
 
 if test -n "$JAVA_OPTIONS" ; then
