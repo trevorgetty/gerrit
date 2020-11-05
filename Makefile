@@ -28,8 +28,14 @@ GERRIT_BAZEL_BASE_PATH := $(shell bazelisk info output_base 2> /dev/null)
 # JENKINS_WORKSPACE is the location where the job puts work by default, and we need to have assets paths relative
 # to the workspace in some occasions.
 JENKINS_WORKSPACE ?= $(GERRIT_ROOT)
-ARTIFACT_REPO := libs-staging-local
 
+# Allow customers to pass in their own test or local artifactory for deployment
+ARTIFACTORY_SERVER ?= http://artifacts.wandisco.com:8081/artifactory
+
+# Also allow us to control which repository to deploy to - e.g. libs-release / local testing repo.
+ARTIFACT_REPO ?= libs-staging-local
+
+ARTIFACTORY_DESTINATION := $(ARTIFACTORY_SERVER)/$(ARTIFACT_REPO)
 
 # Works on OSX.
 VERSION := $(shell $(GERRIT_ROOT)/build-tools/get_version_number.sh $(GERRIT_ROOT))
@@ -273,7 +279,7 @@ deploy-gerrit:
 		-Dpackaging=war \
 		-Dfile=$(RELEASE_WAR_PATH) \
 		-DrepositoryId=artifacts \
-		-Durl=http://artifacts.wandisco.com:8081/artifactory/$(ARTIFACT_REPO)
+		-Durl=$(ARTIFACTORY_DESTINATION)
 
 	#Deploying the gerritms-installer.sh to com.google.gerrit/gerritms-installer
 	mvn -X deploy:deploy-file \
@@ -282,7 +288,7 @@ deploy-gerrit:
 		-Dversion=$(VERSION) \
 		-Dfile=$(GERRITMS_INSTALLER_OUT) \
 		-DrepositoryId=artifacts \
-		-Durl=http://artifacts.wandisco.com:8081/artifactory/$(ARTIFACT_REPO)
+		-Durl=$(ARTIFACTORY_DESTINATION)
 
 	@echo "\n************ Deploy  GerritMS Finished **************"
 
@@ -302,7 +308,7 @@ deploy-console:
 	-Dpackaging=jar \
 	-Dfile=$(CONSOLE_API_RELEASE_JAR_PATH) \
 	-DrepositoryId=artifacts \
-	-Durl=http://artifacts.wandisco.com:8081/artifactory/$(ARTIFACT_REPO)
+	-Durl=$(ARTIFACTORY_DESTINATION)
 	@echo "\n************ Deploy Console-API Phase Finished **************"
 .PHONY:deploy-console
 
