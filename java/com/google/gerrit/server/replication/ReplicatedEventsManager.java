@@ -75,8 +75,7 @@ public final class ReplicatedEventsManager implements LifecycleListener {
   public void start() {
     logger.atInfo().log("Create the rep event listener now!");
 
-    ReplicatedEventsWorker worker =
-        new ReplicatedEventsWorker(this, changeHookRunner);
+    worker = new ReplicatedEventsWorker(this, changeHookRunner);
     worker.startReplicationThread();
   }
 
