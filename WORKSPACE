@@ -245,9 +245,9 @@ maven_jar(
 )
 
 maven_jar(
-    name = "flogger-log4j-backend",
-    artifact = "com.google.flogger:flogger-log4j-backend:" + FLOGGER_VERS,
-    sha1 = "17aa5e31daa1354187e14b6978597d630391c028",
+    name = "flogger-slf4j-backend",
+    artifact = "com.google.flogger:flogger-slf4j-backend:" + FLOGGER_VERS,
+    sha1 = "0d211cf0e54bf05bda275c897bb3721614410efc",
 )
 
 maven_jar(

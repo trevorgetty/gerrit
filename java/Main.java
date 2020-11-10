@@ -51,10 +51,10 @@ public final class Main {
       return;
     }
 
-    // Configure log4j backend
+    // Configure SLF4J backend
     System.setProperty(
         FLOGGER_BACKEND_PROPERTY,
-        "com.google.common.flogger.backend.log4j.Log4jBackendFactory#getInstance");
+        "com.google.common.flogger.backend.slf4j.Slf4jBackendFactory#getInstance");
   }
 
   private static double parse(String version) {
