@@ -5,8 +5,9 @@
 # be automatically started.
 
 # If you want to use this template service unit file do not directly edit
-# file in the directory. Instead, you should copy the file to "/lib/systemd/system",
-# edit the copy, then enable the service file.
+# file in the directory. Instead, you should copy the file to the standard location
+# for "systemd" unit files on your operating system distro, edit the copy, then enable
+# the service file.
 
 [Unit]
 Description=Gerrit Code Review
