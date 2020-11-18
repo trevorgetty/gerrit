@@ -96,16 +96,10 @@ public class LfsRepositoryUtilities extends Logging {
       throw new LogAndExitException(LFS_CONFIG_INFO_ERROR.getDescription() + " : Failed to get GitMS application properties. Details: ", e, LFS_CONFIG_INFO_ERROR.getCode());
     }
 
-    String repoHome = null;
-    try {
-      if (Strings.isNullOrEmpty(applicationProperties.getGerritRepoHome()))
-      {
-        throw new LogAndExitException(LFS_CONFIG_INFO_ERROR.getDescription() + " : Invalid null value for {gerrit.repo.home}.", LFS_CONFIG_INFO_ERROR.getCode());
-      }
-      repoHome = applicationProperties.getGerritRepoHome();
-    } catch (IOException e) {
-      throw new LogAndExitException(LFS_CONFIG_INFO_ERROR.getDescription() + " : A problem occurred when obtaining gitms property {gerrit.repo.home}. Details: ", e, LFS_CONFIG_INFO_ERROR.getCode());
+    if (Strings.isNullOrEmpty(applicationProperties.getGerritRepoHome())) {
+      throw new LogAndExitException(LFS_CONFIG_INFO_ERROR.getDescription() + " : Invalid null value for {gerrit.repo.home}.", LFS_CONFIG_INFO_ERROR.getCode());
     }
+    final String repoHome = applicationProperties.getGerritRepoHome();
 
     // Search for our repo in the gerrit repo home location.
     Path repoPath = Paths.get(repoHome, repositoryName);

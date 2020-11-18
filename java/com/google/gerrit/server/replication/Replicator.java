@@ -1065,83 +1065,73 @@ public class Replicator implements Runnable {
   }
 
   public static boolean readConfiguration() {
-    boolean result = false;
-    try {
-      GitMsApplicationProperties props = getApplicationProperties();
-      if (props == null) {
-        // replication is probably disabled otherwise it would have thrown an exception get out.
-        return false;
-      }
+    GitMsApplicationProperties props = getApplicationProperties();
 
-      syncFiles = props.getPropertyAsBoolean(GERRIT_REPLICATED_EVENTS_ENABLED_SYNC_FILES, "false");
+    syncFiles = props.getPropertyAsBoolean(GERRIT_REPLICATED_EVENTS_ENABLED_SYNC_FILES, "false");
 
-      // The user can set a different path specific for the replicated events. If it's not there
-      // then the usual GERRIT_EVENT_BASEPATH will be taken.
-      defaultBaseDir = props.getProperty(GERRIT_REPLICATED_EVENTS_BASEPATH);
+    // The user can set a different path specific for the replicated events. If it's not there
+    // then the usual GERRIT_EVENT_BASEPATH will be taken.
+    defaultBaseDir = props.getProperty(GERRIT_REPLICATED_EVENTS_BASEPATH);
+    if (defaultBaseDir == null) {
+      defaultBaseDir = props.getProperty(GERRIT_EVENT_BASEPATH);
       if (defaultBaseDir == null) {
-        defaultBaseDir = props.getProperty(GERRIT_EVENT_BASEPATH);
-        if (defaultBaseDir == null) {
-          defaultBaseDir = DEFAULT_BASE_DIR;
-        }
-        defaultBaseDir += File.separator + REPLICATED_EVENTS_DIR;
+        defaultBaseDir = DEFAULT_BASE_DIR;
       }
-
-      incomingEventsAreGZipped = props.getPropertyAsBoolean(GERRIT_REPLICATED_EVENTS_INCOMING_ARE_GZIPPED, "false");
-
-      //Getting the node identity that will be used to determine the originating node for each instance.
-      thisNodeIdentity = props.getProperty("node.id");
-
-      //Configurable for the maximum amount of events allowed in the outgoing events file before proposing.
-      maxNumberOfEventsBeforeProposing = Integer.parseInt(
-          cleanLforLong(props.getProperty(GERRIT_MAX_EVENTS_TO_APPEND_BEFORE_PROPOSING, DEFAULT_MAX_EVENTS_PER_FILE)));
-
-      //Configurable for the maximum amount of seconds to wait before proposing events in the outgoing events file.
-      maxMillisToWaitBeforeProposingEvents = Long.parseLong(
-          cleanLforLongAndConvertToMilliseconds(props.getProperty(GERRIT_MAX_MS_TO_WAIT_BEFORE_PROPOSING_EVENTS,
-              DEFAULT_MAX_SECS_TO_WAIT_BEFORE_PROPOSING_EVENTS)));
-
-      //Configurable for the wait time for threads waiting on an event to be received and published.
-      maxMillisToWaitOnPollAndRead = Long.parseLong(
-          cleanLforLongAndConvertToMilliseconds(props.getProperty(GERRIT_MAX_SECS_TO_WAIT_ON_POLL_AND_READ,
-              DEFAULT_MAX_SECS_TO_WAIT_ON_POLL_AND_READ)));
-
-      //Configurable for changing the wait time on building up the unique replicated index events in the unique changes queue.
-      replicatedIndexUniqueChangesQueueWaitTime = Long.parseLong(
-          cleanLforLongAndConvertToMilliseconds(props.getProperty(GERRIT_REPLICATED_INDEX_UNIQUE_CHANGES_QUEUE_WAIT_TIME,
-              DEFAULT_REPLICATED_INDEX_UNIQUE_CHANGES_QUEUE_WAIT_TIME)));
-
-      //Configurable for the time period to check since the change was last indexed, The change will need reindexed
-      //if it has been in the queue more than the specified check period. Default is 1 hour.
-      minutesSinceChangeLastIndexedCheckPeriod = TimeUnit.MINUTES.toMillis(Long.parseLong(
-          props.getProperty(GERRIT_MINUTES_SINCE_CHANGE_LAST_INDEXED_CHECK_PERIOD, DEFAULT_MINUTES_SINCE_CHANGE_LAST_INDEXED_CHECK_PERIOD)));
-
-      //Tunable for wait in ReplicatedIndexEventsManager for synchronized block
-      //i.e, instance.indexEventsAreReady.wait(60*1000) is now instance.indexEventsAreReady.wait(Replicator.indexEventsAreReadySecondsWait)
-      //Default is 60 seconds
-      indexEventsAreReadyMillisWait = Long.parseLong(
-          cleanLforLongAndConvertToMilliseconds(props.getProperty(GERRIT_INDEX_EVENTS_READY_SECONDS_WAIT_TIME,
-              DEFAULT_INDEX_EVENTS_READY_SECONDS_WAIT_TIME)));
-
-      logger.atInfo().log("Property %s=%s", new Object[]{GERRIT_REPLICATED_EVENTS_BASEPATH, defaultBaseDir});
-
-      // Replicated CACHE properties
-      try {
-        String[] tempCacheNames = props.getProperty(GERRIT_CACHE_NAMES_NOT_TO_BE_RELOADED, "invalid_cache_name").split(",");
-        for (String s : tempCacheNames) {
-          String st = s.trim();
-          if (st.length() > 0) {
-            cacheNamesNotToReload.add(st);
-          }
-        }
-      } catch (Exception e) {
-        logger.atSevere().withCause(e).log("Not able to load cache properties");
-      }
-
-      return true;
-    } catch (IOException e) {
-      logger.atSevere().withCause(e).log("While reading GerritMS properties file");
+      defaultBaseDir += File.separator + REPLICATED_EVENTS_DIR;
     }
-    return false;
+
+    incomingEventsAreGZipped = props.getPropertyAsBoolean(GERRIT_REPLICATED_EVENTS_INCOMING_ARE_GZIPPED, "false");
+
+    //Getting the node identity that will be used to determine the originating node for each instance.
+    thisNodeIdentity = props.getProperty("node.id");
+
+    //Configurable for the maximum amount of events allowed in the outgoing events file before proposing.
+    maxNumberOfEventsBeforeProposing = Integer.parseInt(
+        cleanLforLong(props.getProperty(GERRIT_MAX_EVENTS_TO_APPEND_BEFORE_PROPOSING, DEFAULT_MAX_EVENTS_PER_FILE)));
+
+    //Configurable for the maximum amount of seconds to wait before proposing events in the outgoing events file.
+    maxMillisToWaitBeforeProposingEvents = Long.parseLong(
+        cleanLforLongAndConvertToMilliseconds(props.getProperty(GERRIT_MAX_MS_TO_WAIT_BEFORE_PROPOSING_EVENTS,
+            DEFAULT_MAX_SECS_TO_WAIT_BEFORE_PROPOSING_EVENTS)));
+
+    //Configurable for the wait time for threads waiting on an event to be received and published.
+    maxMillisToWaitOnPollAndRead = Long.parseLong(
+        cleanLforLongAndConvertToMilliseconds(props.getProperty(GERRIT_MAX_SECS_TO_WAIT_ON_POLL_AND_READ,
+            DEFAULT_MAX_SECS_TO_WAIT_ON_POLL_AND_READ)));
+
+    //Configurable for changing the wait time on building up the unique replicated index events in the unique changes queue.
+    replicatedIndexUniqueChangesQueueWaitTime = Long.parseLong(
+        cleanLforLongAndConvertToMilliseconds(props.getProperty(GERRIT_REPLICATED_INDEX_UNIQUE_CHANGES_QUEUE_WAIT_TIME,
+            DEFAULT_REPLICATED_INDEX_UNIQUE_CHANGES_QUEUE_WAIT_TIME)));
+
+    //Configurable for the time period to check since the change was last indexed, The change will need reindexed
+    //if it has been in the queue more than the specified check period. Default is 1 hour.
+    minutesSinceChangeLastIndexedCheckPeriod = TimeUnit.MINUTES.toMillis(Long.parseLong(
+        props.getProperty(GERRIT_MINUTES_SINCE_CHANGE_LAST_INDEXED_CHECK_PERIOD, DEFAULT_MINUTES_SINCE_CHANGE_LAST_INDEXED_CHECK_PERIOD)));
+
+    //Tunable for wait in ReplicatedIndexEventsManager for synchronized block
+    //i.e, instance.indexEventsAreReady.wait(60*1000) is now instance.indexEventsAreReady.wait(Replicator.indexEventsAreReadySecondsWait)
+    //Default is 60 seconds
+    indexEventsAreReadyMillisWait = Long.parseLong(
+        cleanLforLongAndConvertToMilliseconds(props.getProperty(GERRIT_INDEX_EVENTS_READY_SECONDS_WAIT_TIME,
+            DEFAULT_INDEX_EVENTS_READY_SECONDS_WAIT_TIME)));
+
+    logger.atInfo().log("Property %s=%s", new Object[]{GERRIT_REPLICATED_EVENTS_BASEPATH, defaultBaseDir});
+
+    // Replicated CACHE properties
+    try {
+      String[] tempCacheNames = props.getProperty(GERRIT_CACHE_NAMES_NOT_TO_BE_RELOADED, "invalid_cache_name").split(",");
+      for (String s : tempCacheNames) {
+        String st = s.trim();
+        if (st.length() > 0) {
+          cacheNamesNotToReload.add(st);
+        }
+      }
+    } catch (Exception e) {
+      logger.atSevere().withCause(e).log("Not able to load cache properties");
+    }
+
+    return true;
   }
 
   /**

@@ -194,42 +194,31 @@ public final class ReplicatedEventsManager implements LifecycleListener {
   }
 
   private boolean readConfiguration() {
-    boolean result = false;
-    try {
-      GitMsApplicationProperties props = Replicator.getApplicationProperties();
+    GitMsApplicationProperties props = Replicator.getApplicationProperties();
 
-      // we allow no properties to be returned when the replication is disabled in an override
-      if (props == null) {
-        return false;
-      }
+    replicatedEventsSend = true; // they must be always enabled, not dependant on GERRIT_REPLICATED_EVENTS_ENABLED_SEND
+    replicatedEventsReceive = props.getPropertyAsBoolean(GERRIT_REPLICATED_EVENTS_ENABLED_RECEIVE, "true");
+    replicatedEventsReplicateOriginalEvents = props.getPropertyAsBoolean(GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL, "true");
 
-      replicatedEventsSend = true; // they must be always enabled, not dependant on GERRIT_REPLICATED_EVENTS_ENABLED_SEND
-      replicatedEventsReceive = props.getPropertyAsBoolean(GERRIT_REPLICATED_EVENTS_ENABLED_RECEIVE, "true");
-      replicatedEventsReplicateOriginalEvents = props.getPropertyAsBoolean(GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL, "true");
-
-      receiveReplicatedEventsEnabled = replicatedEventsReceive || replicatedEventsReplicateOriginalEvents;
-      replicatedEventsEnabled = receiveReplicatedEventsEnabled || replicatedEventsSend;
-      if (replicatedEventsEnabled) {
-        maxSecsToWaitForEventOnQueue = Long.parseLong(Replicator.cleanLforLongAndConvertToMilliseconds(props.getProperty(
-            GERRIT_MAX_SECS_TO_WAIT_FOR_EVENT_ON_QUEUE, DEFAULT_MAX_SECS_TO_WAIT_FOR_EVENT_ON_QUEUE)));
-        logger.atInfo().log("RE Replicated events are enabled, send: %s, receive: %s", replicatedEventsSend, receiveReplicatedEventsEnabled);
-      } else {
-        logger.atInfo().log("RE Replicated events are disabled"); // This could not apppear in the log... cause the log could not yet be ready
-      }
-
-      //Read in a comma separated list of events that should be skipped.
-      eventSkipList = props.getPropertyAsList(GERRIT_EVENT_TYPES_TO_BE_SKIPPED);
-      //Setting all to lowercase so user doesn't have to worry about correct casing.
-      eventSkipList.replaceAll(String::toLowerCase);
-
-      logger.atInfo().log("RE Replicated events: receive=%s, original=%s, send=%s ",
-          replicatedEventsReceive, replicatedEventsReplicateOriginalEvents, replicatedEventsSend);
-
-      return true;
-    } catch (IOException e) {
-      logger.atSevere().withCause(e).log("RE While reading GerritMS properties file");
+    receiveReplicatedEventsEnabled = replicatedEventsReceive || replicatedEventsReplicateOriginalEvents;
+    replicatedEventsEnabled = receiveReplicatedEventsEnabled || replicatedEventsSend;
+    if (replicatedEventsEnabled) {
+      maxSecsToWaitForEventOnQueue = Long.parseLong(Replicator.cleanLforLongAndConvertToMilliseconds(props.getProperty(
+          GERRIT_MAX_SECS_TO_WAIT_FOR_EVENT_ON_QUEUE, DEFAULT_MAX_SECS_TO_WAIT_FOR_EVENT_ON_QUEUE)));
+      logger.atInfo().log("RE Replicated events are enabled, send: %s, receive: %s", replicatedEventsSend, receiveReplicatedEventsEnabled);
+    } else {
+      logger.atInfo().log("RE Replicated events are disabled"); // This could not apppear in the log... cause the log could not yet be ready
     }
-    return false;
+
+    //Read in a comma separated list of events that should be skipped.
+    eventSkipList = props.getPropertyAsList(GERRIT_EVENT_TYPES_TO_BE_SKIPPED);
+    //Setting all to lowercase so user doesn't have to worry about correct casing.
+    eventSkipList.replaceAll(String::toLowerCase);
+
+    logger.atInfo().log("RE Replicated events: receive=%s, original=%s, send=%s ",
+        replicatedEventsReceive, replicatedEventsReplicateOriginalEvents, replicatedEventsSend);
+
+    return true;
   }
 
 }

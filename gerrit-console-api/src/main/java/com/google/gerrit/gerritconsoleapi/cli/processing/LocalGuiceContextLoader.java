@@ -115,13 +115,7 @@ public class LocalGuiceContextLoader {
      The sitePath will be the gerrit.root declared within the application.properties.
      With the sitePath declared, the Guice bindings to the application classes can be performed.
      */
-    Path gerritSitePath;
-    try {
-      gerritSitePath = Paths.get(confProps.getGerritRoot());
-    } catch (IOException e) {
-      throw new LogAndExitException(LFS_CONFIG_INFO_ERROR.getDescription() + " : Problem occurred when retrieving GitMS \"gerrit_root\" configuration. Error Details: ", e, LFS_CONFIG_INFO_ERROR.getCode());
-    }
-
+    final Path gerritSitePath = Paths.get(confProps.getGerritRoot());
 
     GuiceConfigurator configurator = new GuiceConfigurator(gerritSitePath);
     programGuiceContext = configurator.getMainInjector();
