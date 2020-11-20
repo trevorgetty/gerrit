@@ -738,9 +738,8 @@ function get_config_from_user() {
   TMP_APPLICATION_PROPERTIES="$SCRATCH/application.properties"
 
   if ! is_gitms_running; then
-    info " \033[1mERROR:\033[0m Looks like Git Multisite is not running"
-    info " Please ensure that Git Multisite is running and re-run the installer."
-    info ""
+    echo " \033[1mERROR:\033[0m Looks like Git Multisite is not running" 1>&2
+    echo " Please ensure that Git Multisite is running and re-run the installer." 1>&2
     exit 1
   fi
 
