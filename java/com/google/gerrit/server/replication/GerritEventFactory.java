@@ -1,6 +1,7 @@
 package com.google.gerrit.server.replication;
 
 import com.google.common.base.Supplier;
+import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.server.events.Event;
 import com.google.gerrit.server.events.EventDeserializer;
 import com.google.gerrit.server.events.SupplierDeserializer;
@@ -37,12 +38,25 @@ public class GerritEventFactory {
                             GERRIT_EVENT);
   }
 
-  //This type of cache eventWrapper is for the All-Projects as projectName is null.
+  /**
+   * This type of cache eventWrapper is for the All-Projects as projectName is null.
+   *
+   * NB: This is actually called for other projects too, however, as projectName comes from the key inside
+   * CacheKeyWrapper it will generally call toString to unwrap, but we know that in Gerrit it's likely to
+   * be a {@link Project.NameKey} instance which will require calling .get() instead to get the original
+   * project name string entered by the user.
+   *
+   * @param cacheNameAndKey Wrapper around cache name to affect.
+   * @return Outgoing cache event.
+   */
   public static EventWrapper createReplicatedAllProjectsCacheEvent(CacheKeyWrapper cacheNameAndKey){
-    String eventString = gson.toJson(cacheNameAndKey);
+    final String eventString = gson.toJson(cacheNameAndKey);
+    final Object key = cacheNameAndKey.key;
+    final String projectName = (key instanceof Project.NameKey) ? ((Project.NameKey)key).get() : key.toString();
+
     return new EventWrapper(eventString,
                             cacheNameAndKey.getClass().getName(),
-                            cacheNameAndKey.key.toString(),
+                            projectName,
                             CACHE_EVENT);
   }
 
