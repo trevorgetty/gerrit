@@ -113,6 +113,7 @@ java_library(
         "//lib/log:api",
         "//lib/log:json-smart",
         "//lib/log:jsonevent-layout",
+        "//lib/log:jul-to-slf4j",
         "//lib/log:log4j",
         "//lib/lucene:lucene-analyzers-common",
         "//lib/lucene:lucene-core-and-backward-codecs",

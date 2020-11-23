@@ -48,6 +48,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PatternLayout;
 import org.eclipse.jgit.lib.Config;
+import org.slf4j.bridge.SLF4JBridgeHandler;
 
 public class ErrorLogFile {
   static final String LOG_NAME = "error_log";
@@ -55,6 +56,8 @@ public class ErrorLogFile {
   static final Logger logger = Logger.getLogger(ErrorLogFile.class);
 
   public static void errorOnlyConsole() {
+    java.util.logging.LogManager.getLogManager().reset();
+    SLF4JBridgeHandler.install();
     LogManager.resetConfiguration();
 
     PatternLayout layout = new PatternLayout();

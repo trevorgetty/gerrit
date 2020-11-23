@@ -29,6 +29,13 @@ java_library(
 )
 
 java_library(
+    name = "jul-to-slf4j",
+    data = ["//lib:LICENSE-slf4j"],
+    visibility = ["//visibility:public"],
+    exports = ["@jul-to-slf4j//jar"],
+)
+
+java_library(
     name = "jcl-over-slf4j",
     data = ["//lib:LICENSE-slf4j"],
     visibility = ["//visibility:public"],
