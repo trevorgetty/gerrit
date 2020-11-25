@@ -511,6 +511,10 @@ class ReceiveCommits {
     processCommandsUnsafe(commands, progress);
     rejectRemaining(commands, INTERNAL_SERVER_ERROR);
 
+    // This sends the 'GitMS - update replicated.' message before the 'done' string of the
+    // progress monitor is sent.
+    sendOkMessage(commands);
+
     // This sends error messages before the 'done' string of the progress monitor is sent.
     // Currently, the test framework relies on this ordering to understand if pushes completed
     // successfully.
@@ -616,6 +620,13 @@ class ReceiveCommits {
     // TODO(xchangcheng): remove after migrating tools which are using this magic branch.
     if (magicBranch != null && magicBranch.publish) {
       addMessage("Pushing to refs/publish/* is deprecated, use refs/for/* instead.");
+    }
+  }
+
+  private void sendOkMessage(Collection<ReceiveCommand> commands) {
+    if (commands.stream().allMatch(c -> c.getResult() == OK)) {
+      logger.atFine().log("Handling success - no replicated errors.");
+      receivePack.sendMessage("GitMS - update replicated.");
     }
   }
 
