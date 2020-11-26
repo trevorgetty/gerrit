@@ -298,7 +298,7 @@ fi
 # Add Gerrit properties to Java VM options.
 #####################################################
 
-GERRIT_OPTIONS=`get_config --get-all container.javaOptions | tr '\n' ' '`
+GERRIT_OPTIONS=`get_config --get-all container.javaOptions | tr '\n' ' ' | sed -e 's/log4j\.Log4jBackendFactory#getInstance/slf4j.Slf4jBackendFactory#getInstance/g'`
 if test -n "$GERRIT_OPTIONS" ; then
   JAVA_OPTIONS="$JAVA_OPTIONS $GERRIT_OPTIONS"
 fi

@@ -20,12 +20,14 @@ import com.google.inject.Inject;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class InitLogging implements InitStep {
   private static final String CONTAINER = "container";
   private static final String JAVA_OPTIONS = "javaOptions";
   private static final String FLOGGER_BACKEND_PROPERTY = "flogger.backend_factory";
   private static final String FLOGGER_LOGGING_CONTEXT = "flogger.logging_context";
+  private static final String FLOGGER_BACKEND_VALUE = "com.google.common.flogger.backend.slf4j.Slf4jBackendFactory#getInstance";
 
   private final Section container;
 
@@ -37,11 +39,12 @@ public class InitLogging implements InitStep {
   @Override
   public void run() throws Exception {
     List<String> javaOptions = new ArrayList<>(Arrays.asList(container.getList(JAVA_OPTIONS)));
-    if (!isSet(javaOptions, FLOGGER_BACKEND_PROPERTY)) {
-      javaOptions.add(
-          getJavaOption(
-              FLOGGER_BACKEND_PROPERTY,
-              "com.google.common.flogger.backend.slf4j.Slf4jBackendFactory#getInstance"));
+    if (!isSet(javaOptions, FLOGGER_BACKEND_PROPERTY) || !isSLF4JLogging(javaOptions)) {
+      final List<String> duplicateLoggingConfig = javaOptions.stream()
+          .filter(op -> op.contains("-D" + FLOGGER_BACKEND_PROPERTY))
+          .collect(Collectors.toList());
+      javaOptions.removeAll(duplicateLoggingConfig);
+      javaOptions.add(getJavaOption(FLOGGER_BACKEND_PROPERTY, FLOGGER_BACKEND_VALUE));
     }
     if (!isSet(javaOptions, FLOGGER_LOGGING_CONTEXT)) {
       javaOptions.add(
@@ -50,6 +53,15 @@ public class InitLogging implements InitStep {
               "com.google.gerrit.server.logging.LoggingContext#getInstance"));
     }
     container.setList(JAVA_OPTIONS, javaOptions);
+  }
+
+  private boolean isSLF4JLogging(final List<String> javaOptions) {
+    return javaOptions.stream()
+        .anyMatch(
+            option -> {
+              return option.contains("-D" + FLOGGER_BACKEND_PROPERTY) && option.contains(FLOGGER_BACKEND_VALUE);
+            }
+        );
   }
 
   private static boolean isSet(List<String> javaOptions, String javaOptionName) {
