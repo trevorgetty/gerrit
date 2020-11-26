@@ -1116,7 +1116,7 @@ public class Replicator implements Runnable {
         cleanLforLongAndConvertToMilliseconds(props.getProperty(GERRIT_INDEX_EVENTS_READY_SECONDS_WAIT_TIME,
             DEFAULT_INDEX_EVENTS_READY_SECONDS_WAIT_TIME)));
 
-    logger.atInfo().log("Property %s=%s", new Object[]{GERRIT_REPLICATED_EVENTS_BASEPATH, defaultBaseDir});
+    logger.atInfo().log("Property %s=%s", GERRIT_REPLICATED_EVENTS_BASEPATH, defaultBaseDir);
 
     // Replicated CACHE properties
     try {
