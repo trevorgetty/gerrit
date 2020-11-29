@@ -72,6 +72,7 @@ public class ErrorLogFile {
     Logger root = LogManager.getRootLogger();
     root.removeAllAppenders();
     root.addAppender(dst);
+    root.setLevel(Level.INFO);
   }
 
   public static LifecycleListener start(Path sitePath, Config config) throws IOException {
