@@ -363,7 +363,7 @@ public class Daemon extends SiteProgram {
 
   @VisibleForTesting
   public void start() throws IOException {
-    ErrorLogFile.errorOnlyConsole();
+    ErrorLogFile.initLoggingBridge();
     if (dbInjector == null) {
       dbInjector = createDbInjector(true /* enableMetrics */, MULTI_USER);
     }
