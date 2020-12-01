@@ -184,6 +184,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.regex.Matcher;
 import java.util.stream.Stream;
+import org.apache.commons.lang.exception.ExceptionUtils;
 import org.eclipse.jgit.errors.ConfigInvalidException;
 import org.eclipse.jgit.errors.IncorrectObjectTypeException;
 import org.eclipse.jgit.errors.MissingObjectException;
@@ -630,6 +631,15 @@ class ReceiveCommits {
     }
   }
 
+  // Send the reason for the failure to perform an atomic batch update. No point attaching this to every
+  // rejected update. Only need to do this if some remaining commands are still to be rejected (i.e. result == not_attempted).
+  private void sendReplicationErrorMessage(final Collection<ReceiveCommand> commands, final String message) {
+    if (commands.stream().anyMatch(c -> c.getResult() == NOT_ATTEMPTED)) {
+      logger.atFine().log("Handling failure to replicate: %s.", message);
+      receivePack.sendMessage("error: " + message);
+    }
+  }
+
   private void sendErrorMessages() {
     if (!errors.isEmpty()) {
       logger.atFine().log("Handling error conditions: %s", errors.keySet());
@@ -666,6 +676,12 @@ class ReceiveCommits {
       logger.atFine().log("Added %d additional ref updates", added);
       bu.execute();
     } catch (UpdateException | RestApiException e) {
+      // Output the root cause to the client console once for this batch. (In the case of a single or non-atomic
+      // update the cause will already be included in the reject message of that command. sendReplicationErrorMessage will
+      // only print if there are remaining commands to reject.)
+      final Throwable rootCause = ExceptionUtils.getRootCause(e);
+      sendReplicationErrorMessage(cmds, rootCause.getMessage());
+
       rejectRemaining(cmds, INTERNAL_SERVER_ERROR);
       logger.atSevere().withCause(e).log("update failed:");
     }
