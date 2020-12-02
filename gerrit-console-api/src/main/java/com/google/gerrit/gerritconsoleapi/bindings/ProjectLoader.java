@@ -17,6 +17,8 @@ import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.server.config.AllProjectsName;
 import com.google.gerrit.server.git.GitRepositoryManager;
 import com.google.gerrit.server.project.ProjectConfig;
+import com.google.gwtorm.client.KeyUtil;
+import com.google.gwtorm.server.StandardKeyEncoder;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
 import org.eclipse.jgit.errors.ConfigInvalidException;
@@ -27,6 +29,10 @@ public class ProjectLoader {
   private final GitRepositoryManager mgr;
   private final Injector injector;
   private final AllProjectsName allProjects;
+
+  static {
+    KeyUtil.setEncoderImpl(new StandardKeyEncoder());
+  }
 
   @Inject
   public ProjectLoader(Injector injector, GitRepositoryManager mgr, AllProjectsName allProjects) {
