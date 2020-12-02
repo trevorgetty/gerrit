@@ -37,9 +37,11 @@ import com.google.gerrit.server.project.NoSuchChangeException;
 import com.google.gerrit.server.project.ProjectCache;
 import com.google.gerrit.server.project.ProjectState;
 import com.google.gwtorm.server.OrmException;
+import com.google.gwtorm.server.SchemaFactory;
 import com.google.inject.Inject;
 import com.google.inject.Provider;
 import com.google.inject.Singleton;
+import com.google.inject.util.Providers;
 import org.eclipse.jgit.lib.Config;
 
 /**
@@ -72,6 +74,10 @@ public class EventBroker implements EventDispatcher {
   protected final ChangeNotes.Factory notesFactory;
   protected final Provider<ReviewDb> dbProvider;
 
+  // Use schemaFactory directly as we can't use Request Scoped Providers for items that can cause writes / migration
+  // to happen - or if the change it is passed came from request scope.
+  private final SchemaFactory<ReviewDb> schemaFactory;
+
   @Inject
   public EventBroker(
       PluginSetContext<UserScopedEventListener> listeners,
@@ -80,6 +86,7 @@ public class EventBroker implements EventDispatcher {
       ProjectCache projectCache,
       ChangeNotes.Factory notesFactory,
       Provider<ReviewDb> dbProvider,
+      SchemaFactory<ReviewDb> schemaFactory,
       @GerritServerConfig Config config
   ) {
     this.listeners = listeners;
@@ -88,7 +95,20 @@ public class EventBroker implements EventDispatcher {
     this.projectCache = projectCache;
     this.notesFactory = notesFactory;
     this.dbProvider = dbProvider;
+    this.schemaFactory = schemaFactory;
   }
+
+  /**
+   * Please note as this returns a Provider of a ReviewDB.  As such the instance of the DB isn't really open until
+   * the provider.get() is used.  Allowing tidy try( ReviewDb db = provider.get() ) blocks to be used.
+   *
+   * @return Provider<ReviewDB> instance
+   * @throws OrmException
+   */
+  public Provider<ReviewDb> getReviewDbProvider() throws OrmException {
+    return Providers.of(schemaFactory.open());
+  }
+
 
   @Override
   public void postEvent(Change change, ChangeEvent event)
@@ -181,8 +201,12 @@ public class EventBroker implements EventDispatcher {
     if (pe == null || !pe.statePermitsRead()) {
       return false;
     }
-    ReviewDb db = dbProvider.get();
-    try {
+
+    // Use Thread Request scope, as the createChecked below may cause a read/write during migration from
+    // review to note DB.
+    // N.B. This change should be reverted when we move over to 3.0+ -> see 3.x branch for the
+    // new code which should work again
+    try ( ReviewDb db = getReviewDbProvider().get() ) {
       permissionBackend
           .user(user)
           .change(notesFactory.createChecked(db, change))

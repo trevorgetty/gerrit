@@ -831,7 +831,7 @@ public class Replicator implements Runnable {
 
             // if some events failed copy the file to the failed directory
             if (failedEvents > 0) {
-              logger.atSevere().log("RE There was {} failed events in this file {}, " +
+              logger.atSevere().log("RE There was %s failed events in this file %s, " +
                                     "moving the failed event file to the failed events directory",
                                     failedEvents, file.getAbsolutePath());
               Persister.moveFileToFailed(incomingReplEventsDirectory, file);
