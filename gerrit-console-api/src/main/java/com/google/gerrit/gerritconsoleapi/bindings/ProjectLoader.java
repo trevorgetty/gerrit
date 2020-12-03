@@ -46,7 +46,8 @@ public class ProjectLoader {
     return getProjectSnapshot(allProjects);
   }
 
-  /** Open Project, get configuration but take a SNAPSHOT of it at this point in time.
+  /**
+   * Open Project, get configuration but take a SNAPSHOT of it at this point in time.
    *
    * @param projectName  * String representation of projectname.
    * @return
@@ -58,7 +59,8 @@ public class ProjectLoader {
     return getProjectSnapshot(key);
   }
 
-  /** Open Project, get configuration but take a SNAPSHOT of it at this point in time.
+  /**
+   * Open Project, get configuration but take a SNAPSHOT of it at this point in time.
    *
    * @param key  Project name key object, representing project name.
    * @return
@@ -76,7 +78,7 @@ public class ProjectLoader {
   }
 
   /**
-   * Obtain configuration file or information from a project.   This could be any file within
+   * Obtain configuration file or information from a project. This could be any file within
    * any project given.
    * E.g. LFS.config file from the AllProjects repo.
    *
@@ -87,7 +89,7 @@ public class ProjectLoader {
    */
   public com.google.gerrit.gerritconsoleapi.bindings.ProjectLevelConfigNoCache getConfigFromProject(String fileName, ProjectStateMinDepends project) throws Exception {
 
-    // Get the ProjectLevel information, without have to clone the project ( via tree walk ).
+    // Get the ProjectLevel information, without having to clone the project ( via tree walk ).
     ProjectLevelConfigNoCache cfg = new ProjectLevelConfigNoCache(fileName, project);
     Project.NameKey name = project.getProject().getNameKey();
     try (Repository git = mgr.openRepository(name)) {
