@@ -194,8 +194,6 @@ public abstract class BatchUpdate implements AutoCloseable {
   }
 
   static void wrapAndThrowException(Exception e) throws UpdateException, RestApiException {
-    Throwables.throwIfUnchecked(e);
-
     // Propagate REST API exceptions thrown by operations; they commonly throw exceptions like
     // ResourceConflictException to indicate an atomic update failure.
     Throwables.throwIfInstanceOf(e, UpdateException.class);

@@ -166,6 +166,7 @@ import com.google.inject.util.Providers;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.io.UnsupportedEncodingException;
+import java.net.ConnectException;
 import java.net.URLDecoder;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -195,6 +196,7 @@ import org.eclipse.jgit.lib.ObjectInserter;
 import org.eclipse.jgit.lib.ObjectReader;
 import org.eclipse.jgit.lib.PersonIdent;
 import org.eclipse.jgit.lib.Ref;
+import org.eclipse.jgit.lib.RefUpdate;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.notes.NoteMap;
 import org.eclipse.jgit.revwalk.FooterLine;
@@ -228,6 +230,7 @@ class ReceiveCommits {
   private static final String CANNOT_DELETE_CONFIG =
       "Cannot delete project configuration from '" + RefNames.REFS_CONFIG + "'";
   private static final String INTERNAL_SERVER_ERROR = "internal server error";
+  private static final String GITMS_DOWN_ERROR = "GitMS is down or unreachable";
 
   interface Factory {
     ReceiveCommits create(
@@ -601,20 +604,45 @@ class ReceiveCommits {
       Task replaceProgress = progress.beginSubTask("updated", UNKNOWN);
 
       List<CreateRequest> newChanges = Collections.emptyList();
-      if (magicBranch != null && magicBranch.cmd.getResult() == NOT_ATTEMPTED) {
-        newChanges = selectNewAndReplacedChangesFromMagicBranch(newProgress);
+      String failureReason = "";
+      try {
+        if (magicBranch != null && magicBranch.cmd.getResult() == NOT_ATTEMPTED) {
+            newChanges = selectNewAndReplacedChangesFromMagicBranch(newProgress);
+        }
+        // Commit validation has already happened, so any changes without Change-Id are for the
+        // deprecated feature.
+        warnAboutMissingChangeId(newChanges);
+        preparePatchSetsForReplace(newChanges);
+        insertChangesAndPatchSets(newChanges, replaceProgress);
+      } catch (ResourceConflictException e) {
+          addError(e.getMessage());
+          failureReason = "conflict";
+      } catch (BadRequestException | UnprocessableEntityException e) {
+        logger.atFine().withCause(e).log("Rejecting due to client error");
+        failureReason = e.getMessage();
+      } catch (RestApiException | IOException e) {
+        logger.atSevere().withCause(e).log("Can't insert change/patch set for %s", project.getName());
+        failureReason = String.format("%s: %s",
+            ExceptionUtils.getRootCause(e) instanceof ConnectException ? GITMS_DOWN_ERROR : INTERNAL_SERVER_ERROR,
+            e.getMessage());
+      } finally {
+        if (!Strings.isNullOrEmpty(failureReason)) {
+          rejectRemaining(commands, failureReason);
+        }
+        newProgress.end();
+        replaceProgress.end();
       }
-
-      // Commit validation has already happened, so any changes without Change-Id are for the
-      // deprecated feature.
-      warnAboutMissingChangeId(newChanges);
-      preparePatchSetsForReplace(newChanges);
-      insertChangesAndPatchSets(newChanges, replaceProgress);
-      newProgress.end();
-      replaceProgress.end();
-      queueSuccessMessages(newChanges);
+      // check result of command before printing success to the client
+      if (verifyCommandsOk(directPatchSetPushCommands) ||
+          (magicBranch != null && magicBranch.cmd.getResult().equals(OK))) {
+        queueSuccessMessages(newChanges);
+      }
       refsPublishDeprecationWarning();
     }
+  }
+
+  private boolean verifyCommandsOk(Collection<ReceiveCommand> commands) {
+     return commands.stream().allMatch(cmd -> cmd.getResult().equals(OK));
   }
 
   private void refsPublishDeprecationWarning() {
@@ -625,7 +653,7 @@ class ReceiveCommits {
   }
 
   private void sendOkMessage(Collection<ReceiveCommand> commands) {
-    if (commands.stream().allMatch(c -> c.getResult() == OK)) {
+    if (verifyCommandsOk(commands)) {
       logger.atFine().log("Handling success - no replicated errors.");
       receivePack.sendMessage("GitMS - update replicated.");
     }
@@ -682,7 +710,7 @@ class ReceiveCommits {
       final Throwable rootCause = ExceptionUtils.getRootCause(e);
       sendReplicationErrorMessage(cmds, rootCause.getMessage());
 
-      rejectRemaining(cmds, INTERNAL_SERVER_ERROR);
+      rejectRemaining(cmds, rootCause instanceof ConnectException ? GITMS_DOWN_ERROR :INTERNAL_SERVER_ERROR);
       logger.atSevere().withCause(e).log("update failed:");
     }
 
@@ -798,7 +826,8 @@ class ReceiveCommits {
     }
   }
 
-  private void insertChangesAndPatchSets(List<CreateRequest> newChanges, Task replaceProgress) {
+  private void insertChangesAndPatchSets(List<CreateRequest> newChanges, Task replaceProgress)
+      throws RestApiException, IOException {
     ReceiveCommand magicBranchCmd = magicBranch != null ? magicBranch.cmd : null;
     if (magicBranchCmd != null && magicBranchCmd.getResult() != NOT_ATTEMPTED) {
       logger.atWarning().log(
@@ -858,15 +887,6 @@ class ReceiveCommits {
         }
       }
 
-    } catch (ResourceConflictException e) {
-      addError(e.getMessage());
-      reject(magicBranchCmd, "conflict");
-    } catch (BadRequestException | UnprocessableEntityException e) {
-      logger.atFine().withCause(e).log("Rejecting due to client error");
-      reject(magicBranchCmd, e.getMessage());
-    } catch (RestApiException | IOException e) {
-      logger.atSevere().withCause(e).log("Can't insert change/patch set for %s", project.getName());
-      reject(magicBranchCmd, String.format("%s: %s", INTERNAL_SERVER_ERROR, e.getMessage()));
     }
 
     if (magicBranch != null && magicBranch.submit) {
@@ -2249,7 +2269,9 @@ class ReceiveCommits {
       logger.atFine().log("Finished updating groups from GroupCollector");
     } catch (OrmException e) {
       logger.atSevere().withCause(e).log("Error collecting groups for changes");
-      reject(magicBranch.cmd, INTERNAL_SERVER_ERROR);
+      reject(magicBranch.cmd,
+          ExceptionUtils.getRootCause(e) instanceof ConnectException ? GITMS_DOWN_ERROR : INTERNAL_SERVER_ERROR);
+      return Collections.emptyList();
     }
     return newChanges;
   }
