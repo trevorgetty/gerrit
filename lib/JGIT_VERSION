@@ -2,13 +2,13 @@ include_defs('//lib/maven.defs')
 include_defs('//lib/WD_REPOSITORY')
 
 # Defines main maven central repo
-REPO = MAVEN_CENTRAL # Leave here even if set to MAVEN_CENTRAL.
+REPO = MAVEN_LOCAL # Leave here even if set to MAVEN_CENTRAL.
 
 # Defines the jgit base version
 VERS = '4.5.5.201812240535-r'
 
 # Defines the WD postfix
-POSTFIX_WD = '_WDv3'
+POSTFIX_WD = '_WDv3.1'
 
 # Defines the WD replicated version of jgit
 VERS_WD = VERS + POSTFIX_WD
