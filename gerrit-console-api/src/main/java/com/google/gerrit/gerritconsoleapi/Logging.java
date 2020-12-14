@@ -1,6 +1,6 @@
 
 /********************************************************************************
- * Copyright (c) 2014-2018 WANdisco
+ * Copyright (c) 2014-2020 WANdisco
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,23 +34,9 @@ public abstract class Logging {
     // otherwise just log the error message string
     if ( isVerbose() ) {
       // Use logger from class that called this method
-      classlogger.debug(s, e);
+      classlogger.error(s, e);
     } else {
-      classlogger.error( s, e == null ? "NULL" : e.getMessage());
-    }
-
-  }
-
-  // Verbose debug logging, write out debug message and throwable exception to STDERR
-  public static void logdebug(Logger classlogger, String s, Throwable e) {
-
-    // We have passed in a throwable exception
-    // verbose mode has to be enabled before we can log it
-    // otherwise just log the error message string
-    if ( isVerbose() ) {
-      classlogger.debug(s, e);
-    } else {
-      classlogger.debug(s, e == null ? "NULL" : e.getMessage());
+      classlogger.error(s);
     }
 
   }
