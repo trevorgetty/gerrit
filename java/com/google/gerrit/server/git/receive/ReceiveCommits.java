@@ -633,8 +633,8 @@ class ReceiveCommits {
         replaceProgress.end();
       }
       // check result of command before printing success to the client
-      if (verifyCommandsOk(directPatchSetPushCommands) ||
-          (magicBranch != null && magicBranch.cmd.getResult().equals(OK))) {
+      if ((magicBranch != null && magicBranch.cmd.getResult().equals(OK)) ||
+          (!directPatchSetPushCommands.isEmpty() && verifyCommandsOk(directPatchSetPushCommands))) {
         queueSuccessMessages(newChanges);
       }
       refsPublishDeprecationWarning();
