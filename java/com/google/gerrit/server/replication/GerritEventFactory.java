@@ -10,12 +10,14 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.wandisco.gerrit.gitms.shared.events.DeleteProjectMessageEvent;
 import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
+import com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator;
 
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.CACHE_EVENT;
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.DELETE_PROJECT_EVENT;
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.DELETE_PROJECT_MESSAGE_EVENT;
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.GERRIT_EVENT;
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.INDEX_EVENT;
+import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.PROJECTS_INDEX_EVENT;
 
 public class GerritEventFactory {
 
@@ -58,6 +60,15 @@ public class GerritEventFactory {
                             cacheNameAndKey.getClass().getName(),
                             projectName,
                             CACHE_EVENT);
+  }
+
+  public static EventWrapper createReplicatedProjectsIndexEvent(String projectName,
+                                                                ProjectIndexEvent indexEvent){
+    final String eventString = gson.toJson(indexEvent);
+    return new EventWrapper(eventString,
+                            indexEvent.getClass().getName(),
+                            projectName,
+                            PROJECTS_INDEX_EVENT);
   }
 
   public static EventWrapper createReplicatedCacheEvent(String projectName, CacheKeyWrapper cacheNameAndKey){

@@ -28,6 +28,8 @@ import com.google.gerrit.server.logging.TraceContext.TraceTimer;
 import com.google.gerrit.server.plugincontext.PluginSetContext;
 import com.google.gerrit.server.project.ProjectCache;
 import com.google.gerrit.server.project.ProjectState;
+import com.google.gerrit.server.replication.ReplicatedProjectsIndexManager;
+import com.google.gerrit.server.replication.Replicator;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import java.io.IOException;
@@ -39,7 +41,6 @@ public class ProjectIndexerImpl implements ProjectIndexer {
 
   public interface Factory {
     ProjectIndexerImpl create(ProjectIndexCollection indexes);
-
     ProjectIndexerImpl create(@Nullable ProjectIndex index);
   }
 
@@ -47,7 +48,7 @@ public class ProjectIndexerImpl implements ProjectIndexer {
   private final PluginSetContext<ProjectIndexedListener> indexedListener;
   @Nullable private final ProjectIndexCollection indexes;
   @Nullable private final ProjectIndex index;
-
+  @Nullable private final ReplicatedProjectsIndexManager replicatedProjectsIndexManager;
   @AssistedInject
   ProjectIndexerImpl(
       ProjectCache projectCache,
@@ -57,6 +58,7 @@ public class ProjectIndexerImpl implements ProjectIndexer {
     this.indexedListener = indexedListener;
     this.indexes = indexes;
     this.index = null;
+    this.replicatedProjectsIndexManager = ReplicatedProjectsIndexManager.Factory.create(this);
   }
 
   @AssistedInject
@@ -68,10 +70,21 @@ public class ProjectIndexerImpl implements ProjectIndexer {
     this.indexedListener = indexedListener;
     this.indexes = null;
     this.index = index;
+    this.replicatedProjectsIndexManager = ReplicatedProjectsIndexManager.Factory.create(this);
   }
 
   @Override
   public void index(Project.NameKey nameKey) throws IOException {
+    indexImplementation(nameKey, Replicator.isReplicationEnabled());
+  }
+
+  @Override
+  public void indexNoRepl(Project.NameKey nameKey) throws IOException {
+    indexImplementation(nameKey, false);
+  }
+
+
+  public void indexImplementation(Project.NameKey nameKey, boolean replicate) throws IOException {
     ProjectState projectState = projectCache.get(nameKey);
     if (projectState != null) {
       logger.atFine().log("Replace project %s in index", nameKey.get());
@@ -95,6 +108,10 @@ public class ProjectIndexerImpl implements ProjectIndexer {
           i.delete(nameKey);
         }
       }
+    }
+
+    if ( replicate && replicatedProjectsIndexManager != null) {
+      replicatedProjectsIndexManager.replicateReindex(nameKey);
     }
   }
 
