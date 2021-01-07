@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2015, WANDisco
+# Copyright (c) 2021, WANdisco
 # All rights reserved.
 
 # Redistribution and use in source and binary forms, with or without
@@ -91,7 +91,6 @@ function parse_gerrit_config {
   GIT_CONFIG="$CONFIG"
   export GIT_CONFIG
   GERRIT_URL=$(git config gerrit.canonicalWebUrl)
-  DIGEST_CONFIGURATION=$(git config auth.gitBasicAuth)
   unset GIT_CONFIG
 
   if [ -z "$GERRIT_URL" ]; then
@@ -106,27 +105,12 @@ function parse_gerrit_config {
   if [[ "$GERRIT_URL" = *"https"* ]]; then
     SSL_FLAG="-k"
   fi
-  
-  # If git basic auth is not set, set --digest in curl call
-  if [[ -z "$DIGEST_CONFIGURATION" ]]; then
-    DIGEST_FLAG="--digest"
-  fi
-  
-  # If git basic auth is set, check if not set true then set --digest in curl call  
-  if [[ -n "$DIGEST_CONFIGURATION" ]]; then
-    DIGEST_CONFIGURATION=$(echo "$DIGEST_CONFIGURATION" | tr '[:upper:]' '[:lower:]')
-    if [[ "$DIGEST_CONFIGURATION" != "true" ]]; then
-      DIGEST_FLAG="--digest"
-    fi
-  fi
-
 }
 
 USERNAME=""
 PASSWORD=""
 CONFIG=""
 CHANGEID=""
-DIGEST_FLAG=""
 SSL_FLAG=""
 
 while getopts u:p:c:i:h opt
@@ -150,8 +134,6 @@ if ! type -p "curl" >/dev/null 2>&1; then
   die "cURL is required to reindex, but could not be found."
 fi
 
-
-
 bold "Reindexing change $CHANGEID"
 # Remove all trailing slashes from the end of the gerrit url and handle it in the URL constuuction below
 case $GERRIT_URL in
@@ -159,7 +141,7 @@ case $GERRIT_URL in
 esac
 URL="${GERRIT_URL}/a/changes/${CHANGEID}/index"
 
- return_code=$(curl $SSL_FLAG $DIGEST_FLAG $REINDEX_ARG -X POST -u "$USERNAME":"$PASSWORD" -s -o /dev/null -w "%{http_code}" "$URL")
+return_code=$(curl $SSL_FLAG -X POST -u "$USERNAME":"$PASSWORD" -s -o /dev/null -w "%{http_code}" "$URL")
 if [ ! "$return_code" == "204" ]; then
   die "Reindex call failed, got return code ${return_code}, expected 204"
 else
