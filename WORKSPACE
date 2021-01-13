@@ -269,6 +269,13 @@ maven_jar(
     sha1 = "f645ed69d595b24d4cf8b3fbb64cc505bede8829",
 )
 
+maven_jar(
+    name = "gwtorm-client",
+    artifact = "com.google.gerrit:gwtorm:1.18",
+    sha1 = "f326dec463439a92ccb32f05b38345e21d0b5ecf",
+    src_sha1 = "e0b973d5cafef3d145fa80cdf032fcead1186d29",
+)
+
 load("//lib:guava.bzl", "GUAVA_BIN_SHA1", "GUAVA_VERSION")
 
 maven_jar(
@@ -1064,14 +1071,6 @@ maven_jar(
     artifact = "com.wandisco:gerrit-gitms-interface:" + _GERRIT_GITMS_VERSION,
     repository = WANDISCO_ASSETS,
     #    sha1 = 213e4234
-)
-
-_GERRIT_GWTORM_VERSION = "1.18.0.1-WD"
-
-maven_jar(
-    name = "gwtorm-client",
-    artifact = "com.google.gerrit:gwtorm:" + _GERRIT_GWTORM_VERSION,
-    repository = WANDISCO_ASSETS,
 )
 
 load("//tools/bzl:js.bzl", "bower_archive", "npm_binary")
