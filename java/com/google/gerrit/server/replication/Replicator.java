@@ -613,14 +613,14 @@ public class Replicator implements Runnable {
     try {
       lastWriter.close();
     } catch (IOException ex) {
-      logger.atWarning().log("RE unable to close the file to send", ex);
+      logger.atWarning().withCause(ex).log("RE unable to close the file to send");
     }
 
     if (syncFiles) {
       try {
         lastWriter.getFD().sync();
       } catch (IOException ex) {
-        logger.atWarning().log("RE unable to sync the file to send", ex);
+        logger.atWarning().withCause(ex).log("RE unable to sync the file to send");
       }
     }
     renameAndReset();
@@ -663,7 +663,7 @@ public class Replicator implements Runnable {
 
     if(eventData == null){
       logger.atSevere().log("Unable to set event filename, could not create "
-                + "GerritEventData object from JSON {}", originalEvent.getEvent());
+                + "GerritEventData object from JSON %s", originalEvent.getEvent());
       return;
     }
 
@@ -801,8 +801,9 @@ public class Replicator implements Runnable {
     try {
       File[] listFiles = incomingReplEventsDirectory.listFiles(incomingEventsToReplicateFileFilter);
       if (listFiles == null) {
-        logger.atSevere().log("RE Cannot read files in directory %s. Too many files open?",
-                              incomingReplEventsDirectory, new IllegalStateException("RE Cannot read files"));
+        logger.atSevere().withCause( new IllegalStateException("RE Cannot read files"))
+              .log("RE Cannot read files in directory %s. Too many files open?",
+                              incomingReplEventsDirectory);
       } else if (listFiles.length > 0) {
         logger.atFine().log("RE Found %s files", listFiles.length);
 
@@ -851,7 +852,7 @@ public class Replicator implements Runnable {
               logger.atSevere().log("RE Could not delete file %s", file.getAbsolutePath());
             }
           } catch (IOException e) {
-            logger.atSevere().log("RE while reading file %s", file.getAbsolutePath(), e);
+            logger.atSevere().withCause(e).log("RE while reading file %s", file.getAbsolutePath());
           }
         }
       }
@@ -936,7 +937,7 @@ public class Replicator implements Runnable {
     try {
       sortedEvents = sortEvents(eventsBytes);
     } catch (IOException | InvalidEventJsonException e) {
-      logger.atSevere().log("RE Unable to sort events as there are invalid events in the event file {}",
+      logger.atSevere().log("RE Unable to sort events as there are invalid events in the event file %s",
                 e.getMessage());
       failedEvents++;
     }
@@ -955,19 +956,21 @@ public class Replicator implements Runnable {
         }
 
         if (originalEvent.getEvent().isEmpty()) {
-          logger.atSevere().log("RE event GSON string is invalid!",
-                                new Exception(String.format("Internal error, event is empty -> " +
-                                                            "eventTimestamp[%d] | eventNanoTime[%d]",
-                                                            event.getEventTimestamp(), event.getEventNanoTime())));
+          logger.atSevere().withCause(
+                  new Exception(String.format("Internal error, event is empty -> " +
+                                              "eventTimestamp[%d] | eventNanoTime[%d]",
+                                              event.getEventTimestamp(), event.getEventNanoTime())))
+                .log("RE event GSON string is invalid!");
           failedEvents++;
           continue;
         }
 
         if (originalEvent.getEvent().length() <= 2) {
-          logger.atSevere().log("RE event GSON string is invalid!",
-                                new Exception(String.format("Internal error, event is invalid -> " +
-                                                            "eventTimestamp[%d] | eventNanoTime[%d]",
-                                                            event.getEventTimestamp(), event.getEventNanoTime())));
+          logger.atSevere().withCause(
+                  new Exception(String.format("Internal error, event is invalid -> " +
+                                              "eventTimestamp[%d] | eventNanoTime[%d]",
+                                              event.getEventTimestamp(), event.getEventNanoTime())))
+                .log("RE event GSON string is invalid!");
           failedEvents++;
           continue;
         }
@@ -990,14 +993,14 @@ public class Replicator implements Runnable {
                     failedEvents++;
                   }
                 } catch (Exception e) {
-                  logger.atSevere().log("RE While publishing events", e);
+                  logger.atSevere().withCause(e).log("RE While publishing events");
                   failedEvents++;
                 }
               }
             }
           }
         } catch (JsonSyntaxException e) {
-          logger.atSevere().log("RE event has been lost. Could not rebuild obj using GSON", e);
+          logger.atSevere().withCause(e).log("RE event has been lost. Could not rebuild obj using GSON");
           failedEvents++;
         }
       }
