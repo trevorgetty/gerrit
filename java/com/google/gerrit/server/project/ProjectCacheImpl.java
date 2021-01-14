@@ -279,7 +279,10 @@ public class ProjectCacheImpl implements ProjectCache {
     } finally {
       listLock.unlock();
     }
-    indexer.get().index(newProjectName);
+    // noRepl here as each site will hit this line on receipt of the above cache event.
+    // remotes still need to do the list manipulation above on new projects so that resulting index is accurate
+    // this allows that to occur and update index locally without sending another global index event.
+    indexer.get().indexNoRepl(newProjectName);
   }
 
   @Override
