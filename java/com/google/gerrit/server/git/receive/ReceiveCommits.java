@@ -139,6 +139,7 @@ import com.google.gerrit.server.project.ProjectConfig;
 import com.google.gerrit.server.project.ProjectState;
 import com.google.gerrit.server.query.change.ChangeData;
 import com.google.gerrit.server.query.change.InternalChangeQuery;
+import com.google.gerrit.server.replication.Replicator;
 import com.google.gerrit.server.submit.MergeOp;
 import com.google.gerrit.server.submit.MergeOpRepoManager;
 import com.google.gerrit.server.submit.SubmoduleException;
@@ -652,19 +653,32 @@ class ReceiveCommits {
     }
   }
 
+  /**
+   * GitMS specific success messaging - if replication is disabled this should not be printed.
+   * @param commands
+   */
   private void sendOkMessage(Collection<ReceiveCommand> commands) {
-    if (verifyCommandsOk(commands)) {
-      logger.atFine().log("Handling success - no replicated errors.");
-      receivePack.sendMessage("GitMS - update replicated.");
+    if(!Replicator.isReplicationDisabled()) {
+      if (verifyCommandsOk(commands)) {
+        logger.atFine().log("Handling success - no replicated errors.");
+        addMessage("GitMS - update replicated.");
+      }
     }
   }
 
-  // Send the reason for the failure to perform an atomic batch update. No point attaching this to every
-  // rejected update. Only need to do this if some remaining commands are still to be rejected (i.e. result == not_attempted).
+  /**
+   * Send the reason for the failure to perform an atomic batch update. No point attaching this to every
+   * rejected update. Only need to do this if some remaining commands are still to be rejected (i.e. result == not_attempted).
+   * GitMS specific success messaging - if replication is disabled this should not be printed.
+   * @param commands
+   * @param message
+   */
   private void sendReplicationErrorMessage(final Collection<ReceiveCommand> commands, final String message) {
-    if (commands.stream().anyMatch(c -> c.getResult() == NOT_ATTEMPTED)) {
-      logger.atFine().log("Handling failure to replicate: %s.", message);
-      receivePack.sendMessage("error: " + message);
+    if(!Replicator.isReplicationDisabled()) {
+      if (commands.stream().anyMatch(c -> c.getResult() == NOT_ATTEMPTED)) {
+        logger.atFine().log("Handling failure to replicate: %s.", message);
+        addError(message);
+      }
     }
   }
 
@@ -672,10 +686,10 @@ class ReceiveCommits {
     if (!errors.isEmpty()) {
       logger.atFine().log("Handling error conditions: %s", errors.keySet());
       for (String error : errors.keySet()) {
-        receivePack.sendMessage("error: " + buildError(error, errors.get(error)));
+        addError(buildError(error, errors.get(error)));
       }
-      receivePack.sendMessage(String.format("User: %s", user.getLoggableName()));
-      receivePack.sendMessage(COMMAND_REJECTION_MESSAGE_FOOTER);
+      addError(String.format("User: %s", user.getLoggableName()));
+      addError(COMMAND_REJECTION_MESSAGE_FOOTER);
     }
   }
 
