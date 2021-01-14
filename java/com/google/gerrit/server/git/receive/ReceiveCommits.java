@@ -677,7 +677,7 @@ class ReceiveCommits {
     if(!Replicator.isReplicationDisabled()) {
       if (commands.stream().anyMatch(c -> c.getResult() == NOT_ATTEMPTED)) {
         logger.atFine().log("Handling failure to replicate: %s.", message);
-        addError(message);
+        receivePack.sendMessage("error: " + message);
       }
     }
   }
@@ -686,10 +686,10 @@ class ReceiveCommits {
     if (!errors.isEmpty()) {
       logger.atFine().log("Handling error conditions: %s", errors.keySet());
       for (String error : errors.keySet()) {
-        addError(buildError(error, errors.get(error)));
+        receivePack.sendMessage("error: " + buildError(error, errors.get(error)));
       }
-      addError(String.format("User: %s", user.getLoggableName()));
-      addError(COMMAND_REJECTION_MESSAGE_FOOTER);
+      receivePack.sendMessage(String.format("User: %s", user.getLoggableName()));
+      receivePack.sendMessage(COMMAND_REJECTION_MESSAGE_FOOTER);
     }
   }
 
