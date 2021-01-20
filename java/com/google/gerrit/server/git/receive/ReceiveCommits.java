@@ -285,8 +285,10 @@ class ReceiveCommits {
         } else if ((input instanceof ExecutionException)
             && (input.getCause() instanceof RestApiException)) {
           return (RestApiException) input.getCause();
+        } else if (input instanceof UpdateException){
+          return new RestApiException(ExceptionUtils.getRootCause(input).getMessage(), input);
         }
-        return new RestApiException("Error inserting change/patchset", input);
+        return new RestApiException("Error inserting change/patchset", ExceptionUtils.getRootCause(input));
       };
 
   // ReceiveCommits has a lot of fields, sorry. Here and in the constructor they are split up
