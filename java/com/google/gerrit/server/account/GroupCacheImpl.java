@@ -166,6 +166,17 @@ public class GroupCacheImpl implements GroupCache {
     }
   }
 
+  @Override
+  public void evict(AccountGroup.UUID groupUuid, boolean shouldReplicate) {
+    if (groupUuid != null) {
+      logger.atFine().log("Evict group %s by UUID", groupUuid.get());
+      byUUID.invalidate(groupUuid.get());
+      if (shouldReplicate) {
+        ReplicatedCacheManager.replicateEvictionFromCache(BYUUID_NAME, groupUuid);
+      }
+    }
+  }
+
   static class ByIdLoader extends CacheLoader<AccountGroup.Id, Optional<InternalGroup>> {
     private final Provider<InternalGroupQuery> groupQueryProvider;
 

@@ -75,11 +75,22 @@ public interface AccountCache {
   Optional<AccountState> getByUsername(String username);
 
   /**
-   * Evicts the account from the cache.
+   * Evicts the account from the cache with replication enabled by default.
    *
    * @param accountId account ID of the account that should be evicted
    */
   void evict(@Nullable Account.Id accountId);
+
+  /**
+   * Evicts the account from the cache with optional replication.
+   * This performs the same action as {@link AccountCache#evict(Account.Id)} but gives
+   * us the option to switch off replication without breaking the contract elsewhere in the codebase and
+   * unexpectedly turning off replication.
+   *
+   * @param accountId account ID of the account that should be evicted
+   * @param shouldReplicate boolean telling us whether to replicate the eviction
+   */
+  void evict(@Nullable Account.Id accountId, boolean shouldReplicate);
 
   /** Evict all accounts from the cache. */
   void evictAll();

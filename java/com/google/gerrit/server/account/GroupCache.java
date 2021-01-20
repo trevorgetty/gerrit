@@ -76,7 +76,7 @@ public interface GroupCache {
   void evict(AccountGroup.NameKey groupName);
 
   /**
-   * Removes the association of the given UUID with a group.
+   * Removes the association of the given UUID with a group with replication enabled by default.
    *
    * <p>The next call to {@link #get(AccountGroup.UUID)} won't provide a cached value.
    *
@@ -88,4 +88,23 @@ public interface GroupCache {
    * @param groupUuid the UUID of a possibly associated group
    */
   void evict(AccountGroup.UUID groupUuid);
+
+  /**
+   * Removes the association of the given UUID with a group.
+   *
+   * <p>The next call to {@link #get(AccountGroup.UUID)} won't provide a cached value.
+   *
+   * <p>It's safe to call this method if no association exists.
+   *
+   * <p><strong>Note: </strong>This method doesn't touch any associations between names/IDs and
+   * groups!
+   *
+   * <p> This performs the same action as {@link GroupCache#evict(AccountGroup.UUID)} )} but gives
+   * us the option to switch off replication without breaking the contract elsewhere in the codebase and
+   * unexpectedly turning off replication.
+   *
+   * @param groupUuid the UUID of a possibly associated group
+   * @param shouldReplicate boolean telling us whether to replicate the eviction
+   */
+  void evict(AccountGroup.UUID groupUuid, boolean shouldReplicate);
 }

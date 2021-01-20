@@ -102,7 +102,7 @@ public class AccountIndexerImpl implements AccountIndexer {
    */
   private void indexImplementation(Account.Id id, boolean replicate) throws IOException {
 
-    byIdCache.evict(id);
+    byIdCache.evict(id, replicate);
     Optional<AccountState> accountState = byIdCache.get(id);
 
     if (accountState.isPresent()) {
@@ -128,7 +128,7 @@ public class AccountIndexerImpl implements AccountIndexer {
       }
     }
 
-    if ( replicate && replicatedAccountsIndexManager != null) {
+    if (replicate && replicatedAccountsIndexManager != null) {
       replicatedAccountsIndexManager.replicateReindex(id);
     }
 

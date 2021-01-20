@@ -97,10 +97,9 @@ public class GroupIndexerImpl implements GroupIndexer {
     indexImplementation((AccountGroup.UUID) identifier, false);
   }
 
-
   public void indexImplementation(AccountGroup.UUID uuid, boolean replicate) throws IOException {
     // Evict the cache to get an up-to-date value for sure.
-    groupCache.evict(uuid);
+    groupCache.evict(uuid, replicate);
     Optional<InternalGroup> internalGroup = groupCache.get(uuid);
 
     if (internalGroup.isPresent()) {
@@ -125,7 +124,7 @@ public class GroupIndexerImpl implements GroupIndexer {
       }
     }
 
-    if ( replicate && replicatedAccountsIndexManager != null) {
+    if (replicate && replicatedAccountsIndexManager != null) {
       replicatedAccountsIndexManager.replicateReindex(uuid);
     }
 

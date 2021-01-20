@@ -182,6 +182,17 @@ public class AccountCacheImpl implements AccountCache {
   }
 
   @Override
+  public void evict(@Nullable Account.Id accountId, boolean shouldReplicate) {
+    if (accountId != null) {
+      logger.atFine().log("Evict account %d", accountId.get());
+      byId.invalidate(accountId);
+      if (shouldReplicate) {
+        ReplicatedCacheManager.replicateEvictionFromCache(BYID_NAME, accountId);
+      }
+    }
+  }
+
+  @Override
   public void evictAll() {
     logger.atFine().log("Evict all accounts");
 

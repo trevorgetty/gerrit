@@ -68,6 +68,13 @@ public class FakeAccountCache implements AccountCache {
   }
 
   @Override
+  public void evict(Account.Id accountId, boolean shouldReplicate) {
+    if (byId != null) {
+      byId.remove(accountId);
+    }
+  }
+
+  @Override
   public synchronized void evictAll() {
     byId.clear();
   }
