@@ -197,7 +197,6 @@ import org.eclipse.jgit.lib.ObjectInserter;
 import org.eclipse.jgit.lib.ObjectReader;
 import org.eclipse.jgit.lib.PersonIdent;
 import org.eclipse.jgit.lib.Ref;
-import org.eclipse.jgit.lib.RefUpdate;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.notes.NoteMap;
 import org.eclipse.jgit.revwalk.FooterLine;
@@ -660,11 +659,11 @@ class ReceiveCommits {
    * @param commands
    */
   private void sendOkMessage(Collection<ReceiveCommand> commands) {
-    if(!Replicator.isReplicationDisabled()) {
-      if (verifyCommandsOk(commands)) {
-        logger.atFine().log("Handling success - no replicated errors.");
-        addMessage("GitMS - update replicated.");
-      }
+    final String okMessage = Replicator.isReplicationDisabled() ? "Update successful." : "GitMS - update replicated.";
+
+    if (verifyCommandsOk(commands)) {
+      logger.atFine().log("Handling success - no errors.");
+      receivePack.sendMessage(okMessage);
     }
   }
 
@@ -675,7 +674,7 @@ class ReceiveCommits {
    * @param commands
    * @param message
    */
-  private void sendReplicationErrorMessage(final Collection<ReceiveCommand> commands, final String message) {
+  private void checkAndLogException(final Collection<ReceiveCommand> commands, final String message) {
     if(!Replicator.isReplicationDisabled()) {
       if (commands.stream().anyMatch(c -> c.getResult() == NOT_ATTEMPTED)) {
         logger.atFine().log("Handling failure to replicate: %s.", message);
@@ -724,7 +723,7 @@ class ReceiveCommits {
       // update the cause will already be included in the reject message of that command. sendReplicationErrorMessage will
       // only print if there are remaining commands to reject.)
       final Throwable rootCause = ExceptionUtils.getRootCause(e);
-      sendReplicationErrorMessage(cmds, rootCause.getMessage());
+      checkAndLogException(cmds, rootCause.getMessage());
 
       rejectRemaining(cmds, rootCause instanceof ConnectException ? GITMS_DOWN_ERROR :INTERNAL_SERVER_ERROR);
       logger.atSevere().withCause(e).log("update failed:");
