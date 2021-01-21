@@ -186,6 +186,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.regex.Matcher;
 import java.util.stream.Stream;
+
+import com.wandisco.gerrit.gitms.shared.api.exceptions.GitUpdateException;
 import org.apache.commons.lang.exception.ExceptionUtils;
 import org.eclipse.jgit.errors.ConfigInvalidException;
 import org.eclipse.jgit.errors.IncorrectObjectTypeException;
@@ -2284,8 +2286,14 @@ class ReceiveCommits {
       logger.atFine().log("Finished updating groups from GroupCollector");
     } catch (OrmException e) {
       logger.atSevere().withCause(e).log("Error collecting groups for changes");
-      reject(magicBranch.cmd,
-          ExceptionUtils.getRootCause(e) instanceof ConnectException ? GITMS_DOWN_ERROR : INTERNAL_SERVER_ERROR);
+      Throwable cause = ExceptionUtils.getRootCause(e);
+      if (cause instanceof  ConnectException){
+        reject(magicBranch.cmd, GITMS_DOWN_ERROR );
+      } else if( cause instanceof GitUpdateException){
+        reject(magicBranch.cmd, cause.getMessage());
+      } else{
+        reject(magicBranch.cmd, INTERNAL_SERVER_ERROR);
+      }
       return Collections.emptyList();
     }
     return newChanges;

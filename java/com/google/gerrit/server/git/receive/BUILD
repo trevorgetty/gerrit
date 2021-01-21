@@ -24,5 +24,6 @@ java_library(
         "//lib/guice",
         "//lib/guice:guice-assistedinject",
         "//lib/jgit/org.eclipse.jgit:jgit",
+         "//lib/wandisco:gerrit-gitms-interface",
     ],
 )
