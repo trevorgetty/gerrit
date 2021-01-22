@@ -36,6 +36,7 @@ import com.google.gerrit.server.index.change.ChangeIndexer;
 import com.google.gerrit.server.notedb.ChangeNotes;
 import com.google.gerrit.server.notedb.ChangeUpdate;
 import com.google.gerrit.server.notedb.NoteDbUpdateManager;
+import com.google.gerrit.server.replication.ReplicatedIndexEventManager;
 import com.google.gwtorm.server.OrmException;
 import com.google.inject.Inject;
 import com.google.inject.assistedinject.Assisted;
@@ -420,6 +421,8 @@ public class NoteDbBatchUpdate extends BatchUpdate {
         logDebug("Change %s was deleted", id);
         handle.manager.deleteChange(id);
         handle.setResult(id, ChangeResult.DELETED);
+        // If we have deleted the change, send index deletion event.
+        ReplicatedIndexEventManager.queueReplicationIndexDeletionEvent(id.id, ctx.getProject().get());
       } else {
         handle.setResult(id, ChangeResult.UPSERTED);
       }
