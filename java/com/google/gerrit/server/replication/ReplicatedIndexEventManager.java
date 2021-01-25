@@ -273,8 +273,12 @@ public class ReplicatedIndexEventManager implements LifecycleListener {
    */
   public void deleteChanges(int[] changes) throws IOException {
     //iterate over the list of changes and delete each one
+    /*
+     * Unless delete project plugin is changed this change needs to be local only
+     * as it currently uses events to trigger the index deletion across the ecosystem
+     */
     for (int i : changes) {
-      indexer.delete(new Change.Id(i));
+      indexer.deleteNoRepl(new Change.Id(i));
       logger.atFine().log("Deleted change %d", i);
     }
   }
@@ -287,8 +291,12 @@ public class ReplicatedIndexEventManager implements LifecycleListener {
    */
   public void deleteChanges(List<Change.Id> changes) throws IOException {
     //iterate over the list of changes and delete each one
+    /*
+     * Unless delete project plugin is changed this change needs to be local only as plugin
+     * as it currently uses events to trigger the index deletion across the ecosystem
+     */
     for (Change.Id id : changes) {
-      indexer.delete(id);
+      indexer.deleteNoRepl(id);
       logger.atFine().log("Deleted change %s", id.toString());
     }
   }

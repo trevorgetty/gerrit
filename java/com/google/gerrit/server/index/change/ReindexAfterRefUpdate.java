@@ -27,6 +27,7 @@ import com.google.gerrit.reviewdb.client.Account;
 import com.google.gerrit.reviewdb.client.Branch;
 import com.google.gerrit.reviewdb.client.Change;
 import com.google.gerrit.reviewdb.client.Project;
+import com.google.gerrit.reviewdb.client.Project.NameKey;
 import com.google.gerrit.reviewdb.client.RefNames;
 import com.google.gerrit.reviewdb.server.ReviewDb;
 import com.google.gerrit.server.account.AccountCache;
@@ -205,7 +206,7 @@ public class ReindexAfterRefUpdate implements GitReferenceUpdatedListener {
                 .getChange();
         indexerFactory.create(executor, indexes).index(db, c);
       } catch (NoSuchChangeException e) {
-        indexerFactory.create(executor, indexes).delete(id);
+        indexerFactory.create(executor, indexes).delete(new NameKey(event.getProjectName()), id);
       }
       return null;
     }

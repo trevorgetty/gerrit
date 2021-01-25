@@ -610,7 +610,7 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
       for (IndexToReplicateComparable i : mapOfChanges.values()) {
         if (i.delete) {
           try {
-            indexer.delete(new Change.Id(i.indexNumber));
+            indexer.deleteNoRepl(new Change.Id(i.indexNumber));
           } catch (IOException e) {
             logger.atSevere().withCause(e).log("RC Error while trying to delete change index %d", i.indexNumber);
           }

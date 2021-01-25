@@ -30,6 +30,8 @@ import com.google.gerrit.reviewdb.client.Change;
 import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.reviewdb.server.ReviewDb;
 import com.google.gerrit.server.CurrentUser;
+import com.google.gerrit.server.config.AllProjectsName;
+import com.google.gerrit.server.config.AllProjectsNameProvider;
 import com.google.gerrit.server.config.GerritServerConfig;
 import com.google.gerrit.server.index.IndexExecutor;
 import com.google.gerrit.server.index.IndexUtils;
@@ -107,6 +109,9 @@ public class ChangeIndexer {
   private final StalenessChecker stalenessChecker;
   private final boolean autoReindexIfStale;
   private final boolean replicateAutoReindexIfStale;
+  private final AllProjectsName allProjectsName;
+
+
 
   private final Set<IndexTask> queuedIndexTasks =
       Collections.newSetFromMap(new ConcurrentHashMap<>());
@@ -125,7 +130,8 @@ public class ChangeIndexer {
       StalenessChecker stalenessChecker,
       @IndexExecutor(BATCH) ListeningExecutorService batchExecutor,
       @Assisted ListeningExecutorService executor,
-      @Assisted ChangeIndex index) {
+      @Assisted ChangeIndex index,
+      AllProjectsNameProvider allProjectsNameProvider) {
     this.executor = executor;
     this.schemaFactory = schemaFactory;
     this.notesMigration = notesMigration;
@@ -139,6 +145,7 @@ public class ChangeIndexer {
     this.replicateAutoReindexIfStale = replicateAutoReindexIfStale(cfg);
     this.index = index;
     this.indexes = null;
+    this.allProjectsName = allProjectsNameProvider.get();
   }
 
   @AssistedInject
@@ -153,7 +160,8 @@ public class ChangeIndexer {
       StalenessChecker stalenessChecker,
       @IndexExecutor(BATCH) ListeningExecutorService batchExecutor,
       @Assisted ListeningExecutorService executor,
-      @Assisted ChangeIndexCollection indexes) {
+      @Assisted ChangeIndexCollection indexes,
+      AllProjectsNameProvider allProjectsNameProvider) {
     this.executor = executor;
     this.schemaFactory = schemaFactory;
     this.notesMigration = notesMigration;
@@ -167,6 +175,7 @@ public class ChangeIndexer {
     this.replicateAutoReindexIfStale = replicateAutoReindexIfStale(cfg);
     this.index = null;
     this.indexes = indexes;
+    this.allProjectsName = allProjectsNameProvider.get();
   }
 
   private static boolean autoReindexIfStale(Config cfg) {
@@ -427,8 +436,40 @@ public class ChangeIndexer {
    * @return future for the deleting task.
    */
   @SuppressWarnings("deprecation")
-  public com.google.common.util.concurrent.CheckedFuture<?, IOException> deleteAsync(Change.Id id) {
-    return submit(new DeleteTask(id));
+  public com.google.common.util.concurrent.CheckedFuture<?, IOException> deleteAsync(Project.NameKey project,
+                                                                                     Change.Id id) {
+    return deleteAsyncImpl(project, id, Replicator.isReplicationEnabled());
+  }
+
+  /**
+   * Start deleting a change.
+   *
+   * @param id change to delete.
+   * @return future for the deleting task.
+   */
+  @SuppressWarnings("deprecation")
+  public com.google.common.util.concurrent.CheckedFuture<?, IOException> deleteAsyncNoRepl(Project.NameKey project,
+                                                                                           Change.Id id) {
+    return deleteAsyncImpl(project, id, false);
+  }
+
+  /**
+   * Start indexing a change.  This is real implementation used  by both the replicated and local only indexAsync
+   * methods.
+   * N.B. Private to ensure callers do not use this directly, but instead consider whether they wish to have replication
+   * enabled or not, by calling the parent methods.
+   *
+   * @param id change to index.
+   * @return future for the indexing task.
+   */
+  @SuppressWarnings("deprecation")
+  private com.google.common.util.concurrent.CheckedFuture<?, IOException> deleteAsyncImpl(Project.NameKey project,
+                                                                                          Change.Id id,
+                                                                                          boolean replicationEnabled) {
+    logger.atFine().log("RC Going ASYNC to delete index %s replication: %s", id,
+                        lazy(() -> getReplicationString(replicationEnabled)));
+    DeleteTask task = new DeleteTask(project, id, replicationEnabled);
+    return submit(task);
   }
 
   /**
@@ -437,8 +478,36 @@ public class ChangeIndexer {
    * @param id change ID to delete.
    */
   public void delete(Change.Id id) throws IOException {
-    new DeleteTask(id).call();
+    new DeleteTask(allProjectsName, id, Replicator.isReplicationEnabled()).call();
   }
+
+  /**
+   * Synchronously delete a change.
+   *
+   * @param id change ID to delete.
+   */
+  public void delete(Project.NameKey project, Change.Id id) throws IOException {
+    new DeleteTask(project, id, Replicator.isReplicationEnabled()).call();
+  }
+
+  /**
+   * Synchronously delete a change.
+   *
+   * @param id change ID to delete.
+   */
+  public void deleteNoRepl(Change.Id id) throws IOException {
+    delete(allProjectsName, id, false);
+  }
+
+  /**
+   * Synchronously delete a change.
+   *
+   * @param id change ID to delete.
+   */
+  public void delete(Project.NameKey project ,Change.Id id, boolean replicationEnabled ) throws IOException {
+    new DeleteTask(project, id, replicationEnabled).call();
+  }
+
 
   /**
    * Asynchronously check if a change is stale, and reindex if it is.
@@ -600,9 +669,13 @@ public class ChangeIndexer {
   // Not AbstractIndexTask as it doesn't need ReviewDb.
   private class DeleteTask implements Callable<Void> {
     private final Change.Id id;
+    private final boolean replicationEnabled;
+    private final Project.NameKey project;
 
-    private DeleteTask(Change.Id id) {
+    private DeleteTask(Project.NameKey project, Change.Id id, boolean replicationEnabled) {
       this.id = id;
+      this.replicationEnabled = replicationEnabled;
+      this.project = project;
     }
 
     @Override
@@ -619,6 +692,12 @@ public class ChangeIndexer {
         }
       }
       fireChangeDeletedFromIndexEvent(id.get());
+      if (replicationEnabled == false || ( ReplicatedIndexEventManager.getInstance() == null )) {
+        return null;
+      }
+      // otherwise replicated these index changes now.z
+      logger.atFine().log ("RC Finished deletion index %d, queuing for replication...", id.get());
+      ReplicatedIndexEventManager.queueReplicationIndexDeletionEvent(id.get(), project.get());
       return null;
     }
   }

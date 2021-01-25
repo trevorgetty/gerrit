@@ -496,7 +496,7 @@ public class ReviewDbBatchUpdate extends BatchUpdate {
     // Reindex changes.
     for (ChangeTask task : tasks) {
       if (task.deleted) {
-        indexFutures.add(indexer.deleteAsync(task.id));
+        indexFutures.add(indexer.deleteAsync(project, task.id));
       } else if (task.dirty) {
         indexFutures.add(indexer.indexAsync(project, task.id));
       }
@@ -704,15 +704,6 @@ public class ReviewDbBatchUpdate extends BatchUpdate {
             if (!dryrun) {
               db.commit();
             }
-
-            // If we have deleted the change, send index deletion event. But only do so when we aren't in a dry run.
-            if (!dryrun && deleted){
-              String change = id.toString();
-              int changeId = Integer.parseInt(change);
-              String projectName = project.toString();
-              ReplicatedIndexEventManager.queueReplicationIndexDeletionEvent(changeId, projectName);
-            }
-
           } else {
             logDebug("Skipping ReviewDb write since primary storage is %s", storage);
           }
