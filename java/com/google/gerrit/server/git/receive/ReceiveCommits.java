@@ -519,14 +519,14 @@ class ReceiveCommits {
     processCommandsUnsafe(commands, progress);
     rejectRemaining(commands, INTERNAL_SERVER_ERROR);
 
-    // This sends the 'GitMS - update replicated.' message before the 'done' string of the
-    // progress monitor is sent.
-    sendOkMessage(commands);
-
     // This sends error messages before the 'done' string of the progress monitor is sent.
     // Currently, the test framework relies on this ordering to understand if pushes completed
     // successfully.
     sendErrorMessages();
+
+    // This sends the final success message (i.e. 'GitMS - update replicated.' if replication is enabled.)
+    // after the 'done' string of the progress monitor is sent.
+    checkAndSendOkMessage(commands);
 
     commandProgress.end();
     progress.end();
@@ -660,12 +660,15 @@ class ReceiveCommits {
    * GitMS specific success messaging - if replication is disabled this should not be printed.
    * @param commands
    */
-  private void sendOkMessage(Collection<ReceiveCommand> commands) {
-    final String okMessage = Replicator.isReplicationDisabled() ? "Update successful." : "GitMS - update replicated.";
+  private void checkAndSendOkMessage(Collection<ReceiveCommand> commands) {
+    final String okMessage = Replicator.isReplicationDisabled() ? "Update successful" : "GitMS - update replicated.";
 
     if (verifyCommandsOk(commands)) {
       logger.atFine().log("Handling success - no errors.");
-      receivePack.sendMessage(okMessage);
+      // We're using addMessage here to delay writing the success message until after the progress monitor is
+      // finished using the stream to display the text spinner. If we use sendMessage directly we risk corrupting the
+      // text in the stream when it's expected to only contain progress lines.
+      addMessage(okMessage);
     }
   }
 
@@ -677,10 +680,13 @@ class ReceiveCommits {
    * @param message
    */
   private void checkAndLogException(final Collection<ReceiveCommand> commands, final String message) {
-    if(!Replicator.isReplicationDisabled()) {
+    if (!Replicator.isReplicationDisabled()) {
       if (commands.stream().anyMatch(c -> c.getResult() == NOT_ATTEMPTED)) {
         logger.atFine().log("Handling failure to replicate: %s.", message);
-        receivePack.sendMessage("error: " + message);
+        // We're using addMessage here to delay writing the atomic replication error until after the progress monitor is
+        // finished using the stream to display the text spinner. If we use sendMessage directly we risk corrupting the
+        // text in the stream when it's expected to only contain progress lines.
+        addMessage("error: " + message);
       }
     }
   }
