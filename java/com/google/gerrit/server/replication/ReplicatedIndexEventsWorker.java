@@ -700,7 +700,9 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
                       .getChange();
       return c;
     } catch (NoSuchChangeException e) {
-      logger.atSevere().withCause(e).log("RC Error while trying to get change index %d", i.indexNumber);
+      //This is called on deletions so can be expected to throw.
+      logger.atFine().withCause(e).log("RC change was not found , could be missing or deleted %d", i.indexNumber);
+      logger.atInfo().log("RC change was not found trying to get change index %d", i.indexNumber);
       return null;
     }
   }
@@ -788,6 +790,10 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
    */
   private boolean indexSingleChange(ReviewDb db, IndexToReplicate indexEvent, boolean enqueueIfUnsuccessful, boolean forceIndexing) throws OrmException {
 
+    if (indexEvent.delete){
+      logger.atInfo().log("RC Change %d not indexed, not found -- deleted", indexEvent.indexNumber);
+      return true;
+    }
     long startTime = System.currentTimeMillis();
     Change change = getChange(db, indexEvent);
     long endTime = System.currentTimeMillis();
@@ -795,7 +801,7 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
     logger.atFine().log("RC Lookup of change.Id %d took %d",indexEvent.indexNumber, duration);
 
     if (change == null) {
-      logger.atInfo().log("RC Change %d not reindexed, not found -- deleted", indexEvent.indexNumber);
+      logger.atInfo().log("RC Change %d not indexed, not found -- missing", indexEvent.indexNumber);
       return true;
     }
 

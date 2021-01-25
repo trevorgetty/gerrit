@@ -18,6 +18,7 @@ import com.google.gerrit.reviewdb.client.Branch;
 import com.google.gerrit.reviewdb.client.Change;
 import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.reviewdb.server.ReviewDb;
+import com.google.gerrit.server.events.ChangeDeletedEvent;
 import com.google.gerrit.server.events.ChangeEvent;
 import com.google.gerrit.server.events.Event;
 import com.google.gerrit.server.events.EventBroker;
@@ -303,6 +304,12 @@ public class ReplicatedEventsWorker implements Runnable, Replicator.GerritPublis
       try (ReviewDb db = replicatedEventsManager.getReviewDbProvider().get()) {
         if (changeEventInfo.getChangeAttr() != null) {
           logger.atFine().log("RE using changeAttr: %s...", changeEventInfo.getChangeAttr());
+          if (newEvent instanceof ChangeDeletedEvent){
+            //changeDeletedEvent has changeAttr needs fired without look up as it is a delete
+            // fired through generic event path to avoid Change look up
+            changeHookRunner.postEvent(newEvent);
+            return true;
+          }
           // As this is a replicated event, and we are raising to listeners create without auto rebuilding of the
           // index, this stops us potentially rebuilding the index twice.  If we raise a changed event, we later
           // check for reindexing again which could rebuild a missing index (used during online migration only )
@@ -315,7 +322,8 @@ public class ReplicatedEventsWorker implements Runnable, Replicator.GerritPublis
           logger.atFine().log("RE using branchName: %s", changeEventInfo.getBranchName());
           changeHookRunner.postEvent(changeEventInfo.getBranchName(), (RefEvent) newEvent);
         } else if (newEvent instanceof ProjectCreatedEvent) {
-          changeHookRunner.postEvent(((ProjectCreatedEvent) newEvent));
+          changeHookRunner.postEvent(((ProjectCreatedEvent) newEvent).getProjectNameKey(),
+                                     ((ProjectCreatedEvent) newEvent));
         } else {
           logger.atSevere().withCause(new Exception("refs is null for supported event")).log(
               "RE Internal error, it's *supported*, but refs is null");
