@@ -408,6 +408,11 @@ case "$ACTION" in
         exit 1
     fi
 
+    if [[ -z "$(get_config --get noteDb.changes.sequenceBatchSize)" ]] ; then
+        echo "** ERROR: noteDb.changes.sequenceBatchSize is not set. See WANdisco documentation."
+        exit 1
+    fi
+
     printf '%s' "Starting Gerrit Code Review: "
 
     if test 1 = "$NO_START" ; then
