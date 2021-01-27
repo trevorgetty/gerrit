@@ -83,13 +83,10 @@ function prereqs() {
   info " Welcome to the GerritMS installation. Before the install can continue,"
   info " you must:"
   info ""
-  info " * Have one of the following gerrit versions installed before beginning:"
+  info " * Have the following gerrit version installed before beginning:"
   info "     - Gerrit: $NEW_GERRIT_VERSION"
-  for version in "${PREVIOUS_ALLOWED_RP_GERRIT_VERSIONS[@]}"; do
-    info "     - Gerrit MS: $version"
-  done
   info " * Have backed up your existing Gerrit database"
-  info " * Have a version of GitMS (1.9.4 or higher) installed and running"
+  info " * Have a version of GitMS (1.10.0 or higher) installed and running"
   info " * Have a replication group created in GitMS containing all Gerrit nodes"
   info " * Have a valid GitMS admin username/password"
   info " * Stop the Gerrit service on this node"
@@ -1486,8 +1483,8 @@ function mkdirectory(){
 NON_INTERACTIVE=0
 WD_GERRIT_VERSION=$(get_gerrit_version "release.war")
 NEW_GERRIT_VERSION=$(echo $WD_GERRIT_VERSION | cut -f1 -d '-')
-GERRIT_RELEASE_NOTES="https://gerrit-documentation.storage.googleapis.com/ReleaseNotes/ReleaseNotes-2.13.html"
-GERRITMS_INSTALL_DOC="http://docs.wandisco.com/gerrit/1.9/#doc_gerritinstall"
+GERRIT_RELEASE_NOTES="https://www.gerritcodereview.com/2.16.html"
+GERRITMS_INSTALL_DOC="http://docs.wandisco.com/gerrit/1.10/#doc_gerritinstall"
 
 check_executables
 get_gerrit_root_from_user
