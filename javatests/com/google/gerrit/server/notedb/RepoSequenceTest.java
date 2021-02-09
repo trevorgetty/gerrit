@@ -185,8 +185,7 @@ public class RepoSequenceTest {
         newSequence("id", 1, 3).next();
         fail();
       } catch (OrmException e) {
-        assertThat(e.getCause()).isInstanceOf(ExecutionException.class);
-        assertThat(e.getCause().getCause()).isInstanceOf(IncorrectObjectTypeException.class);
+        assertThat(e.getCause()).isInstanceOf(IncorrectObjectTypeException.class);
       }
     }
   }
@@ -210,7 +209,10 @@ public class RepoSequenceTest {
 
   @Test
   public void nextWithCountOneCaller() throws Exception {
-    RepoSequence s = newSequence("id", 1, 3);
+    final int batchSize = 3;
+    RepoSequence s = newSequence("id", 1, batchSize);
+    assertThat(s.batchSize).isEqualTo(batchSize);
+
     assertThat(s.next(2)).containsExactly(1, 2).inOrder();
     assertThat(s.acquireCount).isEqualTo(1);
     assertThat(s.next(2)).containsExactly(3, 4).inOrder();
@@ -226,11 +228,11 @@ public class RepoSequenceTest {
     assertThat(s.acquireCount).isEqualTo(5);
 
     assertThat(s.next(7)).containsExactly(16, 17, 18, 19, 20, 21, 22).inOrder();
-    assertThat(s.acquireCount).isEqualTo(6);
-    assertThat(s.next(7)).containsExactly(23, 24, 25, 26, 27, 28, 29).inOrder();
-    assertThat(s.acquireCount).isEqualTo(7);
-    assertThat(s.next(7)).containsExactly(30, 31, 32, 33, 34, 35, 36).inOrder();
     assertThat(s.acquireCount).isEqualTo(8);
+    assertThat(s.next(7)).containsExactly(23, 24, 25, 26, 27, 28, 29).inOrder();
+    assertThat(s.acquireCount).isEqualTo(10);
+    assertThat(s.next(7)).containsExactly(30, 31, 32, 33, 34, 35, 36).inOrder();
+    assertThat(s.acquireCount).isEqualTo(12);
   }
 
   @Test

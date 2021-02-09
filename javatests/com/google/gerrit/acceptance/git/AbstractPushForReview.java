@@ -2387,7 +2387,7 @@ public abstract class AbstractPushForReview extends AbstractDaemonTest {
     PushOneCommit.Result result = pushTo("refs/publish/master");
     result.assertOkStatus();
     assertThat(result.getMessage())
-        .endsWith("Pushing to refs/publish/* is deprecated, use refs/for/* instead.\n");
+        .contains("Pushing to refs/publish/* is deprecated, use refs/for/* instead.\n");
   }
 
   @Test
