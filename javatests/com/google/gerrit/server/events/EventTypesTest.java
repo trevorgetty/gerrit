@@ -15,21 +15,31 @@
 package com.google.gerrit.server.events;
 
 import static com.google.common.truth.Truth.assertThat;
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.junit.Assert.assertTrue;
 
-import com.google.common.collect.Sets;
-import org.eclipse.jgit.util.StringUtils;
+import com.google.common.base.Strings;
 import org.junit.Test;
 
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class EventTypesTest {
+
+  private static final String KNOWN_EVENTS_FILE="known_event_types.txt";
+
   public static class TestEvent extends Event {
     private static final String TYPE = "test-event";
 
@@ -77,7 +87,7 @@ public class EventTypesTest {
 
 
   @Test
-  public void testKnownChangeEvents() throws NoSuchFieldException, IllegalAccessException {
+  public void testKnownChangeEvents() throws Exception {
     //These events are present in gerrit 2.13 and gerrit 2.16
     List<Class<? extends Event>> knownEventClasses = new ArrayList<>(Arrays.asList(
         ChangeAbandonedEvent.class, ChangeMergedEvent.class, ChangeRestoredEvent.class, CommentAddedEvent.class,
@@ -95,30 +105,110 @@ public class EventTypesTest {
     //Getting the events we actually support and compare them.
     //When the EventTypes class loads, there is a static initializer that
     //registers the events. It is these registered events that we want to compare against.
+    List<String> eventTypesInCurrentVersion = convertList(getAllEventClasses(), Class::toString);
+    List<String> knownEventTypes = getListFromResource(KNOWN_EVENTS_FILE);
+
+    List<String> KnownIn213 = convertList(knownEventClasses, Class::toString);
+    List<String> knownAddedIn216 = convertList(knownGerrit216EventClasses, Class::toString);
+
+    List<String> combinedKnown = Stream.of(KnownIn213, knownAddedIn216)
+        .flatMap(Collection::stream).collect(Collectors.toList());
+
+    //Need to make sure that the events file contains the hard coded
+    //events here. This is just a precautionary step in case the known
+    //events file is not kept up to date.
+    assertTrue(knownEventTypes.containsAll(combinedKnown));
+
+    checkEventSetDifferences(eventTypesInCurrentVersion, knownEventTypes);
+  }
+
+
+  //Finds and returns a list of all event types.
+  private List<Class> getAllEventClasses() throws NoSuchFieldException, IllegalAccessException {
     EventTypes eventTypes = new EventTypes();
     Class clazz = eventTypes.getClass();
     Field field = clazz.getDeclaredField("typesByString");
     field.setAccessible(true);
     Map<String, String> refMap = (HashMap<String, String>) field.get(eventTypes);
-    Class[] clsArray = refMap.values().toArray(new Class[0]);
+    return Arrays.asList(refMap.values().toArray(new Class[0]));
+  }
 
-    Set<Class> foundSet = new HashSet<Class>(Arrays.asList(clsArray));
-    Set<Class> knownSet = new HashSet<Class>(knownEventClasses);
 
-    //Comparing the two sets of classes. If one set contains or is missing something
-    //from the other set then we should fail.
-    String msg = "";
-    if (!knownSet.containsAll(foundSet)) {
-      msg = String.format("New events have been found : %s", Sets.difference(foundSet, knownSet));
+  // Transforms each object type in the stream using the map function
+  // to convert one type to another.
+  public static <T, U> List<U> convertList(List<T> from, Function<T, U> func) {
+    return from.stream().map(func).collect(Collectors.toList());
+  }
+
+  @Test(expected = AssertionError.class)
+  public void testNewEventTypeAdded() throws Exception {
+    //Converting event types of Type Class to String here.
+    List<String> eventTypesInCurrentVersion = convertList(getAllEventClasses(), Class::toString);
+
+    eventTypesInCurrentVersion.add("class com.google.gerrit.server.events.BrandNewEvent");
+
+    List<String> knownEventTypes = getListFromResource(KNOWN_EVENTS_FILE);
+
+    checkEventSetDifferences(eventTypesInCurrentVersion, knownEventTypes);
+  }
+
+  @Test(expected = AssertionError.class)
+  public void testEventTypeRemoved() throws Exception {
+    //Converting event types of Type Class to String here.
+    List<String> eventTypesInCurrentVersion = convertList(getAllEventClasses(), Class::toString);
+
+    List<String> knownEventTypes = getListFromResource(KNOWN_EVENTS_FILE);
+    knownEventTypes.remove("class com.google.gerrit.server.events.ChangeDeletedEvent");
+
+    checkEventSetDifferences(eventTypesInCurrentVersion, knownEventTypes);
+  }
+
+
+  // Compares two sets, events in the current version vs events in our known_events_types.txt file
+  // Throws an AssertionError if any differences found with the relevant message.
+  private void checkEventSetDifferences(List<String> eventTypesInCurrentVersion, List<String> knownEventTypes) {
+    Set<String> oldFilterNew = knownEventTypes.stream()
+        .distinct()
+        .filter(val -> !eventTypesInCurrentVersion.contains(val))
+        .collect(Collectors.toSet());
+
+    Set<String> newFilterOld = eventTypesInCurrentVersion.stream()
+        .distinct()
+        .filter(val -> !knownEventTypes.contains(val))
+        .collect(Collectors.toSet());
+
+    StringBuilder errMsg = new StringBuilder();
+
+    if(!oldFilterNew.isEmpty()) {
+      errMsg.append(String.format("\nNew event types have been found " +
+          "that are not in our current known set [ %s ], have new events been added? ", oldFilterNew));
     }
 
-    if (!foundSet.containsAll(knownSet)) {
-      msg = String.format("Old events have been removed: %s", Sets.difference(knownSet, foundSet));
+    if(!newFilterOld.isEmpty()) {
+      errMsg.append(String.format("\nEvent types exist in the known set " +
+          "that are not present in this version [ %s ], have they been removed? ", newFilterOld));
     }
 
-    if(!StringUtils.isEmptyOrNull(msg)){
-      throw new AssertionError(msg);
+    if(!Strings.isNullOrEmpty(errMsg.toString())){
+      throw new AssertionError(errMsg);
     }
+  }
+
+  //The known_event_types text file in resources / events is read as an
+  // inputStream and each line added to a list and returned.
+  private List<String> getListFromResource(String resource) throws Exception {
+    List<String> eventsList = new ArrayList<>();
+    try (InputStream in = this.getClass().getResourceAsStream(resource)) {
+      if (in == null) {
+        throw new Exception(String.format("%s list not found", resource));
+      }
+      BufferedReader r = new BufferedReader(new InputStreamReader(in, UTF_8));
+      String line;
+      while ((line = r.readLine()) != null) {
+        eventsList.add(line);
+      }
+    }
+    return eventsList;
   }
 
   //This test is to check that we can verify the presence of the skipReplication
