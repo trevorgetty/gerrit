@@ -867,8 +867,8 @@ maven_jar(
 
 maven_jar(
     name = "httpclient",
-    artifact = "org.apache.httpcomponents:httpclient:" + HTTPCOMP_VERS,
-    sha1 = "016d0bc512222f1253ee6b64d389c84e22f697f0",
+    artifact = "org.apache.httpcomponents:httpclient:4.5.13",
+    sha1 = "e5f6cae5ca7ecaac1ec2827a9e2d65ae2869cada",
 )
 
 maven_jar(
@@ -1064,13 +1064,13 @@ maven_jar(
 )
 
 # WANdisco maven assets
-_GERRIT_GITMS_VERSION = "1.1.0.1"
+_GERRIT_GITMS_VERSION = "1.1.1.1-SNAPSHOT"
 
 maven_jar(
     name = "gerrit-gitms-interface",
     artifact = "com.wandisco:gerrit-gitms-interface:" + _GERRIT_GITMS_VERSION,
     repository = WANDISCO_ASSETS,
-    sha1 = "a0eb0feb042c06fa0974b45039a728c4c28cb3fd",
+#    sha1 = "a0eb0feb042c06fa0974b45039a728c4c28cb3fd",
 )
 
 load("//tools/bzl:js.bzl", "bower_archive", "npm_binary")
