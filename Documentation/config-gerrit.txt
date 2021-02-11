@@ -1905,6 +1905,13 @@ utils (e.g. MigrateToNoteDb).
 +
 Default is `false`.
 
+[[database.h2.maxQueryTimeout]]database.h2.maxQueryTimeout::
++
+The maximum timeout of a query in milliseconds.
+(see http://www.h2database.com/javadoc/org/h2/engine/DbSettings.html?#MAX_QUERY_TIMEOUT[MAX_QUERY_TIMEOUT]).
++
+The default is 0, meaning no limit.
+
 [[download]]
 === Section download
 
@@ -2727,7 +2734,8 @@ By default, `gerrit`.
 +
 Enable (or disable) the `'$site_path'/logs/httpd_log` request log.
 If enabled, an NCSA combined log format request log file is written
-out by the internal HTTP daemon.
+out by the internal HTTP daemon. The httpd log format is documented
+link:logs.html#_httpd_log[here].
 +
 `log4j.appender` with the name `httpd_log` can be configured to overwrite
 programmatic configuration.
@@ -2905,7 +2913,7 @@ by the JVM. If set to a negative value, defaults to a direct executor.
 [[index.batchThreads]]index.batchThreads::
 +
 Number of threads to use for indexing in background operations, such as
-online schema upgrades.
+online schema upgrades, and also for offline reindexing.
 +
 If not set or set to a zero, defaults to the number of logical CPUs as returned
 by the JVM. If set to a negative value, defaults to a direct executor.
@@ -4819,6 +4827,7 @@ By default, `host/canonical.host.name`
 +
 Enable (or disable) the `'$site_path'/logs/sshd_log` request log.
 If enabled, a request log file is written out by the SSH daemon.
+The sshd log format is documented link:logs.html#_sshd_log[here].
 +
 `log4j.appender` with the name `sshd_log` can be configured to overwrite
 programmatic configuration.

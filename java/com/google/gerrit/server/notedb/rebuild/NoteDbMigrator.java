@@ -14,7 +14,6 @@
 
 package com.google.gerrit.server.notedb.rebuild;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.gerrit.reviewdb.server.ReviewDbUtil.unwrapDb;
 import static com.google.gerrit.server.notedb.NotesMigration.SECTION_NOTE_DB;
@@ -33,7 +32,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
-import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import com.google.common.collect.MultimapBuilder;
 import com.google.common.collect.Ordering;
 import com.google.common.collect.SetMultimap;
@@ -47,6 +46,7 @@ import com.google.gerrit.common.FormatUtil;
 import com.google.gerrit.common.Nullable;
 import com.google.gerrit.extensions.registration.DynamicSet;
 import com.google.gerrit.reviewdb.client.Change;
+import com.google.gerrit.reviewdb.client.Change.Id;
 import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.reviewdb.server.ReviewDb;
 import com.google.gerrit.reviewdb.server.ReviewDbWrapper;
@@ -68,7 +68,6 @@ import com.google.gerrit.server.notedb.NoteDbTable;
 import com.google.gerrit.server.notedb.NoteDbUpdateManager;
 import com.google.gerrit.server.notedb.NotesMigrationState;
 import com.google.gerrit.server.notedb.PrimaryStorageMigrator;
-import com.google.gerrit.server.notedb.PrimaryStorageMigrator.NoNoteDbStateException;
 import com.google.gerrit.server.notedb.RepoSequence;
 import com.google.gerrit.server.notedb.rebuild.ChangeRebuilder.NoPatchSetsException;
 import com.google.gerrit.server.project.NoSuchChangeException;
@@ -86,17 +85,22 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import org.eclipse.jgit.errors.ConfigInvalidException;
 import org.eclipse.jgit.errors.RepositoryNotFoundException;
 import org.eclipse.jgit.internal.storage.file.FileRepository;
+import org.eclipse.jgit.internal.storage.file.GC;
 import org.eclipse.jgit.internal.storage.file.PackInserter;
 import org.eclipse.jgit.lib.BatchRefUpdate;
 import org.eclipse.jgit.lib.Config;
@@ -108,6 +112,7 @@ import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.lib.TextProgressMonitor;
 import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.storage.file.FileBasedConfig;
+import org.eclipse.jgit.storage.pack.PackConfig;
 import org.eclipse.jgit.transport.ReceiveCommand;
 import org.eclipse.jgit.util.FS;
 
@@ -117,6 +122,9 @@ public class NoteDbMigrator implements AutoCloseable {
 
   private static final String AUTO_MIGRATE = "autoMigrate";
   private static final String TRIAL = "trial";
+
+  private static final int PROJECT_SLICE_MAX_REFS = 1000;
+  private static final int GC_INTERVAL = 10000;
 
   public static boolean getAutoMigrate(Config cfg) {
     return cfg.getBoolean(SECTION_NOTE_DB, NoteDbTable.CHANGES.key(), AUTO_MIGRATE, false);
@@ -175,8 +183,10 @@ public class NoteDbMigrator implements AutoCloseable {
     private NotesMigrationState stopAtState;
     private boolean trial;
     private boolean forceRebuild;
+    private boolean forceStateChangeWithSkip;
     private int sequenceGap = -1;
     private boolean autoMigrate;
+    private boolean verbose;
 
     @Inject
     Builder(
@@ -341,6 +351,21 @@ public class NoteDbMigrator implements AutoCloseable {
     }
 
     /**
+     * Force state change to next migration state if some projects were skipped.
+     *
+     * <p>This makes sense when the skipped projects are migrated in a copy of the site and migrated
+     * data will be transported using git fetch.
+     *
+     * @param forceStateChangeWithSkip whether state change to next migration state should be
+     *     enforced if some projects were skipped.
+     * @return this.
+     */
+    public Builder setForceStateChangeWithSkip(boolean forceStateChangeWithSkip) {
+      this.forceStateChangeWithSkip = forceStateChangeWithSkip;
+      return this;
+    }
+
+    /**
      * Gap between ReviewDb change sequence numbers and NoteDb.
      *
      * <p>If NoteDb sequences are enabled in a running server, there is a race between the migration
@@ -379,6 +404,17 @@ public class NoteDbMigrator implements AutoCloseable {
       return this;
     }
 
+    /**
+     * Enable verbose log output
+     *
+     * @param verbose enable verbose log output
+     * @return this.
+     */
+    public Builder setVerbose(boolean verbose) {
+      this.verbose = verbose;
+      return this;
+    }
+
     public NoteDbMigrator build() throws MigrationException {
       return new NoteDbMigrator(
           sitePaths,
@@ -407,8 +443,42 @@ public class NoteDbMigrator implements AutoCloseable {
           projectCache,
           trial,
           forceRebuild,
+          forceStateChangeWithSkip,
           sequenceGap >= 0 ? sequenceGap : Sequences.getChangeSequenceGap(cfg),
-          autoMigrate);
+          autoMigrate,
+          verbose);
+    }
+  }
+
+  private static class ProjectContext {
+    final ReentrantLock gcLock;
+    final Project.NameKey project;
+    int sliceCount;
+    int changeCount;
+    final AtomicLong changesMigratedCount;
+
+    ProjectContext(Project.NameKey project, int sliceCount) {
+      this.gcLock = new ReentrantLock();
+      this.project = project;
+      this.sliceCount = sliceCount;
+      this.changesMigratedCount = new AtomicLong();
+    }
+  }
+
+  private static class ProjectSlice {
+    final ProjectContext ctx;
+    final List<Id> changes;
+    int sliceNumber = 0;
+
+    ProjectSlice(ProjectContext ctx, List<Id> changes, int sliceNumber) {
+      this.ctx = ctx;
+      this.changes = changes;
+      this.sliceNumber = sliceNumber;
+    }
+
+    @Override
+    public String toString() {
+      return "Slice [project=" + ctx.project + "]";
     }
   }
 
@@ -434,11 +504,15 @@ public class NoteDbMigrator implements AutoCloseable {
   private final ImmutableList<Change.Id> changes;
   private final OutputStream progressOut;
   private final NotesMigrationState stopAtState;
-  private final ProjectCache projectCache;
   private final boolean trial;
   private final boolean forceRebuild;
+  private final boolean forceStateChangeWithSkip;
   private final int sequenceGap;
   private final boolean autoMigrate;
+  private final boolean verbose;
+
+  private final AtomicLong globalChangeCounter = new AtomicLong();
+  private long totalChangeCount;
 
   private NoteDbMigrator(
       SitePaths sitePaths,
@@ -464,8 +538,10 @@ public class NoteDbMigrator implements AutoCloseable {
       ProjectCache projectCache,
       boolean trial,
       boolean forceRebuild,
+      boolean forceStateChangeWithSkip,
       int sequenceGap,
-      boolean autoMigrate)
+      boolean autoMigrate,
+      boolean verbose)
       throws MigrationException {
     if (ImmutableList.of(!changes.isEmpty(), !projects.isEmpty(), !skipProjects.isEmpty()).stream()
             .filter(e -> e)
@@ -496,11 +572,12 @@ public class NoteDbMigrator implements AutoCloseable {
     this.changes = changes;
     this.progressOut = progressOut;
     this.stopAtState = stopAtState;
-    this.projectCache = projectCache;
     this.trial = trial;
     this.forceRebuild = forceRebuild;
+    this.forceStateChangeWithSkip = forceStateChangeWithSkip;
     this.sequenceGap = sequenceGap;
     this.autoMigrate = autoMigrate;
+    this.verbose = verbose;
 
     // Stack notedb.config over gerrit.config, in the same way as GerritServerConfigProvider.
     this.gerritConfig = new FileBasedConfig(sitePaths.gerrit_config.toFile(), FS.detect());
@@ -514,9 +591,12 @@ public class NoteDbMigrator implements AutoCloseable {
   }
 
   public void migrate() throws OrmException, IOException {
-    if (!changes.isEmpty() || !projects.isEmpty() || !skipProjects.isEmpty()) {
+    if (!changes.isEmpty()
+        || !projects.isEmpty()
+        || (!forceStateChangeWithSkip && !skipProjects.isEmpty())) {
       throw new MigrationException(
-          "Cannot set changes or projects or skipProjects during full migration; call rebuild() instead");
+          "Cannot set changes or projects or skipProjects during full migration; call rebuild()"
+              + " instead");
     }
     Optional<NotesMigrationState> maybeState = loadState();
     if (!maybeState.isPresent()) {
@@ -627,7 +707,9 @@ public class NoteDbMigrator implements AutoCloseable {
   private NotesMigrationState setNoteDbPrimary(NotesMigrationState prev)
       throws MigrationException, OrmException, IOException {
     checkState(
-        projects.isEmpty() && changes.isEmpty() && skipProjects.isEmpty(),
+        projects.isEmpty()
+            && changes.isEmpty()
+            && (forceStateChangeWithSkip || skipProjects.isEmpty()),
         "Should not have attempted setNoteDbPrimary with a subset of changes");
     checkState(
         prev == READ_WRITE_WITH_SEQUENCE_REVIEW_DB_PRIMARY
@@ -643,39 +725,29 @@ public class NoteDbMigrator implements AutoCloseable {
     logger.atInfo().log("Setting primary storage to NoteDb");
     List<Change.Id> allChanges;
     try (ReviewDb db = unwrapDb(schemaFactory.open())) {
-      allChanges = Streams.stream(db.changes().all()).map(Change::getId).collect(toList());
+      if (forceStateChangeWithSkip) {
+        allChanges =
+            Streams.stream(db.changes().all())
+                .filter(c -> !skipProjects.contains(c.getProject()))
+                .map(Change::getId)
+                .collect(toList());
+      } else {
+        allChanges = Streams.stream(db.changes().all()).map(Change::getId).collect(toList());
+      }
     }
 
     try (ContextHelper contextHelper = new ContextHelper()) {
       List<ListenableFuture<Boolean>> futures =
-          allChanges.stream()
+          Lists.partition(allChanges, PROJECT_SLICE_MAX_REFS).stream()
               .map(
-                  id ->
+                  partition ->
                       executor.submit(
                           () -> {
                             try (ManualRequestContext ctx = contextHelper.open()) {
-                              try {
-                                primaryStorageMigrator.migrateToNoteDbPrimary(id);
-                              } catch (NoNoteDbStateException e) {
-                                if (canSkipPrimaryStorageMigration(
-                                    ctx.getReviewDbProvider().get(), id)) {
-                                  logger.atWarning().withCause(e).log(
-                                      "Change %s previously failed to rebuild;"
-                                          + " skipping primary storage migration",
-                                      id);
-                                } else {
-                                  throw e;
-                                }
-                              }
-                              return true;
-                            } catch (Exception e) {
-                              logger.atSevere().withCause(e).log(
-                                  "Error migrating primary storage for %s", id);
-                              return false;
+                              return primaryStorageMigrator.migrateToNoteDbPrimary(partition);
                             }
                           }))
               .collect(toList());
-
       boolean ok = futuresToBoolean(futures, "Error migrating primary storage");
       double t = sw.elapsed(TimeUnit.MILLISECONDS) / 1000d;
       logger.atInfo().log(
@@ -687,41 +759,6 @@ public class NoteDbMigrator implements AutoCloseable {
     }
 
     return disableReviewDb(prev);
-  }
-
-  /**
-   * Checks whether a change is so corrupt that it can be completely skipped by the primary storage
-   * migration step.
-   *
-   * <p>To get to the point where this method is called from {@link #setNoteDbPrimary}, it means we
-   * attempted to rebuild it, and encountered an error that was then caught in {@link
-   * #rebuildProject} and skipped. As a result, there is no {@code noteDbState} field in the change
-   * by the time we get to {@link #setNoteDbPrimary}, so {@code migrateToNoteDbPrimary} throws an
-   * exception.
-   *
-   * <p>We have to do this hacky double-checking because we don't have a way for the rebuilding
-   * phase to communicate to the primary storage migration phase that the change is skippable. It
-   * would be possible to store this info in some field in this class, but there is no guarantee
-   * that the rebuild and primary storage migration phases are run in the same JVM invocation.
-   *
-   * <p>In an ideal world, we could do this through the {@link
-   * com.google.gerrit.server.notedb.NoteDbChangeState.PrimaryStorage} enum, having a separate value
-   * for errors. However, that would be an invasive change touching many non-migration-related parts
-   * of the NoteDb migration code, which is too risky to attempt in the stable branch where this bug
-   * had to be fixed.
-   *
-   * <p>As of this writing, there are only two cases where this happens: when a change has no patch
-   * sets, or the project doesn't exist.
-   */
-  private boolean canSkipPrimaryStorageMigration(ReviewDb db, Change.Id id) {
-    try {
-      return Iterables.isEmpty(unwrapDb(db).patchSets().byChange(id))
-          || projectCache.get(unwrapDb(db).changes().get(id).getProject()) == null;
-    } catch (Exception e) {
-      logger.atSevere().withCause(e).log(
-          "Error checking if change %s can be skipped, assuming no", id);
-      return false;
-    }
   }
 
   private NotesMigrationState disableReviewDb(NotesMigrationState prev) throws IOException {
@@ -801,6 +838,27 @@ public class NoteDbMigrator implements AutoCloseable {
     }
   }
 
+  private List<ProjectSlice> slice() throws OrmException {
+    ImmutableListMultimap<Project.NameKey, Change.Id> changesByProject = getChangesByProject();
+    List<Project.NameKey> projectNames =
+        Ordering.usingToString().sortedCopy(changesByProject.keySet());
+    List<ProjectSlice> slices = Lists.newArrayList();
+    for (Project.NameKey project : projectNames) {
+      int sliceNumber = 1;
+      List<List<Id>> projectSlices =
+          Lists.partition(changesByProject.get(project), PROJECT_SLICE_MAX_REFS);
+      ProjectContext ctx = new ProjectContext(project, projectSlices.size());
+      ctx.changeCount = changesByProject.get(project).size();
+      for (List<Id> s : projectSlices) {
+        ProjectSlice ps = new ProjectSlice(ctx, s, sliceNumber++);
+        slices.add(ps);
+      }
+    }
+    Collections.shuffle(slices);
+    totalChangeCount = changesByProject.size();
+    return slices;
+  }
+
   public void rebuild() throws MigrationException, OrmException {
     if (!globalNotesMigration.commitChangeWrites()) {
       throw new MigrationException("Cannot rebuild without noteDb.changes.write=true");
@@ -808,33 +866,27 @@ public class NoteDbMigrator implements AutoCloseable {
     Stopwatch sw = Stopwatch.createStarted();
     logger.atInfo().log("Rebuilding changes in NoteDb");
 
-    ImmutableListMultimap<Project.NameKey, Change.Id> changesByProject = getChangesByProject();
+    List<ProjectSlice> slices = slice();
     List<ListenableFuture<Boolean>> futures = new ArrayList<>();
-    try (ContextHelper contextHelper = new ContextHelper()) {
-      List<Project.NameKey> projectNames =
-          Ordering.usingToString().sortedCopy(changesByProject.keySet());
-      for (Project.NameKey project : projectNames) {
-        ListenableFuture<Boolean> future =
-            executor.submit(
-                () -> {
-                  try {
-                    return rebuildProject(contextHelper.getReviewDb(), changesByProject, project);
-                  } catch (Exception e) {
-                    logger.atSevere().withCause(e).log("Error rebuilding project %s", project);
-                    return false;
-                  }
-                });
-        futures.add(future);
-      }
-
-      boolean ok = futuresToBoolean(futures, "Error rebuilding projects");
-      double t = sw.elapsed(TimeUnit.MILLISECONDS) / 1000d;
-      logger.atInfo().log(
-          "Rebuilt %d changes in %.01fs (%.01f/s)\n",
-          changesByProject.size(), t, changesByProject.size() / t);
-      if (!ok) {
-        throw new MigrationException("Rebuilding some changes failed, see log");
-      }
+    for (ProjectSlice slice : slices) {
+      ListenableFuture<Boolean> future =
+          executor.submit(
+              () -> {
+                try (ContextHelper contextHelper = new ContextHelper()) {
+                  return rebuildProjectSlice(contextHelper.getReviewDb(), slice);
+                } catch (Exception e) {
+                  logger.atSevere().withCause(e).log("Error rebuilding project %s", slice.ctx);
+                  return false;
+                }
+              });
+      futures.add(future);
+    }
+    boolean ok = futuresToBoolean(futures, "Error rebuilding projects");
+    double t = sw.elapsed(TimeUnit.MILLISECONDS) / 1000d;
+    logger.atInfo().log(
+        "Rebuilt %d changes in %.01fs (%.01f/s)\n", totalChangeCount, t, totalChangeCount / t);
+    if (!ok) {
+      throw new MigrationException("Rebuilding some changes failed, see log");
     }
   }
 
@@ -877,15 +929,18 @@ public class NoteDbMigrator implements AutoCloseable {
     return ins;
   }
 
-  private boolean rebuildProject(
-      ReviewDb db,
-      ImmutableListMultimap<Project.NameKey, Change.Id> allChanges,
-      Project.NameKey project) {
-    checkArgument(allChanges.containsKey(project));
+  private boolean rebuildProjectSlice(ReviewDb db, ProjectSlice slice) {
+    ProjectContext ctx = slice.ctx;
     boolean ok = true;
     ProgressMonitor pm =
         new TextProgressMonitor(
             new PrintWriter(new BufferedWriter(new OutputStreamWriter(progressOut, UTF_8))));
+    Project.NameKey project = ctx.project;
+    String oldThreadName = Thread.currentThread().getName();
+    Thread.currentThread()
+        .setName(
+            String.format(
+                "Rebuild %s (slice %d/%d)", ctx.project, slice.sliceNumber, ctx.sliceCount));
     try (Repository changeRepo = repoManager.openRepository(project);
         // Only use a PackInserter for the change repo, not All-Users.
         //
@@ -906,11 +961,20 @@ public class NoteDbMigrator implements AutoCloseable {
       ChainedReceiveCommands changeCmds = new ChainedReceiveCommands(changeRepo);
       ChainedReceiveCommands allUsersCmds = new ChainedReceiveCommands(allUsersRepo);
 
-      Collection<Change.Id> changes = allChanges.get(project);
-      pm.beginTask(FormatUtil.elide("Rebuilding " + project.get(), 50), changes.size());
+      pm.beginTask(
+          FormatUtil.elide(
+              String.format(
+                  "Rebuilding project %s slice %d/%d",
+                  project.get(), slice.sliceNumber, ctx.sliceCount),
+              60),
+          slice.changes.size());
       int toSave = 0;
       try {
-        for (Change.Id changeId : changes) {
+        logger.atInfo().log(
+            "Starting to rebuild changes from project %s slice %d/%d",
+            project.get(), slice.sliceNumber, ctx.sliceCount);
+        long pc = 0;
+        for (Change.Id changeId : slice.changes) {
           // NoteDbUpdateManager assumes that all commands in its OpenRepo were added by itself, so
           // we can't share the top-level ChainedReceiveCommands. Use a new set of commands sharing
           // the same underlying repo, and copy commands back to the top-level
@@ -952,13 +1016,30 @@ public class NoteDbMigrator implements AutoCloseable {
             logger.atSevere().withCause(t).log("Failed to rebuild change %s", changeId);
             ok = false;
           }
+          if (verbose) {
+            logger.atInfo().log("Rebuilt change %s", changeId.get());
+          }
+          long c = globalChangeCounter.incrementAndGet();
+          if (c % 1000 == 0) {
+            logger.atInfo().log(
+                "Total number of rebuilt changes %d/%d (%.01f%%)",
+                c, totalChangeCount, (100.0 * c) / totalChangeCount);
+          }
+          pc = ctx.changesMigratedCount.incrementAndGet();
+          if (pc % GC_INTERVAL == 0) {
+            gc(project, changeRepo, ctx.gcLock);
+          }
           pm.update(1);
         }
+        logger.atInfo().log(
+            "Finished rebuilding changes of project %s, slice %d/%d, changes %d/%d)",
+            project.get(), slice.sliceNumber, ctx.sliceCount, pc, ctx.changeCount);
       } finally {
         pm.endTask();
       }
 
-      pm.beginTask(FormatUtil.elide("Saving " + project.get(), 50), ProgressMonitor.UNKNOWN);
+      pm.beginTask(
+          FormatUtil.elide("Saving noteDb refs for " + project.get(), 60), ProgressMonitor.UNKNOWN);
       try {
         save(changeRepo, changeRw, changeIns, changeCmds);
         save(allUsersRepo, allUsersRw, allUsersIns, allUsersCmds);
@@ -980,8 +1061,34 @@ public class NoteDbMigrator implements AutoCloseable {
       logger.atWarning().log("Repository %s not found", project);
     } catch (IOException e) {
       logger.atSevere().withCause(e).log("Failed to rebuild project %s", project);
+    } finally {
+      Thread.currentThread().setName(oldThreadName);
     }
     return ok;
+  }
+
+  private void gc(Project.NameKey project, Repository repo, ReentrantLock gcLock) {
+    if (repo instanceof FileRepository && gcLock.tryLock()) {
+      try {
+        FileRepository r = (FileRepository) repo;
+        GC gc = new GC(r);
+        // known limitation in jgit 5.1: bitmap index creation is slow due to bug 562740,
+        // see https://bugs.eclipse.org/bugs/show_bug.cgi?id=562740
+        logger.atInfo().log("Running GC on project %s", project);
+        PackConfig pconfig = new PackConfig(repo);
+        pconfig.setBuildBitmaps(false);
+        // let auto gc decide when gc needs to really do something
+        gc.setAuto(true);
+        gc.setPackConfig(pconfig);
+        gc.gc();
+        logger.atInfo().log("Finished GC on project %s", project);
+      } catch (IOException | ParseException e) {
+        logger.atSevere().withCause(e).log("GC of project %s failed", project);
+      } finally {
+        gcLock.unlock();
+        logger.atFine().log("Released gc lock for project %s", project);
+      }
+    }
   }
 
   private void rebuild(ReviewDb db, Change.Id changeId, NoteDbUpdateManager manager)

@@ -4066,7 +4066,6 @@ Submits a revision.
 .Request
 ----
   POST /changes/myProject~master~I8473b95934b5732ac55d26311a706c9c2bde9940/revisions/674ac754f91e64a0efb8087e59a176484bd534d1/submit HTTP/1.0
-  Content-Type: application/json; charset=UTF-8
 ----
 
 As response a link:#submit-info[SubmitInfo] entity is returned that
@@ -4288,7 +4287,7 @@ a project-specific rule.
 .Request
 ----
   POST /changes/myProject~master~I8473b95934b5732ac55d26311a706c9c2bde9940/revisions/current/test.submit_type HTTP/1.0
-  Content-Type: text/plain; charset-UTF-8
+  Content-Type: text/plain; charset=UTF-8
 
   submit_type(cherry_pick).
 ----
@@ -4319,7 +4318,7 @@ a project-specific rule.
 .Request
 ----
   POST /changes/myProject~master~I8473b95934b5732ac55d26311a706c9c2bde9940/revisions/current/test.submit_rule?filters=SKIP HTTP/1.0
-  Content-Type: text/plain; charset-UTF-8
+  Content-Type: text/plain; charset=UTF-8
 
   submit_rule(submit(R)) :-
     R = label('Any-Label-Name', reject(_)).
@@ -5965,7 +5964,7 @@ Number of the parent relative to which the cherry-pick should be considered.
 Notify handling that defines to whom email notifications should be sent
 after the cherry-pick. +
 Allowed values are `NONE`, `OWNER`, `OWNER_REVIEWERS` and `ALL`. +
-If not set, the default is `NONE`.
+If not set, the default is `ALL`.
 |`notify_details`   |optional|
 Additional information about whom to notify about the update as a map
 of recipient type to link:#notify-info[NotifyInfo] entity.

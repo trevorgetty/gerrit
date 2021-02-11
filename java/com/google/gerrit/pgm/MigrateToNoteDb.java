@@ -21,6 +21,7 @@ import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toList;
 
 import com.google.common.collect.ImmutableList;
+import com.google.gerrit.common.Die;
 import com.google.gerrit.extensions.config.FactoryModule;
 import com.google.gerrit.lifecycle.LifecycleManager;
 import com.google.gerrit.pgm.util.BatchProgramModule;
@@ -83,6 +84,11 @@ public class MigrateToNoteDb extends SiteProgram {
               + " were previously migrated")
   private boolean force;
 
+  @Option(
+      name = "--force-state-change-with-skip",
+      usage = "Force state change of the migration if projects are skipped")
+  private boolean forceStateChangeWithSkip;
+
   @Option(name = "--trial", usage = TRIAL_USAGE)
   private boolean trial;
 
@@ -100,6 +106,9 @@ public class MigrateToNoteDb extends SiteProgram {
           "Reindex all changes after migration; defaults to false in trial mode, true otherwise",
       handler = ExplicitBooleanOptionHandler.class)
   private Boolean reindex;
+
+  @Option(name = "--verbose", usage = "Output more detailed information when reindexing")
+  private boolean verbose;
 
   private Injector dbInjector;
   private Injector sysInjector;
@@ -141,36 +150,51 @@ public class MigrateToNoteDb extends SiteProgram {
               .setChanges(changes.stream().map(Change.Id::new).collect(toList()))
               .setTrialMode(trial)
               .setForceRebuild(force)
+              .setForceStateChangeWithSkip(forceStateChangeWithSkip)
               .setSequenceGap(sequenceGap)
+              .setVerbose(verbose)
               .build()) {
-        if (!projects.isEmpty() || !changes.isEmpty() || !skipProjects.isEmpty()) {
+        if (!projects.isEmpty()
+            || !changes.isEmpty()
+            || (!forceStateChangeWithSkip && !skipProjects.isEmpty())) {
           migrator.rebuild();
         } else {
           migrator.migrate();
         }
       }
-      try (PrintWriter w = new PrintWriter(new OutputStreamWriter(System.out, UTF_8), true)) {
-        gcAllUsers.run(w);
-      }
+
+      PrintWriter w = new PrintWriter(new OutputStreamWriter(System.out, UTF_8), true);
+      gcAllUsers.run(w);
+      // No closing of the PrintWriter here, as it would cascade down and eventually close
+      // System.out and thereby swallow further output.
+    } catch (Throwable e) {
+      throw new Die(e.getMessage(), e);
     } finally {
       stop();
     }
 
+    System.out.println("NoteDB Migration complete.");
     boolean reindex = firstNonNull(this.reindex, !trial);
     if (!reindex) {
+      System.out.println("Reindexing changes is skipped (either because of trial mode, or ");
+      System.out.println("because you requested so). If needed, reindex changes manually.");
       return 0;
     }
     // Reindex all indices, to save the user from having to run yet another program by hand while
     // their server is offline.
-    List<String> reindexArgs =
-        ImmutableList.of(
-            "--site-path",
-            getSitePath().toString(),
-            "--threads",
-            Integer.toString(threads),
-            "--index",
-            ChangeSchemaDefinitions.NAME);
-    System.out.println("Migration complete, reindexing changes with:");
+    ImmutableList.Builder<String> reindexArgsBuilder = ImmutableList.builder();
+    reindexArgsBuilder.add(
+        "--site-path",
+        getSitePath().toString(),
+        "--threads",
+        Integer.toString(threads),
+        "--index",
+        ChangeSchemaDefinitions.NAME);
+    if (verbose) {
+      reindexArgsBuilder.add("--verbose");
+    }
+    List<String> reindexArgs = reindexArgsBuilder.build();
+    System.out.println("Reindexing changes with:");
     System.out.println("  reindex " + reindexArgs.stream().collect(joining(" ")));
     Reindex reindexPgm = new Reindex();
     return reindexPgm.main(reindexArgs.stream().toArray(String[]::new));
