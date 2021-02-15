@@ -389,8 +389,8 @@ maven_jar(
 # When upgrading commons-compress, also upgrade tukaani-xz
 maven_jar(
     name = "commons-compress",
-    artifact = "org.apache.commons:commons-compress:1.15",
-    sha1 = "b686cd04abaef1ea7bc5e143c080563668eec17e",
+    artifact = "org.apache.commons:commons-compress:1.20",
+    sha1 = "b8df472b31e1f17c232d2ad78ceb1c84e00c641b",
 )
 
 maven_jar(
@@ -664,18 +664,18 @@ maven_jar(
     sha1 = "a3ae34e57fa8a4040e28247291d0cc3d6b8c7bcf",
 )
 
-AUTO_VALUE_VERSION = "1.6.2"
+AUTO_VALUE_VERSION = "1.7.4"
 
 maven_jar(
     name = "auto-value",
     artifact = "com.google.auto.value:auto-value:" + AUTO_VALUE_VERSION,
-    sha1 = "e7eae562942315a983eea3e191b72d755c153620",
+    sha1 = "6b126cb218af768339e4d6e95a9b0ae41f74e73d",
 )
 
 maven_jar(
     name = "auto-value-annotations",
     artifact = "com.google.auto.value:auto-value-annotations:" + AUTO_VALUE_VERSION,
-    sha1 = "ed193d86e0af90cc2342aedbe73c5d86b03fa09b",
+    sha1 = "eff48ed53995db2dadf0456426cc1f8700136f86",
 )
 
 declare_nongoogle_deps()
@@ -943,66 +943,66 @@ maven_jar(
     sha1 = "75070c744a8e52a7d17b8b476468580309d5cd09",
 )
 
-JETTY_VERS = "9.4.30.v20200611"
+JETTY_VERS = "9.4.36.v20210114"
 
 maven_jar(
     name = "jetty-servlet",
     artifact = "org.eclipse.jetty:jetty-servlet:" + JETTY_VERS,
-    sha1 = "ca3dea2cd34ee88cec017001603af0c9e74781d6",
+    sha1 = "b189e52a5ee55ae172e4e99e29c5c314f5daf4b9",
 )
 
 maven_jar(
     name = "jetty-security",
     artifact = "org.eclipse.jetty:jetty-security:" + JETTY_VERS,
-    sha1 = "1a5261f6ad4081ad9e9bb01416d639931d391273",
+    sha1 = "42030d6ed7dfc0f75818cde0adcf738efc477574",
 )
 
 maven_jar(
     name = "jetty-servlets",
     artifact = "org.eclipse.jetty:jetty-servlets:" + JETTY_VERS,
-    sha1 = "3404a59996afbecd05d2504b07a765304546af07",
+    sha1 = "080d85ab9b82acb0af174ee5b6d5669b4ad3faf2",
 )
 
 maven_jar(
     name = "jetty-server",
     artifact = "org.eclipse.jetty:jetty-server:" + JETTY_VERS,
-    sha1 = "e5ede3724d062717d0c04e4c77f74fe8115c2a6f",
+    sha1 = "88a7d342974aadca658e7386e8d0fcc5c0788f41",
 )
 
 maven_jar(
     name = "jetty-jmx",
     artifact = "org.eclipse.jetty:jetty-jmx:" + JETTY_VERS,
-    sha1 = "653559eaec0f9a335a0d12e90bc764b28f341241",
+    sha1 = "bb3847eabe085832aeaedd30e872b40931632e54",
 )
 
 maven_jar(
     name = "jetty-continuation",
     artifact = "org.eclipse.jetty:jetty-continuation:" + JETTY_VERS,
-    sha1 = "2a9cd8c4cf392a7697a57665e7b0caf5bce4cd48",
+    sha1 = "84dcd3bc44258d6e2e552f59c77966c4ed252373",
 )
 
 maven_jar(
     name = "jetty-http",
     artifact = "org.eclipse.jetty:jetty-http:" + JETTY_VERS,
-    sha1 = "cd6223382e4f82b9ea807d8cdb04a23e5d629f1c",
+    sha1 = "1eee89a55e04ff94df0f85d95200fc48acb43d86",
 )
 
 maven_jar(
     name = "jetty-io",
     artifact = "org.eclipse.jetty:jetty-io:" + JETTY_VERS,
-    sha1 = "9c360d08e903b2dbd5d1f8e889a32046948628ce",
+    sha1 = "84a8faf9031eb45a5a2ddb7681e22c483d81ab3a",
 )
 
 maven_jar(
     name = "jetty-util",
     artifact = "org.eclipse.jetty:jetty-util:" + JETTY_VERS,
-    sha1 = "39ec6aa4745952077f5407cb1394d8ba2db88b13",
+    sha1 = "925257fbcca6b501a25252c7447dbedb021f7404",
 )
 
 maven_jar(
     name = "postgresql",
-    artifact = "org.postgresql:postgresql:42.2.5",
-    sha1 = "951b7eda125f3137538a94e2cbdcf744088ad4c2",
+    artifact = "org.postgresql:postgresql:42.2.18",
+    sha1 = "a0a9c1d43c7727eeaf1b729477891185d3c71751",
 )
 
 maven_jar(
@@ -1036,8 +1036,6 @@ maven_jar(
     sha1 = "8e8c1d8fc6144405700dd8df3b177f2801ac5987",
 )
 
-
-
 maven_jar(
     name = "jackson-core",
     artifact = "com.fasterxml.jackson.core:jackson-core:2.11.2",
@@ -1050,12 +1048,12 @@ maven_jar(
     name = "jackson-databind",
     artifact = "com.fasterxml.jackson.core:jackson-databind:2.11.2",
 )
+
 #This is required by jackson databind ObjectMapper
 maven_jar(
     name = "jackson-annotations",
     artifact = "com.fasterxml.jackson.core:jackson-annotations:2.11.2",
 )
-
 
 maven_jar(
     name = "javax-activation",
