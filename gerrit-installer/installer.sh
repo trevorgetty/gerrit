@@ -1483,6 +1483,24 @@ function mkdirectory(){
     fi
 }
 
+function check_db_config() {
+  local db_type=$(GIT_CONFIG="$GERRIT_ROOT/etc/gerrit.config" git config database.type)
+  local notedb_disableReviewDb=$(GIT_CONFIG="$GERRIT_ROOT/etc/gerrit.config" git config noteDb.changes.disableReviewDb)
+  local notedb_primaryStorage=$(GIT_CONFIG="$GERRIT_ROOT/etc/gerrit.config" git config noteDb.changes.primaryStorage)
+  local notedb_read=$(GIT_CONFIG="$GERRIT_ROOT/etc/gerrit.config" git config noteDb.changes.read)
+  local notedb_sequence=$(GIT_CONFIG="$GERRIT_ROOT/etc/gerrit.config" git config noteDb.changes.sequence)
+  local notedb_write=$(GIT_CONFIG="$GERRIT_ROOT/etc/gerrit.config" git config noteDb.changes.write)
+
+  # This is temporary, this will be adapted in GER-1567 to support upgrades
+  if [[ "$db_type" = "h2" ]] \
+      && [[ "$notedb_disableReviewDb" != "true" || "$notedb_primaryStorage" != "note db" \
+             || "$notedb_read" != "true" || "$notedb_sequence" != "true" ||  "$notedb_write" != "true" ]];
+  then
+      perr "Unable to proceed as database type is set to H2 but NoteDB configuration is invalid \nNoteDB config should match below:\n[noteDb \"changes\"] \n    disableReviewDb = true \n    primaryStorage = note db \n    read = true \n    sequence = true \\n    write = true"
+      exit 1
+  fi
+}
+
 NON_INTERACTIVE=0
 WD_GERRIT_VERSION=$(get_gerrit_version "release.war")
 NEW_GERRIT_VERSION=$(echo $WD_GERRIT_VERSION | cut -f1 -d '-')
@@ -1492,6 +1510,7 @@ GERRITMS_INSTALL_DOC="http://docs.wandisco.com/gerrit/1.10/#doc_gerritinstall"
 check_executables
 get_gerrit_root_from_user
 check_java
+check_db_config
 create_scratch_dir
 
 ## Versions of Gerrit that we allow the user to upgrade from. Generally a user is not allowed to skip a major
