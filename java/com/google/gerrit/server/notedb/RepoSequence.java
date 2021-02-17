@@ -103,7 +103,7 @@ public class RepoSequence {
   private final String refName;
   private final Seed seed;
   private final int floor;
-  private final int batchSize;
+  @VisibleForTesting final int batchSize;
   private final Runnable afterReadRef;
   private final Retryer<RefUpdate.Result> retryer;
 
