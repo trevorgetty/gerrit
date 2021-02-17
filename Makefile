@@ -142,11 +142,11 @@ clean: | $(testing_location)
 	@# Going to clear out anything that looks like our known assets for now...!
 	@echo
 	@echo "Deleting JGit cached assets.."
-	@ls $(GERRIT_BAZELCACHE_PATH)/downloaded-artifacts/*jgit*
+	@ls $(GERRIT_BAZELCACHE_PATH)/downloaded-artifacts/*jgit* || echo "Can't find downloaded-artifacts/*jgit*, maybe assets already deleted?"
 	@rm -rf $(GERRIT_BAZELCACHE_PATH)/downloaded-artifacts/*jgit*
 	@echo
 	@echo "Deleting Gerrit-GitMS-Interface cached assets..."
-	@ls $(GERRIT_BAZELCACHE_PATH)/downloaded-artifacts/*gitms*
+	@ls $(GERRIT_BAZELCACHE_PATH)/downloaded-artifacts/*gitms* || echo "Can't find downloaded-artifacts/*gitms*, maybe assets already deleted?"
 	@rm -rf $(GERRIT_BAZELCACHE_PATH)/downloaded-artifacts/*gitms*
 
 	@echo "************ Clean Phase Finished **************"
