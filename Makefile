@@ -234,12 +234,24 @@ run-acceptance-tests:
 	@echo "\n************ Acceptance Tests Starting **************"
 	@echo "About to run the Gerrit Acceptance Tests. These are the minimum required set of tests needed to run to verify Gerrits integrity."
 	@echo "We specify GERRITMS_REPLICATION_DISABLED=true so that replication is disabled."
-	@echo "Tests with the following labels in their BUILD files are disabled : [ elastic, docker, disabled ]"
+	@echo "Tests with the following labels in their BUILD files are disabled : [ elastic, docker, disabled, replication ]"
 
-	bazelisk test --cache_test_results=NO --test_env=GERRITMS_REPLICATION_DISABLED=true --test_tag_filters=-elastic,-docker,-disabled,-replication,-delete-project  //...
+	bazelisk test --cache_test_results=NO --test_env=GERRITMS_REPLICATION_DISABLED=true --test_tag_filters=-elastic,-docker,-disabled,-replication  //...
 
 	@echo "\n************ Acceptance Tests Finished **************"
 .PHONY:run-acceptance-tests
+
+detect-flaky-acceptance-tests:
+	@echo "\n************ Acceptance Flaky Test Detector Starting **************"
+	@echo "About to run a slow version of the Gerrit acceptance tests to try and identify tests which are flaky (i.e. intermittently failing across multiple runs."
+	@echo "We specify GERRITMS_REPLICATION_DISABLED=true so that replication is disabled."
+	@echo "Tests with the following labels in their BUILD files are disabled : [ elastic, docker, disabled, replication ]"
+
+	# Increase the value of runs_per_test if the failure happens rarely.
+	bazelisk test --cache_test_results=NO --test_env=GERRITMS_REPLICATION_DISABLED=true --runs_per_test=10 --runs_per_test_detects_flakes=true --test_tag_filters=-elastic,-docker,-disabled,-replication  //...
+
+	@echo "\n************ Acceptance Flaky Test Detector Finished **************"
+.PHONY:detect-flaky-acceptance-tests
 
 deploy: deploy-console deploy-gerrit
 .PHONY:deploy
@@ -318,6 +330,7 @@ help:
 	@echo
 	@echo "   make all                          -> Will compile all packages, and create installer, and finish with integration tests"
 	@echo "   make clean                        -> Will clean out our integration test, package build and tmp build locations."
+	@echo "   make nuclear-clean                -> Will perform a standard clean and additionally remove the bazel cache directory for this project."
 	@echo "   make clean fast-assembly          -> will compile and build GerritMS without the installer"
 	@echo "   make fast-assembly                -> will just build the GerritMS and ConsoleAPI packages"
 	@echo "   make fast-assembly-gerrit         -> will just build the GerritMS package"
@@ -325,6 +338,7 @@ help:
 	@echo "   make clean fast-assembly installer  -> will build the packages and installer asset"
 	@echo "   make installer                    -> will build the installer asset using already built packages"
 	@echo "   make run-acceptance-tests         -> will run the Gerrit acceptance tests, against the already built packages"
+	@echo "   make detect-flaky-acceptance-tests -> Will run the acceptance tests with more iterations and report on intermittent failures."
 	@echo "   make list-assets                  -> Will list all assets from a built project, and return them in env var: ASSETS_FOUND"
 	@echo "   make deploy                       -> will deploy the installer packages of GerritMS and ConsoleAPI to artifactory"
 	@echo "   make deploy-gerrit                -> will deploy the installer package of GerritMS"
@@ -332,4 +346,3 @@ help:
 	@echo "   make deploy-console               -> will deploy the installer package of GerritMS Console API"
 	@echo "   make help                         -> Display available targets"
 .PHONY:help
-
