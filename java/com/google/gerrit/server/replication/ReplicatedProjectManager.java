@@ -39,7 +39,7 @@ import java.util.List;
 public class ReplicatedProjectManager implements Replicator.GerritPublishable {
   private static final Logger log = LoggerFactory.getLogger(ReplicatedProjectManager.class);
   private static final Gson gson = new Gson();
-  private static ReplicatedProjectManager instance = null;
+  private static volatile ReplicatedProjectManager instance = null;
   private static GitRepositoryManager repoManager;
 
   private ReplicatedProjectManager() {
@@ -92,14 +92,17 @@ public class ReplicatedProjectManager implements Replicator.GerritPublishable {
     return result;
   }
 
-  public static synchronized void enableReplicatedProjectManager() {
+  public static void enableReplicatedProjectManager() {
     if (instance == null) {
-      instance = new ReplicatedProjectManager();
-      log.info("PROJECT New instance created");
-      Replicator.subscribeEvent(DELETE_PROJECT_EVENT, instance);
+      synchronized (ReplicatedProjectManager.class) {
+        if (instance == null) {
+          instance = new ReplicatedProjectManager();
+          log.info("PROJECT New instance created");
+          Replicator.subscribeEvent(DELETE_PROJECT_EVENT, instance);
+        }
+      }
     }
   }
-
 
   /**
    * Perform actions to actually delete the project on all nodes and send round a message

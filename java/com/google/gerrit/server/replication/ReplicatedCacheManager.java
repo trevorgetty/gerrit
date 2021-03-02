@@ -33,6 +33,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * This class is to manage the replication of the cache events happening in
@@ -94,9 +95,9 @@ import java.util.List;
 public class ReplicatedCacheManager implements Replicator.GerritPublishable {
   private static final FluentLogger logger = FluentLogger.forEnclosingClass();
   private static final Gson gson = new Gson();
-  private static final Map<String, CacheWrapper> caches = new HashMap<>();
-  private static final Map<String, Object> cacheObjects = new HashMap<>();
-  private static ReplicatedCacheManager instance = null;
+  private static final Map<String, CacheWrapper> caches = new ConcurrentHashMap<>();
+  private static final Map<String, Object> cacheObjects = new ConcurrentHashMap<>();
+  private static volatile ReplicatedCacheManager instance = null;
 
   public static String projectCache = "ProjectCacheImpl";
   private static List<String> cacheEvictList = null;
@@ -202,7 +203,7 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
     }
   }
 
-  public static synchronized ReplicatedCacheManager watchCache(String cacheName, Cache cache) {
+  public static ReplicatedCacheManager watchCache(String cacheName, Cache cache) {
     if (Replicator.isReplicationDisabled()) {
       logger.atWarning().log("Replication is disabled, watchCache should not be getting called in this instance.");
       return null;
@@ -211,8 +212,12 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
     caches.put(cacheName, new CacheWrapper(cache));
     logger.atInfo().log("CACHE New cache named %s inserted", cacheName);
     if (instance == null) {
-      instance = new ReplicatedCacheManager();
-      Replicator.subscribeEvent(CACHE_EVENT, instance);
+      synchronized (ReplicatedCacheManager.class) {
+        if (instance == null) {
+          instance = new ReplicatedCacheManager();
+          Replicator.subscribeEvent(CACHE_EVENT, instance);
+        }
+      }
     }
     return instance;
   }

@@ -155,7 +155,7 @@ public class Replicator implements Runnable {
   private static final Object applicationPropertiesLocking = new Object();
 
   private static volatile Replicator instance = null;
-  private static Object replicatorLock = new Object();
+  private static final Object replicatorLock = new Object();
 
   private static final Gson gson = new GsonBuilder()
       .registerTypeAdapter(Supplier.class, new SupplierSerializer())
