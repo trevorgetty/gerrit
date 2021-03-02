@@ -35,6 +35,8 @@ import org.eclipse.jgit.lib.RepositoryCache;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
 
 public class ReplicatedProjectManager implements Replicator.GerritPublishable {
   private static final Logger log = LoggerFactory.getLogger(ReplicatedProjectManager.class);
@@ -66,6 +68,60 @@ public class ReplicatedProjectManager implements Replicator.GerritPublishable {
     log.info("PROJECT About to call replicated project change deletion event: {}, {}, {}, {}",
              project.getName(), preserve, changesToBeDeleted, taskUuid);
     Replicator.getInstance().queueEventForReplication(GerritEventFactory.createReplicatedDeleteProjectChangeEvent(deleteProjectChangeEvent));
+  }
+
+  /**
+   * We call this method if we are dealing with a single node replication
+   * group. For a single node membership we need to create a DeleteProjectMessageEvent
+   * instead of using a wrapped ProjectInfoWrapper.
+   * @param project
+   * @param preserve
+   * @param taskUuid
+   */
+  public static void deleteProjectSingleNodeGroup(Project project, boolean preserve,
+                                                  final String taskUuid) {
+
+    //Delete the project from the jgit cache on a single node
+    boolean jgitCacheChangesRemoved = applyActionsForDeletingProject(
+        new ProjectInfoWrapper(project.getName(), preserve, taskUuid,
+            Objects.requireNonNull(Replicator.getInstance()).getThisNodeIdentity()));
+
+    // Send a DELETE_PROJECT_MESSAGE_EVENT which will be picked up by the
+    // GerritEventStreamProposer in the outgoing and which will be used to
+    // send the GerritDeleteProjectProposal to remove the node from the GerritDeleteRepositoryTask.
+
+    createDeleteProjectMessageEvent(taskUuid,
+        jgitCacheChangesRemoved && !preserve, project.getName());
+  }
+
+
+  /**
+   * Creates new instance of DeleteProjectMessageEvent
+   * if the value of deleteFromDisk is true then we construct the
+   * instance with the enum DELETE_PROJECT_FROM_DISK otherwise we construct
+   * it with DO_NOT_DELETE_PROJECT_FROM_DISK
+   * @param taskUuid : The taskId
+   * @param deleteFromDisk : boolean whether to delete project from disk or not
+   * @param name : name of the repository to either delete from disk or to delete changes for.
+   */
+  private static void createDeleteProjectMessageEvent(String taskUuid, boolean deleteFromDisk, String name) {
+    Replicator replicator = Replicator.getInstance();
+    DeleteProjectMessageEvent deleteProjectMessageEvent;
+    if (deleteFromDisk) {
+      // If the request was to remove the repository from the disk, then we do that only after all the nodes have replied
+      // So first phase is to clear the data about the repo, 2nd phase is to remove it
+      deleteProjectMessageEvent = new DeleteProjectMessageEvent(name, DELETE_PROJECT_FROM_DISK,
+          taskUuid, Objects.requireNonNull(replicator).getThisNodeIdentity());
+    } else {
+      // If the result is false then we have failed the first part of the removal. If we are Preserving the repo then we do not
+      // want to remove the repo so we send a failed response so we know not to remove it.
+      deleteProjectMessageEvent = new DeleteProjectMessageEvent(name, DO_NOT_DELETE_PROJECT_FROM_DISK,
+          taskUuid, Objects.requireNonNull(replicator).getThisNodeIdentity());
+    }
+
+    //Queue the event for the replicator
+    Objects.requireNonNull(Replicator.getInstance()).queueEventForReplication(GerritEventFactory
+        .createReplicatedDeleteProjectMessageEvent(deleteProjectMessageEvent));
   }
 
   @Override
@@ -129,22 +185,11 @@ public class ReplicatedProjectManager implements Replicator.GerritPublishable {
 
     log.info("RE Original event: {}",originalEvent.toString());
     originalEvent.replicated = true; // not needed, but makes it clear
-    originalEvent.setNodeIdentity(Replicator.getInstance().getThisNodeIdentity());
+    originalEvent.setNodeIdentity(Objects.requireNonNull(Replicator.getInstance()).getThisNodeIdentity());
     result = applyActionsForDeletingProject(originalEvent);
 
-    DeleteProjectMessageEvent deleteProjectMessageEvent = null;
-    if (result && !originalEvent.preserve) {
-      // If the request was to remove the repository from the disk, then we do that only after all the nodes have replied
-      // So first phase is to clear the data about the repo, 2nd phase is to remove it
-      deleteProjectMessageEvent = new DeleteProjectMessageEvent(originalEvent.projectName, DELETE_PROJECT_FROM_DISK,
-          originalEvent.taskUuid, Replicator.getInstance().getThisNodeIdentity());
-    } else {
-      // If the result is false then we have failed the first part of the removal. If we are Preserving the repo then we do not
-      // want to remove the repo so we send a failed response so we know not to remove it.
-      deleteProjectMessageEvent = new DeleteProjectMessageEvent(originalEvent.projectName, DO_NOT_DELETE_PROJECT_FROM_DISK,
-          originalEvent.taskUuid, Replicator.getInstance().getThisNodeIdentity());
-    }
-    Replicator.getInstance().queueEventForReplication(GerritEventFactory.createReplicatedDeleteProjectMessageEvent(deleteProjectMessageEvent));
+    createDeleteProjectMessageEvent(originalEvent.taskUuid, result &&
+        !originalEvent.preserve, originalEvent.projectName);
     return result;
   }
 
@@ -183,7 +228,7 @@ public class ReplicatedProjectManager implements Replicator.GerritPublishable {
    * @param originalEvent
    * @return
    */
-  private boolean applyActionsForDeletingProject(ProjectInfoWrapper originalEvent) {
+  private static boolean applyActionsForDeletingProject(ProjectInfoWrapper originalEvent) {
     log.info("PROJECT event is about to remove the project from the jgit cache. Original event was {}!", originalEvent);
     Project.NameKey nameKey = new Project.NameKey(originalEvent.projectName);
     Repository repository;
