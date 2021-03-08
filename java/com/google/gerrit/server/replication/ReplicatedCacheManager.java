@@ -235,7 +235,9 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
       logger.atInfo().log("CACHE key is %s so evicting all from cache: %s", evictAllWildCard, cacheName);
     }
 
-    CacheKeyWrapper cacheKeyWrapper = new CacheKeyWrapper(cacheName, key, Replicator.getInstance().getThisNodeIdentity());
+    CacheKeyWrapper cacheKeyWrapper = new CacheKeyWrapper(cacheName, key,
+        Objects.requireNonNull(Replicator.getInstance()).getThisNodeIdentity());
+
     EventWrapper eventWrapper = GerritEventFactory.createReplicatedAllProjectsCacheEvent(cacheKeyWrapper);
     logger.atFine().log("CACHE About to call replicated cache event: %s,%s", cacheName, key);
 
@@ -262,7 +264,7 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
     }
     CacheObjectCallWrapper cacheMethodCall = new CacheObjectCallWrapper(cacheName, methodName, key);
     logger.atInfo().log("CACHE About to call replicated cache method: %s, %s, %s", cacheName, methodName, key);
-    Replicator.getInstance().queueEventForReplication(
+    Objects.requireNonNull(Replicator.getInstance()).queueEventForReplication(
         GerritEventFactory.createReplicatedAllProjectsCacheEvent(cacheMethodCall));
     evictionsSent.add(cacheName);
   }

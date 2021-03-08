@@ -213,24 +213,64 @@ public class ProjectCacheImpl implements ProjectCache {
     indexer.get().index(p);
   }
 
+
+  // Performs an eviction from the projects cache. If replicated is true then
+  // send a replicated cache eviction to all sites.
+  public void evictWithoutReindex(Project.NameKey p, boolean replication) throws IOException {
+    if (p != null) {
+      logger.atFine().log("Evict project '%s'", p.get());
+      byName.invalidate(p.get());
+      if(replication) {
+        ReplicatedCacheManager.replicateEvictionFromCache(CACHE_PROJECTS_BYNAME, p.get());
+      }
+    }
+  }
+
   @Override
   public void remove(Project p) throws IOException {
-    remove(p.getNameKey());
+    removeImpl(p.getNameKey(), Replicator.isReplicationEnabled());
   }
 
   @Override
   public void remove(Project.NameKey name) throws IOException {
+    removeImpl(name, Replicator.isReplicationEnabled());
+  }
+
+  public void removeNoRepl(Project.NameKey name) throws IOException {
+    removeImpl(name, false);
+  }
+
+  private void removeImpl(Project.NameKey name, boolean replicationEnabled) throws IOException {
     listLock.lock();
     try {
       list.put(
           ListKey.ALL,
           ImmutableSortedSet.copyOf(Sets.difference(list.get(ListKey.ALL), ImmutableSet.of(name))));
+
+      if ( replicationEnabled ) {
+        // this call is being replicated to the other nodes, but we do not want this further replicated on
+        // the other nodes so this is sent with method 'removeNoRepl'
+        ReplicatedCacheManager.replicateMethodCallFromCache(ReplicatedCacheManager.projectCache,
+            "removeNoRepl", name);
+        //Replicated delete from the project index
+        indexer.get().deleteIndex(name);
+      }
+
     } catch (ExecutionException e) {
       logger.atWarning().withCause(e).log("Cannot list available projects");
     } finally {
       listLock.unlock();
     }
-    evict(name);
+
+    // If we are a remote site running the removeNoRepl then
+    // replication will be false. We want to delete from the local index only
+    if(!replicationEnabled) {
+      indexer.get().deleteIndexNoRepl(name);
+    }
+
+    //NOTE: remote sites will call removeNoRepl and come into this
+    //method to evict from their local site.
+    evictWithoutReindex(name, replicationEnabled);
   }
 
   /**

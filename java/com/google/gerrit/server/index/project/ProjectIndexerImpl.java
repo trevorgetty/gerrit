@@ -83,6 +83,15 @@ public class ProjectIndexerImpl implements ProjectIndexer {
     indexImplementation(nameKey, false);
   }
 
+  @Override
+  public void deleteIndex(Project.NameKey nameKey) throws IOException {
+    deleteIndexImpl(nameKey, Replicator.isReplicationEnabled());
+  }
+
+  @Override
+  public void deleteIndexNoRepl(Project.NameKey nameKey) throws IOException {
+    deleteIndexImpl(nameKey, false);
+  }
 
   public void indexImplementation(Project.NameKey nameKey, boolean replicate) throws IOException {
     ProjectState projectState = projectCache.get(nameKey);
@@ -111,7 +120,24 @@ public class ProjectIndexerImpl implements ProjectIndexer {
     }
 
     if ( replicate && replicatedProjectsIndexManager != null) {
-      replicatedProjectsIndexManager.replicateReindex(nameKey);
+      replicatedProjectsIndexManager.replicateReindex(nameKey, false);
+    }
+  }
+
+
+  public void deleteIndexImpl(Project.NameKey nameKey, boolean replicate) throws IOException {
+    logger.atFine().log("Delete project %s from index", nameKey.get());
+    for (ProjectIndex i : getWriteIndexes()) {
+      try (TraceTimer traceTimer =
+               TraceContext.newTimer(
+                   "Deleting project %s in index version %d",
+                   nameKey.get(), i.getSchema().getVersion())) {
+        i.delete(nameKey);
+      }
+    }
+
+    if ( replicate && replicatedProjectsIndexManager != null) {
+      replicatedProjectsIndexManager.replicateReindex(nameKey, true);
     }
   }
 

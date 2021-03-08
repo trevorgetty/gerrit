@@ -28,4 +28,9 @@ public interface ProjectIndexer {
   void index(Project.NameKey nameKey) throws IOException;
 
   void indexNoRepl(Project.NameKey nameKey) throws IOException;
+
+  void deleteIndex(Project.NameKey nameKey) throws IOException;
+
+  void deleteIndexNoRepl(Project.NameKey nameKey) throws IOException;
+
 }

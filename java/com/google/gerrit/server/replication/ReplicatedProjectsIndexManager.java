@@ -76,17 +76,21 @@ public class ReplicatedProjectsIndexManager implements Replicator.GerritPublisha
 		logger.atInfo().log("Created ReplicatedProjectsIndexManager");
 	}
 
-	/**
-	 * Queues a ProjectsIndexEvent
-	 *
-	 * @param nameKey
-	 */
-	public void replicateReindex(Project.NameKey nameKey) {
+  /**
+   * Queues a ProjectsIndexEvent
+   * The ProjectsIndexEvent can be constructed with a boolean flag to state
+   * whether or not the index event is to delete the project from the index.
+   * @param nameKey: The name of the project to replicate the reindex for.
+   */
+  public void replicateReindex(Project.NameKey nameKey, boolean deleteFromIndex) {
 
-		ProjectIndexEvent indexEvent = new ProjectIndexEvent(nameKey, replicatorInstance.getThisNodeIdentity());
-		replicatorInstance.queueEventForReplication(
-				GerritEventFactory.createReplicatedProjectsIndexEvent(ReplicationConstants.ALL_PROJECTS, indexEvent));
-	}
+    ProjectIndexEvent indexEvent = new ProjectIndexEvent(nameKey,
+        replicatorInstance.getThisNodeIdentity(), deleteFromIndex);
+
+    replicatorInstance.queueEventForReplication(
+        GerritEventFactory.createReplicatedProjectsIndexEvent(ReplicationConstants.ALL_PROJECTS, indexEvent));
+  }
+
 
 
 	@Override
@@ -115,20 +119,28 @@ public class ReplicatedProjectsIndexManager implements Replicator.GerritPublisha
 
 	/**
 	 * Local reindex of the Projects event.
-	 *
-	 * @param newEvent
-	 * @param eventClass
-	 * @return
+	 * This can be either a deletion from an index or an update to
+   * an index.
+	 * @param newEvent: The event wrapped within the EventWrapper
+	 * @param eventClass : The class associated with the event type.
+	 * @return : Returns true if the indexing operation has completed.
 	 */
-	private boolean reindexProject(EventWrapper newEvent, Class<?> eventClass) {
-		try {
-			ProjectIndexEvent indexEvent = (ProjectIndexEvent) gson.fromJson(newEvent.getEvent(), eventClass);
-			indexer.indexNoRepl(indexEvent.getIdentifier());
-			return true;
-		} catch (JsonSyntaxException | IOException e) {
-			logger.atSevere().withCause(e).log("RC Project reindex, Could not decode json event %s",
-				newEvent.toString());
-			return false;
-		}
-	}
+  private boolean reindexProject(EventWrapper newEvent, Class<?> eventClass) {
+    try {
+      ProjectIndexEvent indexEvent = (ProjectIndexEvent) gson.fromJson(newEvent.getEvent(), eventClass);
+      // If the index is to be deleted, indicated by the boolean flag in the ProjectIndexEvent
+      // then we will delete the index. Otherwise it is a normal reindex.
+      if (indexEvent.isDeleteIndex()) {
+        indexer.deleteIndexNoRepl(indexEvent.getIdentifier());
+      } else {
+        indexer.indexNoRepl(indexEvent.getIdentifier());
+      }
+      return true;
+
+    } catch (JsonSyntaxException | IOException e) {
+      logger.atSevere().withCause(e).log("RC Project reindex, Could not decode json event %s",
+          newEvent.toString());
+      return false;
+    }
+  }
 }
