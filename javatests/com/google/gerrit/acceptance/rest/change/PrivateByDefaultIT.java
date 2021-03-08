@@ -127,8 +127,8 @@ public class PrivateByDefaultIT extends AbstractDaemonTest {
   public void pushDraftsWithPrivateByDefaultAndDisablePrivateChangesTrue() throws Exception {
     setPrivateByDefault(project2, InheritableBoolean.TRUE);
 
-    RevCommit initialHead = getRemoteHead();
     TestRepository<InMemoryRepository> testRepo = cloneProject(project2);
+    RevCommit initialHead = getRemoteHead(project2, "refs/heads/master");
     PushOneCommit.Result result =
         pushFactory.create(db, admin.getIdent(), testRepo).to("refs/for/master%draft");
     result.assertErrorStatus();
