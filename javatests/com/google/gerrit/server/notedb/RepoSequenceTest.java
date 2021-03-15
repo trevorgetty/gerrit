@@ -228,11 +228,11 @@ public class RepoSequenceTest {
     assertThat(s.acquireCount).isEqualTo(5);
 
     assertThat(s.next(7)).containsExactly(16, 17, 18, 19, 20, 21, 22).inOrder();
-    assertThat(s.acquireCount).isEqualTo(8);
+    assertThat(s.acquireCount).isEqualTo(6);
     assertThat(s.next(7)).containsExactly(23, 24, 25, 26, 27, 28, 29).inOrder();
-    assertThat(s.acquireCount).isEqualTo(10);
+    assertThat(s.acquireCount).isEqualTo(7);
     assertThat(s.next(7)).containsExactly(30, 31, 32, 33, 34, 35, 36).inOrder();
-    assertThat(s.acquireCount).isEqualTo(12);
+    assertThat(s.acquireCount).isEqualTo(8);
   }
 
   @Test

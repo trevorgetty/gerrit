@@ -38,6 +38,7 @@ import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.reviewdb.client.RefNames;
 import com.google.gerrit.server.extensions.events.GitReferenceUpdated;
 import com.google.gerrit.server.git.GitRepositoryManager;
+import com.google.gerrit.server.replication.Replicator;
 import com.google.gwtorm.server.OrmException;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -93,6 +94,8 @@ public class RepoSequence {
     //need to rebuild with the statically set retry timeout
     RETRYER = retryerBuilder().build();
   }
+
+  private static final String SEQUENCE_TUPLE_DELIMITER = ":";
 
   private static int sequenceRetryMaxTimeoutSecs = 30;
   private static Retryer<RefUpdate.Result> RETRYER = retryerBuilder().build();
@@ -227,14 +230,9 @@ public class RepoSequence {
           return ImmutableList.copyOf(ids);
         }
       }
-      while(ids.size() < count) {
-        acquire(batchSize);
-        while (counter < limit) {
-          ids.add(counter++);
-          if (ids.size() == count) {
-            return ImmutableList.copyOf(ids);
-          }
-        }
+      acquire(Math.max(count - ids.size(), batchSize));
+      while (ids.size() < count) {
+        ids.add(counter++);
       }
       return ImmutableList.copyOf(ids);
     } finally {
@@ -380,7 +378,7 @@ public class RepoSequence {
       throw new IncorrectObjectTypeException(id, OBJ_BLOB);
     }
     String str = CharMatcher.whitespace().trimFrom(new String(ol.getCachedBytes(), UTF_8));
-    Integer val = Ints.tryParse(str);
+    Integer val = decodeSequenceString(str);
     if (val == null) {
       throw new OrmException("invalid value in " + refName + " blob at " + id.name());
     }
@@ -391,7 +389,7 @@ public class RepoSequence {
       throws IOException {
     ObjectId newId;
     try (ObjectInserter ins = repo.newObjectInserter()) {
-      newId = ins.insert(OBJ_BLOB, Integer.toString(val).getBytes(UTF_8));
+      newId = ins.insert(OBJ_BLOB, encodeSequenceString(val).getBytes(UTF_8));
       ins.flush();
     }
     RefUpdate ru = repo.updateRef(refName);
@@ -412,5 +410,33 @@ public class RepoSequence {
       throws IOException {
     ObjectId newId = ins.insert(OBJ_BLOB, Integer.toString(val).getBytes(UTF_8));
     return new ReceiveCommand(ObjectId.zeroId(), newId, RefNames.REFS_SEQUENCES + name);
+  }
+
+  /* Convert a given change sequence number into the content to store in the blob. For vanilla or non-replicated
+   * Gerrit this will just be the sequence number, but for replicated flow make a tuple incorporating node-id so that
+   * the blob sent to GitMS will hash differently. This will cause GitMS to differentiate sequence numbers coming from
+   * different nodes.
+   */
+  private static String encodeSequenceString(int val) {
+    // If replication is disabled, just store the sequence number directly as we don't need to disambiguate the blobs
+    // by node-id.
+    if (Replicator.isReplicationDisabled()) {
+      return Integer.toString(val);
+    }
+
+    // The format of the tuple in the replicated scenario will be NodeId:Sequence#.
+    final String nodeId = requireNonNull(Replicator.getInstance()).getThisNodeIdentity();
+    return String.format("%s%s%d", nodeId, SEQUENCE_TUPLE_DELIMITER, val);
+  }
+
+  /* Convert a sequenceString back into the expected sequence number. For vanilla or non-replicated Gerrit we only need
+   * parse the string as an int. For replicated flow we need to unpack the sequence number out of the encoded tuple.
+   */
+  private static Integer decodeSequenceString(String sequenceString) {
+    final int separatorIndex = sequenceString.lastIndexOf(SEQUENCE_TUPLE_DELIMITER);
+
+    return separatorIndex < 0 ?
+           Ints.tryParse(sequenceString) :
+           Ints.tryParse(sequenceString.substring(separatorIndex + SEQUENCE_TUPLE_DELIMITER.length()));
   }
 }
