@@ -166,6 +166,24 @@ nuclear-clean: clean
 
 .PHONY:nuclear-clean
 
+update_bazel_deps:
+	@echo "***** Updating Bazel Dependencies Starting *****"
+
+	./tools/check_sha.py -vpe
+
+	@echo "***** Updating Bazel Dependencies Finished *****"
+.PHONY:update_bazel_deps
+
+update_bazel_dep:
+	$(if $(FILTER),,$(error Expects an argument of FILTER=<name-of-dependency>))
+	@echo "** Updating Single Bazel Dependency Starting ***"
+
+	./tools/check_sha.py -vpe -f '.*$(FILTER).*'
+
+	@echo "** Updating Single Bazel Dependency Finished ***"
+.PHONY:update_bazel_dep
+
+
 list-assets:
 	@echo "************ List Assets Starting **************"
 	@echo  "Jenkins workspace is: $(JENKINS_WORKSPACE)"

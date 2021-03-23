@@ -1,12 +1,25 @@
 # GerritMS Code Fork
-This is the main codebase for GerritMS with replication support.  
+This is the main codebase for GerritMS with replication support.
 Gerrit Multisite is a fork based on [Gerrit](https://www.gerritcodereview.com) that adds replication
 support and full Read Write Multi Master on Geographically seperate locations.
 
 See https://wandisco.com/scm for more information on LiveCode - replicated SCM products.
- 
+
 [GerritMS - Builds](https://build-jenkins.wandisco.com/view/Gerrit-MS/)
 
+## Additional Tools
+
+- [tools/check_sha.py](https://workspace.wandisco.com/display/GIT/GerritMS+Build+Helper+Scripts)
+  Script to automatically update bazel dependencies in the build files.
+
+  Typical usage to update all bazel dependencies for org.eclipse.jgit.\* and com.wandisco.\*
+  using their default configured repositories would be:
+
+      $ tools/check_sha.py -vpe
+
+  For full usage options, run:
+
+      $ tools/check_sha.py -h
 
 # Gerrit Code Review
 
