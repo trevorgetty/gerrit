@@ -606,7 +606,7 @@ function run_gerrit_init() {
   info ""
 
   local ret_code
-  ${JAVA_BIN} -Dhttps.protocols=TLSv1.2 -jar "${GERRIT_ROOT}/bin/gerrit.war" init -d "${GERRIT_ROOT}" --batch --no-reindex
+  ${JAVA_BIN} -jar "${GERRIT_ROOT}/bin/gerrit.war" init -d "${GERRIT_ROOT}" --batch --no-reindex
   ret_code="$?"
 
   if [[ "$ret_code" -ne "0" ]]; then
@@ -636,7 +636,7 @@ function replicated_upgrade() {
   info " ${GERRIT_RELEASE_NOTES}"
   info ""
   info " This will require running the command with the format: "
-  bold "   java -Dhttps.protocols=TLSv1.2 -jar gerrit.war init -d site_path"
+  bold "   java -jar gerrit.war init -d site_path"
   info ""
   info " Note: This command must be run across all nodes being upgraded, even if a replicated/shared"
   info " database is in use. This is required to update locally stored 3rd party dependencies not "
@@ -1507,19 +1507,20 @@ NEW_GERRIT_VERSION=$(echo $WD_GERRIT_VERSION | cut -f1 -d '-')
 GERRIT_RELEASE_NOTES="https://www.gerritcodereview.com/2.16.html"
 GERRITMS_INSTALL_DOC="http://docs.wandisco.com/gerrit/1.10/#doc_gerritinstall"
 
+## Versions of Gerrit that we allow the user to upgrade from. Generally a user is not allowed to skip a major
+## version, but can skip minor versions. This is not a hard and fast rule however, as the reality of when an
+## upgrade can be safely skipped is down to Gerrit upgrade behaviour. This should have all the release versions
+## of the previous major version number, and any release versions of the current major version number.
+PREVIOUS_ALLOWED_RP_GERRIT_VERSIONS=( "2.16.21-RP-1.10.0.1" )
+REPLICATED_UPGRADE="false"
+
 check_executables
 get_gerrit_root_from_user
 check_java
 check_db_config
 create_scratch_dir
 
-## Versions of Gerrit that we allow the user to upgrade from. Generally a user is not allowed to skip a major
-## version, but can skip minor versions. This is not a hard and fast rule however, as the reality of when an
-## upgrade can be safely skipped is down to Gerrit upgrade behaviour. This should have all the release versions
-## of the previous major version number, and any release versions of the current major version number.
-PREVIOUS_ALLOWED_RP_GERRIT_VERSIONS=( "v2.16.21-RP-1.10.0.1" )
 
-REPLICATED_UPGRADE="false"
 SPINNER=("|" "/" "-" "\\")
 
 check_for_non_interactive_mode
