@@ -11,12 +11,12 @@ function perr() {
 }
 
 ## $1 version to check if allowed
-function versionAllowed() {
+function isPreviousAllowedVersion() {
   local check_version="$1"
 
   for var in "${PREVIOUS_ALLOWED_RP_GERRIT_VERSIONS[@]}"
   do
-    if [ "$var" == "$check_version" ]; then
+    if [[ "$var" == "$check_version" ]]; then
       return 0
     fi
   done
@@ -84,7 +84,7 @@ function prereqs() {
   info " you must:"
   info ""
   info " * Have one of the following gerrit versions installed before beginning:"
-  info "     - Gerrit: $NEW_GERRIT_VERSION"
+  info "     - Gerrit: $CURRENT_GERRIT_VERSION"
   for version in "${PREVIOUS_ALLOWED_RP_GERRIT_VERSIONS[@]}"; do
     info "     - Gerrit MS: $version"
   done
@@ -469,9 +469,9 @@ function check_gerrit_root() {
 
   ## Make sure that GERRIT_ROOT/etc/gerrit.config exists
 
-  local gerrit_config=$gerrit_root"/etc/gerrit.config"
+  local gerrit_config=${gerrit_root}"/etc/gerrit.config"
 
-  if [ ! -e "$gerrit_config" ]; then
+  if [[ ! -e "$gerrit_config" ]]; then
     perr "$gerrit_config does not exist, invalid Gerrit Root directory"
     return 1
   fi
@@ -482,7 +482,7 @@ function check_gerrit_root() {
   local gerrit_war_path="${gerrit_root}/bin/gerrit.war"
   local container_war_prop=$(GIT_CONFIG="$gerrit_config" git config container.war)
 
-  if [ ! -z "$container_war_prop" ]; then
+  if [[ ! -z "$container_war_prop" ]]; then
     ## container.war is set, gerrit.war may be elsewhere
 
     if [[ "$container_war_prop" = /* ]]; then
@@ -494,25 +494,27 @@ function check_gerrit_root() {
     fi
   fi
 
-  if [ ! -e "$gerrit_war_path" ]; then
+  if [[ ! -e "$gerrit_war_path" ]]; then
     perr "$gerrit_war_path does not exist"
     return 1
   fi
   
   #check the permmisions of the gerrit.war file
-  if [ ! -w "$gerrit_war_path" ]; then
+  if [[ ! -w "$gerrit_war_path" ]]; then
     perr "The gerrit.war file is not writable"
     exit 1
   fi
 
   ## Check the version of the detected gerrit.war
   OLD_GERRIT_VERSION=$(get_gerrit_version "$gerrit_war_path")
-  if versionAllowed "$OLD_GERRIT_VERSION"; then
+  # If the OLD_GERRIT_VERSION is found in the previous allowed versions list
+  # then treat it as an upgrade.
+  if isPreviousAllowedVersion "$OLD_GERRIT_VERSION"; then
     REPLICATED_UPGRADE="true"
 
     ## check here for NON_INTERACTIVE mode - it requires upgrade
     ## variables to be set
-    if [ "$NON_INTERACTIVE" == "1" ]; then
+    if [[ "$NON_INTERACTIVE" == "1" ]]; then
       if [[ -z "$UPGRADE" || -z "$UPDATE_REPO_CONFIG" || -z "$RUN_GERRIT_INIT" || -z "$REMOVE_PLUGIN" ]]; then
         echo "" 1>&2
         perr "This install has been detected as an upgrade, but the upgrade flags: "
@@ -527,13 +529,14 @@ function check_gerrit_root() {
       fi
     fi
   fi
+
   OLD_BASE_GERRIT_VERSION=$(echo "$OLD_GERRIT_VERSION" | cut -f1 -d"-")
 
-  if [[ ! "$OLD_BASE_GERRIT_VERSION" == "$NEW_GERRIT_VERSION" && ! "$REPLICATED_UPGRADE" == "true" ]]; then
+  if [[ ! "$OLD_BASE_GERRIT_VERSION" == "$CURRENT_GERRIT_VERSION" && ! "$REPLICATED_UPGRADE" == "true" ]]; then
     ## Gerrit version we're installing does not match the version already installed
-    echo " Gerrit version detected at this location is at version: $OLD_BASE_GERRIT_VERSION"
-    echo " The current Gerrit version should be: $NEW_GERRIT_VERSION"
-    return 1
+    perr " Gerrit version detected is \"$OLD_BASE_GERRIT_VERSION\" but the Gerrit version should be \
+\"$CURRENT_GERRIT_VERSION\", aborting"
+    exit 1
   fi
 
   return 0
@@ -1503,7 +1506,7 @@ function check_db_config() {
 
 NON_INTERACTIVE=0
 WD_GERRIT_VERSION=$(get_gerrit_version "release.war")
-NEW_GERRIT_VERSION=$(echo $WD_GERRIT_VERSION | cut -f1 -d '-')
+CURRENT_GERRIT_VERSION=$(echo $WD_GERRIT_VERSION | cut -f1 -d '-')
 GERRIT_RELEASE_NOTES="https://www.gerritcodereview.com/2.16.html"
 GERRITMS_INSTALL_DOC="http://docs.wandisco.com/gerrit/1.10/#doc_gerritinstall"
 
