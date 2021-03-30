@@ -79,6 +79,11 @@ public class RepoSequence {
 
   @VisibleForTesting
   static RetryerBuilder<RefUpdate.Result> retryerBuilder() {
+    return retryerBuilder(30);
+  }
+
+  @VisibleForTesting
+  static RetryerBuilder<RefUpdate.Result> retryerBuilder(int stopDelay) {
     return RetryerBuilder.<RefUpdate.Result>newBuilder()
             .retryIfResult(Predicates.or(Predicates.equalTo(Result.LOCK_FAILURE),
                                          Predicates.equalTo(Result.REJECTED_OTHER_REASON)))
@@ -86,18 +91,16 @@ public class RepoSequence {
             WaitStrategies.join(
                 WaitStrategies.exponentialWait(5, TimeUnit.SECONDS),
                 WaitStrategies.randomWait(50, TimeUnit.MILLISECONDS)))
-        .withStopStrategy(StopStrategies.stopAfterDelay(sequenceRetryMaxTimeoutSecs, TimeUnit.SECONDS));
+        .withStopStrategy(StopStrategies.stopAfterDelay(stopDelay, TimeUnit.SECONDS));
   }
 
   public static void setSequenceRetryMaxTimeoutSecs(int sequenceRetryMaxTimeoutSecsIn){
-    sequenceRetryMaxTimeoutSecs = sequenceRetryMaxTimeoutSecsIn;
-    //need to rebuild with the statically set retry timeout
-    RETRYER = retryerBuilder().build();
+    //need to rebuild with the given retry timeout
+    RETRYER = retryerBuilder(sequenceRetryMaxTimeoutSecsIn).build();
   }
 
   private static final String SEQUENCE_TUPLE_DELIMITER = ":";
 
-  private static int sequenceRetryMaxTimeoutSecs = 30;
   private static Retryer<RefUpdate.Result> RETRYER = retryerBuilder().build();
 
   private final GitRepositoryManager repoManager;
