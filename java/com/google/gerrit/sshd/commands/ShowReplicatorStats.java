@@ -16,6 +16,7 @@ package com.google.gerrit.sshd.commands;
 import com.google.common.collect.ImmutableMultiset;
 import com.google.common.flogger.FluentLogger;
 import com.google.gerrit.extensions.restapi.AuthException;
+import com.google.gerrit.server.CurrentUser;
 import com.google.gerrit.server.permissions.PermissionBackend;
 import com.google.gerrit.server.permissions.PermissionBackendException;
 import com.google.gerrit.server.replication.Replicator;
@@ -27,7 +28,6 @@ import static com.google.gerrit.sshd.CommandMetaData.Mode.MASTER_OR_SLAVE;
 import com.google.gerrit.common.data.GlobalCapability;
 import com.google.gerrit.extensions.annotations.RequiresCapability;
 import com.google.gerrit.extensions.events.LifecycleListener;
-import com.google.gerrit.server.IdentifiedUser;
 
 import com.google.gerrit.server.util.time.TimeUtil;
 import com.google.gerrit.sshd.CommandMetaData;
@@ -40,7 +40,9 @@ import com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator;
 
 import java.io.IOException;
 import java.text.SimpleDateFormat;
+import java.util.Collections;
 import java.util.Date;
+import java.util.Objects;
 
 /**
  * Show the current Wandisco Replicator Statistics
@@ -52,11 +54,8 @@ final class ShowReplicatorStats extends SshCommand {
   private static volatile long serverStarted;
   private static final FluentLogger logger = FluentLogger.forEnclosingClass();
 
-  @Inject
-  private IdentifiedUser currentUser;
-
-  @Inject
-  private PermissionBackend permissionBackend;
+  @Inject private CurrentUser currentUser;
+  @Inject private PermissionBackend permissionBackend;
 
   static class StartupListener implements LifecycleListener {
     @Override
@@ -86,51 +85,64 @@ final class ShowReplicatorStats extends SshCommand {
       throw new UnloggedFailure(msg);
     }
 
+    printStatsTable();
+  }
+
+
+  /**
+   * Utility method for printing the replicator statistics table.
+   */
+  private void printStatsTable() {
     Date now = new Date();
-    stdout.format(
-        "%-25s %-20s      now  %16s\n",
-        "Gerrit Code Review",
-        Version.getVersion() != null ? Version.getVersion() : "",
-        new SimpleDateFormat("HH:mm:ss   zzz").format(now));
-    stdout.format(
-        "%-25s %-20s          uptime %16s\n",
-        "", "",
-        uptime(now.getTime() - serverStarted));
-    stdout.print('\n');
+    final String timeInfoStr = "now : %s\n";
+    final String upTimeInfoStr = "uptime : %s\n";
+    final String versionStr = "Gerrit Code Review : %s\n";
+
+    stdout.println();
+    stdout.print(String.format(timeInfoStr,
+        new SimpleDateFormat("HH:mm:ss   zzz").format(now)));
+
+    stdout.print(String.format(upTimeInfoStr,
+        uptime(now.getTime() - serverStarted)));
+
+    stdout.print(String.format(versionStr, Version.getVersion() != null
+        ? Version.getVersion() : "version unknown"));
 
     Replicator repl = Replicator.getInstance();
 
-    stdout.print("---------------------------------------------------------------------------+\n");
-    stdout.print(String.format("%-30s | %19s | %19s |\n", //
-        "Statistic", "Sent", "Received"));
-    stdout.print("---------------------------------------------------------------------------+\n");
+    final String tableRowStr = "%-50s | %19s | %19s |\n";
+    final String border = String.join("", Collections.nCopies(95, "-"));
+    stdout.print(border + "+\n");
+    stdout.print(String.format(tableRowStr, "Statistic", "Sent", "Received"));
+    stdout.print(border + "+\n");
 
-    ImmutableMultiset<Originator> totalPublishedForeignEventsByType = repl.getTotalPublishedForeignEventsByType();
+    ImmutableMultiset<Originator> totalPublishedForeignEventsByType =
+        Objects.requireNonNull(repl).getTotalPublishedForeignEventsByType();
     ImmutableMultiset<Originator> totalPublishedLocalEventsByType = repl.getTotalPublishedLocalEventsByType();
 
     for (Originator orig : Originator.values()) {
-      stdout.print(String.format("%-30s | %19s | %19s |\n", //
+      stdout.print(String.format(tableRowStr, //
           orig + " messages:",
           totalPublishedLocalEventsByType.count(orig),
           totalPublishedForeignEventsByType.count(orig)));
     }
-    stdout.print(String.format("%-30s | %19s | %19s |\n", //
+    stdout.print(String.format(tableRowStr, //
         "Total published events:",
         repl.getTotalPublishedLocalEvents(),
         repl.getTotalPublishedForeignEvents()));
-    stdout.print(String.format("%-30s | %19s | %19s |\n", //
+    stdout.print(String.format(tableRowStr, //
         "      of which with errors:",
         repl.getTotalPublishedLocalEvents() - repl.getTotalPublishedLocalGoodEvents(),
         repl.getTotalPublishedForeignEvents() - repl.getTotalPublishedForeignGoodEvents()));
-    stdout.print(String.format("%-30s | %19s | %19s |\n", //
+    stdout.print(String.format(tableRowStr, //
         "Total bytes published:",
         repl.getTotalPublishedLocalEventsBytes(),
         repl.getTotalPublishedForeignEventsBytes()));
-    stdout.print(String.format("%-30s | %19s | %19s |\n", //
+    stdout.print(String.format(tableRowStr, //
         "Total MiB published:",
         (repl.getTotalPublishedLocalEventsBytes() * 10 / (1024 * 1024)) / 10.0,
         (repl.getTotalPublishedForeignEventsBytes() * 10 / (1024 * 1024)) / 10.0));
-    stdout.print(String.format("%-30s | %19s | %19s |\n", //
+    stdout.print(String.format(tableRowStr, //
         "Total gzipped MiB published:",
         (repl.getTotalPublishedLocalEventsBytes() * 6 / 100 / (1024 * 1024) * 10) / 10.0,
         (repl.getTotalPublishedForeignEventsBytes() * 6 / 100 / (1024 * 1024) * 10) / 10.0));
@@ -138,27 +150,27 @@ final class ShowReplicatorStats extends SshCommand {
     long localProposals = repl.getTotalPublishedLocalEventsProsals();
     long foreignProposals = repl.getTotalPublishedForeignEventsProsals();
 
-    stdout.print(String.format("%-30s | %19s | %19s |\n", //
+    stdout.print(String.format(tableRowStr, //
         "Total proposals published:",
         localProposals,
         foreignProposals));
 
-    stdout.print(String.format("%-30s | %19s | %19s |\n", //
+    stdout.print(String.format(tableRowStr, //
         "Avg Events/proposal:",
         localProposals == 0 ? "n/a" : (repl.getTotalPublishedLocalEvents() * 10 / localProposals) / 10.0,
         foreignProposals == 0 ? "n/a" : (repl.getTotalPublishedForeignEvents() * 10 / foreignProposals) / 10.0));
 
-    stdout.print(String.format("%-30s | %19s | %19s |\n", //
+    stdout.print(String.format(tableRowStr, //
         "Avg bytes/proposal:",
         localProposals == 0 ? "n/a" : repl.getTotalPublishedLocalEventsBytes() / localProposals,
         foreignProposals == 0 ? "n/a" : repl.getTotalPublishedForeignEventsBytes() / foreignProposals));
-    stdout.print(String.format("%-30s | %19s | %19s |\n", //
+    stdout.print(String.format(tableRowStr, //
         "Avg gzipped bytes/proposal:",
         localProposals == 0 ? "n/a" : repl.getTotalPublishedLocalEventsBytes() * 6 / 100 / localProposals,
         foreignProposals == 0 ? "n/a" : repl.getTotalPublishedForeignEventsBytes() * 6 / 100 / foreignProposals));
-    stdout.print(String.format("%-30s | %19s | %19s |\n", //ErrorLog
+    stdout.print(String.format(tableRowStr, //ErrorLog
         "Files in Incoming directory:", "n/a", repl.getIncomingDirFileCount()));
-    stdout.print(String.format("%-30s | %19s | %19s |\n", //
+    stdout.print(String.format(tableRowStr, //
         "Files in Outgoing directory:", "n/a", repl.getOutgoingDirFileCount()));
 
     stdout.println();

@@ -29,26 +29,35 @@ Intended for interactive use only.
 
 ====
   $ ssh -p 29418 review.example.com gerrit show-replicator-stats
-  Gerrit Code Review  2.11.7-RP-1.7.1.4                       now    15:30:29   BST
-                                                          uptime     4 days 2 hours
-  ---------------------------------------------------------------------------+
-  Statistic                      |                Sent |            Received |
-  ---------------------------------------------------------------------------+
-  GERRIT_EVENT messages:         |              983911 |             1963651 |
-  CACHE_EVENT messages:          |              231160 |              461259 |
-  INDEX_EVENT messages:          |                1434 |                 120 |
-  PACKFILE_EVENT messages:       |                   0 |                   0 |
-  Total published events:        |             1216505 |             2425030 |
-        of which with errors:    |                   0 |                   0 |
-  Total bytes published:         |          1339062153 |          2672380145 |
-  Total MiB published:           |              1277.0 |              2548.5 |
-  Total gzipped MiB published:   |                76.6 |               152.9 |
-  Total proposals published:     |               40478 |               80935 |
-  Avg Events/proposal:           |                30.0 |                29.9 |
-  Avg bytes/proposal:            |               33081 |               33018 |
-  Avg gzipped bytes/proposal:    |                1984 |                1981 |
-  Files in Incoming directory:   |                 n/a |                   0 |
-  Files in Outgoing directory:   |                 n/a |                   0 |
+
+ now : 10:44:47   UTC
+ uptime :  1 min  8 sec
+ Gerrit Code Review : 2.16.27-RP-1.10.1.1
+ -----------------------------------------------------------------------------------------------+
+ Statistic                                          |                Sent |            Received |
+ -----------------------------------------------------------------------------------------------+
+ GERRIT_EVENT messages:                             |                   3 |                   0 |
+ CACHE_EVENT messages:                              |                   1 |                   0 |
+ INDEX_EVENT messages:                              |                   0 |                   0 |
+ PACKFILE_EVENT messages:                           |                   0 |                   0 |
+ DELETE_PROJECT_EVENT messages:                     |                   0 |                   0 |
+ DELETE_PROJECT_MESSAGE_EVENT messages:             |                   0 |                   0 |
+ ACCOUNT_USER_INDEX_EVENT messages:                 |                   0 |                   0 |
+ ACCOUNT_GROUP_INDEX_EVENT messages:                |                   0 |                   0 |
+ PROJECTS_INDEX_EVENT messages:                     |                   0 |                   0 |
+ Total published events:                            |                   4 |                   0 |
+       of which with errors:                        |                   0 |                   0 |
+ Total bytes published:                             |                1983 |                   0 |
+ Total MiB published:                               |                 0.0 |                 0.0 |
+ Total gzipped MiB published:                       |                 0.0 |                 0.0 |
+ Total proposals published:                         |                   1 |                   0 |
+ Avg Events/proposal:                               |                 4.0 |                 n/a |
+ Avg bytes/proposal:                                |                1983 |                 n/a |
+ Avg gzipped bytes/proposal:                        |                 118 |                 n/a |
+ Files in Incoming directory:                       |                 n/a |                  -1 |
+ Files in Outgoing directory:                       |                 n/a |                  -1 |
+
+
 ====
 
 == SEE ALSO
