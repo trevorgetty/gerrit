@@ -17,7 +17,9 @@ package com.google.gerrit.gerritconsoleapi;
 import com.google.gerrit.gerritconsoleapi.bindings.ProjectLevelConfigNoCache;
 import com.google.gerrit.gerritconsoleapi.bindings.ProjectLoader;
 
+import com.google.gerrit.gerritconsoleapi.bindings.ProjectLoader.Factory;
 import com.google.gerrit.gerritconsoleapi.bindings.ProjectStateMinDepends;
+import com.google.gerrit.server.config.AllProjectsName;
 import com.google.inject.Injector;
 
 import java.util.Set;
@@ -26,7 +28,7 @@ import java.util.Set;
 public class AllProjectsCommands {
 
 
-  private final ProjectLoader projectLoader;
+  private final ProjectLoader allProjectsLoader;
   private final String configName;
 
   public AllProjectsCommands( final Injector programContext, final String configName )
@@ -36,7 +38,8 @@ public class AllProjectsCommands {
       throw new NullPointerException("Null guice context supplied is invalid.");
     }
 
-    projectLoader = programContext.getInstance(ProjectLoader.class);
+    final AllProjectsName allProjectsName = programContext.getInstance(AllProjectsName.class);
+    allProjectsLoader = programContext.getInstance(Factory.class).create(allProjectsName);
     this.configName = configName;
   }
 
@@ -90,14 +93,15 @@ public class AllProjectsCommands {
     return sb.toString();
   }
 
-  /**§
+  /**
    * Returns the specified configuration file from the allProjects repo.
    * @return
    */
   public ProjectLevelConfigNoCache getProjectConfig() {
     try {
 
-      ProjectLevelConfigNoCache projectLevelConfig = projectLoader.getConfigFromProject(getConfigName(), getAllProjects());
+      ProjectLevelConfigNoCache projectLevelConfig = allProjectsLoader
+              .getConfigFromProject(getConfigName(), getAllProjects());
       if (projectLevelConfig == null) {
         throw new NullPointerException(String.format("No project configuration was found for configuration: %s", getConfigName()));
       }
@@ -115,7 +119,7 @@ public class AllProjectsCommands {
    */
   private ProjectStateMinDepends getAllProjects() throws Exception {
 
-    ProjectStateMinDepends state = projectLoader.getAllProjects();
+    ProjectStateMinDepends state = allProjectsLoader.getProjectSnapshot();
     return state;
   }
 }

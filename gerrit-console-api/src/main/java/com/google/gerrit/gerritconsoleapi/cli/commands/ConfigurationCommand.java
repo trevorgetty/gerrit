@@ -16,7 +16,6 @@ package com.google.gerrit.gerritconsoleapi.cli.commands;
 import com.google.common.base.Strings;
 import com.google.gerrit.gerritconsoleapi.AllProjectsCommands;
 
-import com.google.gerrit.gerritconsoleapi.Logging;
 import com.google.gerrit.gerritconsoleapi.cli.processing.CliCommandItemBase;
 import com.google.gerrit.gerritconsoleapi.cli.processing.LocalGuiceContextLoader;
 import com.google.gerrit.gerritconsoleapi.exceptions.LogAndExitException;

@@ -11,7 +11,7 @@
  *
  ********************************************************************************/
  
-package com.google.gerrit.gerritconsoleapi.bindings;
+package com.google.gerrit.gerritconsoleapi.config;
 
 import com.google.gerrit.common.Die;
 import com.google.gerrit.gerritconsoleapi.bindings.ProjectLoader;
@@ -29,6 +29,7 @@ import com.google.gerrit.server.securestore.DefaultSecureStore;
 import com.google.gerrit.server.securestore.SecureStoreClassName;
 import com.google.inject.*;
 
+import com.google.inject.assistedinject.FactoryModuleBuilder;
 import com.google.inject.spi.Message;
 import com.google.inject.util.Providers;
 import org.eclipse.jgit.errors.ConfigInvalidException;
@@ -191,9 +192,13 @@ public class GuiceConfigurator {
     modules.add(new AbstractModule() {
       @Override
       protected void configure() {
-// Bind my own impl of ProjectLoader which avoids the use of the ProjectCache.
-        bind(ProjectLoader.class);
-        bind(ProjectStateMinDepends.class);
+        install(new FactoryModuleBuilder()
+               .implement(ProjectLoader.class, ProjectLoader.class)
+               .build(ProjectLoader.Factory.class));
+      // Bind my own impl of ProjectLoader which avoids the use of the ProjectCache.
+        install(new FactoryModuleBuilder()
+                        .implement(ProjectStateMinDepends.class, ProjectStateMinDepends.class)
+                        .build(ProjectStateMinDepends.Factory.class));
       }
     });
 

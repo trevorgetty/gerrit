@@ -13,6 +13,7 @@ load("@rules_java//java:defs.bzl", "java_library")
 load("//tools/bzl:java.bzl", "java_library2")
 
 SRCS = "src/main/java/**"
+
 RSRCS = "src/main/resources/"
 
 BASE_DEPS = [
@@ -28,11 +29,12 @@ BASE_DEPS = [
     "//lib/guice:guice-servlet",
     "//lib/jgit/org.eclipse.jgit:jgit",
     "//lib/log:api",
-    "//lib/log:log4j"
+    "//lib/log:log4j",
 ]
 
 # TREV TODO //gerrit-reviewdb, does this need abstracted to work with NoteDB?
 DEPS = BASE_DEPS + [
+    "//gerrit-console-api/src/main/java/com/google/gerrit/gerritconsoleapi/bindings:gerrit-console-api-min-dependency-overrides",
     "//java/com/google/gerrit/reviewdb:server",
     "//lib/wandisco:gerrit-gitms-interface",
     "//lib:gwtorm",
@@ -47,8 +49,8 @@ java_library2(
     name = "gerrit-console-api-module",
     srcs = glob(["src/main/java/**/*.java"]),
     resources = glob([RSRCS + "*"]),
-    deps = DEPS,
     visibility = ["//visibility:public"],
+    deps = DEPS,
 )
 
 java_binary(

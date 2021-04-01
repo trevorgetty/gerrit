@@ -35,6 +35,7 @@ java_library(
         "//java/com/google/gerrit/pgm/init",
         "//java/com/google/gerrit/pgm/init/api",
         "//java/com/google/gerrit/pgm/util",
+        "//java/com/google/gerrit/pgm/wandisco",
         "//java/com/google/gerrit/reviewdb:server",
         "//java/com/google/gerrit/server",
         "//java/com/google/gerrit/server:module",

@@ -14,36 +14,48 @@
 package com.google.gerrit.gerritconsoleapi.bindings;
 
 import com.google.gerrit.reviewdb.client.Project;
-import com.google.gerrit.server.config.AllProjectsName;
 import com.google.gerrit.server.git.GitRepositoryManager;
 import com.google.gerrit.server.project.ProjectConfig;
 import com.google.gwtorm.client.KeyUtil;
 import com.google.gwtorm.server.StandardKeyEncoder;
 import com.google.inject.Inject;
-import com.google.inject.Injector;
+import com.google.inject.assistedinject.Assisted;
 import org.eclipse.jgit.errors.ConfigInvalidException;
+import org.eclipse.jgit.lib.Config;
 import org.eclipse.jgit.lib.Repository;
 
 public class ProjectLoader {
 
   private final GitRepositoryManager mgr;
-  private final Injector injector;
-  private final AllProjectsName allProjects;
+  private final ProjectStateMinDepends.Factory projectStateFactory;
+  private final Project.NameKey project;
 
   static {
     KeyUtil.setEncoderImpl(new StandardKeyEncoder());
   }
 
-  @Inject
-  public ProjectLoader(Injector injector, GitRepositoryManager mgr, AllProjectsName allProjects) {
-
-    this.mgr = mgr;
-    this.injector = injector;
-    this.allProjects = allProjects;
+  public interface Factory {
+    ProjectLoader create(Project.NameKey project);
   }
 
-  public ProjectStateMinDepends getAllProjects() throws Exception {
-    return getProjectSnapshot(allProjects);
+  @Inject
+  public ProjectLoader(ProjectStateMinDepends.Factory projectStateFactory, GitRepositoryManager mgr,
+                       @Assisted Project.NameKey project) {
+    this.mgr = mgr;
+    this.projectStateFactory = projectStateFactory;
+    this.project = project;
+  }
+
+  public String getProjectName() {
+    return project.get();
+  }
+
+  public ProjectStateMinDepends getProjectSnapshot() throws Exception {
+    return getProjectSnapshot(project);
+  }
+
+  public Config getProjectConfigSnapshot() throws Exception {
+    return getProjectConfigSnapshot(project);
   }
 
   /**
@@ -70,10 +82,21 @@ public class ProjectLoader {
       ProjectConfig cfg = new ProjectConfig(key);
       cfg.load(git);
 
-
-      ProjectStateMinDepends state = injector.getInstance(ProjectStateMinDepends.class);
+      final ProjectStateMinDepends state = projectStateFactory.create(key);
       state.setConfig(cfg);
       return state;
+    }
+  }
+
+  /**
+   * Open Project, get git configuration but take a SNAPSHOT of it at this point in time.
+   *
+   * @param key  Project name key object, representing project name.
+   * @return Git Configuration
+   */
+  public Config getProjectConfigSnapshot(Project.NameKey key) throws Exception {
+    try (Repository git = mgr.openRepository(key)) {
+      return new Config(git.getConfig());
     }
   }
 

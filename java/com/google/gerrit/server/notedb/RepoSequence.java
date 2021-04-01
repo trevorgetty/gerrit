@@ -78,7 +78,7 @@ public class RepoSequence {
   }
 
   @VisibleForTesting
-  static RetryerBuilder<RefUpdate.Result> retryerBuilder() {
+  public static RetryerBuilder<RefUpdate.Result> retryerBuilder() {
     return retryerBuilder(30);
   }
 
@@ -99,7 +99,7 @@ public class RepoSequence {
     RETRYER = retryerBuilder(sequenceRetryMaxTimeoutSecsIn).build();
   }
 
-  private static final String SEQUENCE_TUPLE_DELIMITER = ":";
+  public static final String SEQUENCE_TUPLE_DELIMITER = ":";
 
   private static Retryer<RefUpdate.Result> RETRYER = retryerBuilder().build();
 
@@ -162,7 +162,7 @@ public class RepoSequence {
   }
 
   @VisibleForTesting
-  RepoSequence(
+  public RepoSequence(
       GitRepositoryManager repoManager,
       GitReferenceUpdated gitRefUpdated,
       Project.NameKey projectName,
@@ -435,7 +435,7 @@ public class RepoSequence {
   /* Convert a sequenceString back into the expected sequence number. For vanilla or non-replicated Gerrit we only need
    * parse the string as an int. For replicated flow we need to unpack the sequence number out of the encoded tuple.
    */
-  private static Integer decodeSequenceString(String sequenceString) {
+  public static Integer decodeSequenceString(String sequenceString) {
     final int separatorIndex = sequenceString.lastIndexOf(SEQUENCE_TUPLE_DELIMITER);
 
     return separatorIndex < 0 ?

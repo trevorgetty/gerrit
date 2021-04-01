@@ -26,6 +26,7 @@ import com.google.gerrit.server.git.GitRepositoryManager;
 import com.google.gerrit.server.project.ProjectConfig;
 import com.google.gerrit.server.project.*;
 import com.google.inject.Inject;
+import com.google.inject.assistedinject.Assisted;
 import org.eclipse.jgit.errors.ConfigInvalidException;
 import org.eclipse.jgit.lib.Repository;
 import org.slf4j.Logger;
@@ -45,12 +46,13 @@ public class ProjectStateMinDepends {
       LoggerFactory.getLogger(ProjectStateMinDepends.class);
 
   public interface Factory {
-    ProjectStateMinDepends create(ProjectConfig config);
+    ProjectStateMinDepends create(Project.NameKey project);
   }
 
   private boolean isAllProjects;
-  private final SitePaths sitePaths;
   private final AllProjectsName allProjectsName;
+  private final SitePaths sitePaths;
+  private final Project.NameKey project;
   private final GitRepositoryManager gitMgr;
   private ProjectConfig config;
   /**
@@ -67,11 +69,12 @@ public class ProjectStateMinDepends {
   public ProjectStateMinDepends(
       final SitePaths sitePaths,
       final AllProjectsName allProjectsName,
+      @Assisted final Project.NameKey project,
       final GitRepositoryManager gitMgr) {
     this.sitePaths = sitePaths;
     this.allProjectsName = allProjectsName;
+    this.project = project;
     this.gitMgr = gitMgr;
-
   }
 
   public void setConfig(ProjectConfig config){
@@ -116,6 +119,7 @@ public class ProjectStateMinDepends {
       Collection<AccessSection> fromConfig = config.getAccessSections();
       sm = new ArrayList<>(fromConfig.size());
       for (AccessSection section : fromConfig) {
+        // if all-projects do additional permissions checks
         if (isAllProjects) {
           List<Permission> copy =
               Lists.newArrayListWithCapacity(section.getPermissions().size());

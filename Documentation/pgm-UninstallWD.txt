@@ -1,0 +1,37 @@
+= UninstallWD
+
+== NAME
+UninstallWD - Revert WANdisco GerritMS back to vanilla installation
+
+== SYNOPSIS
+[verse]
+--
+_java_ -jar gerrit.war _UninstallWD_
+  -d <SITE_PATH>
+--
+
+== DESCRIPTION
+This command is intended to revert a WANdisco GerritMS installation
+back to vanilla functionality.
+Further uninstall steps detailed by the tool must be followed in order to
+completely remove WANdisco applications from the system.
+
+== OPTIONS
+
+-d::
+--site-path::
+	Location of the gerrit.config file, and all other per-site
+	configuration data, supporting libraries and log files.
+
+== CONTEXT
+This command should be run on an installation where all repositories
+exist. All repositories should be taken out of replication prior to
+running the tool.
+
+
+GERRIT
+------
+Part of link:index.html[Gerrit Code Review]
+
+SEARCHBOX
+---------

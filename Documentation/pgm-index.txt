@@ -36,6 +36,9 @@ version::
 link:pgm-passwd.html[passwd]::
 	Set or reset password in secure.config.
 
+link:pgm-UninstallWD.html[UninstallWD]::
+    Revert WANdisco GerritMS back to vanilla installation.
+
 === Transition Utilities
 
 link:pgm-LocalUsernamesToLowerCase.html[LocalUsernamesToLowerCase]::

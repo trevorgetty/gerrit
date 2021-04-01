@@ -15,8 +15,7 @@ package com.google.gerrit.gerritconsoleapi.cli.processing;
 
 import com.google.common.base.Strings;
 import com.google.gerrit.gerritconsoleapi.Logging;
-import com.google.gerrit.gerritconsoleapi.bindings.GuiceConfigurator;
-import com.google.gerrit.gerritconsoleapi.cli.commands.LfsInformationCommand;
+import com.google.gerrit.gerritconsoleapi.config.GuiceConfigurator;
 import com.google.gerrit.gerritconsoleapi.exceptions.LogAndExitException;
 import com.google.inject.Injector;
 import com.wandisco.gerrit.gitms.shared.exception.ConfigurationException;
