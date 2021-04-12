@@ -1,7 +1,7 @@
 #!/bin/bash --noprofile
 
 function info() {
-  if [ ! "$NON_INTERACTIVE" == "1" ]; then
+  if [[ ! "$NON_INTERACTIVE" == "1" ]]; then
     echo -e "$1"
   fi
 }
@@ -25,7 +25,7 @@ function isPreviousAllowedVersion() {
 }
 
 function header() {
-  if [ ! "$NON_INTERACTIVE" == "1" ]; then
+  if [[ ! "$NON_INTERACTIVE" == "1" ]]; then
     cat "resources/logo.txt"
     info "\n\n"
   fi
@@ -37,7 +37,7 @@ function bold {
 }
 
 function next_screen() {
-  if [ ! "$NON_INTERACTIVE" == "1" ]; then
+  if [[ ! "$NON_INTERACTIVE" == "1" ]]; then
     read -s -p "$1"
   fi
 }
@@ -95,10 +95,10 @@ function prereqs() {
   info " * Stop the Gerrit service on this node"
   info ""
 
-  if [ ! "$NON_INTERACTIVE" == "1" ]; then
+  if [[ ! "$NON_INTERACTIVE" == "1" ]]; then
     REQUIREMENTS_MET=$(get_boolean "Do you want to continue with the installation?" "true")
     info
-    if [ "$REQUIREMENTS_MET" == "false" ]; then
+    if [[ "$REQUIREMENTS_MET" == "false" ]]; then
       info "Installation aborted by user"
       exit 0
     fi
@@ -108,21 +108,21 @@ function prereqs() {
 }
 
 function check_environment_variables_that_affect_curl() {
-    if [ -n "$HTTP_PROXY" ] || [ -n "$HTTPS_PROXY" ] || [ -n "$FTP_PROXY" ] || [ -n "$ALL_PROXY" ] || [ -n "$NO_PROXY" ]; then
+    if [[ -n "$HTTP_PROXY" ]] || [[ -n "$HTTPS_PROXY" ]] || [[ -n "$FTP_PROXY" ]] || [[ -n "$ALL_PROXY" ]] || [[ -n "$NO_PROXY" ]]; then
       info ""
       info " The following environment variables are set and will affect the use of 'curl': "
       info ""
-      [ -n "$HTTP_PROXY" ] && echo " * HTTP_PROXY=$HTTP_PROXY"
-      [ -n "$HTTPS_PROXY" ] && echo " * HTTPS_PROXY=$HTTPS_PROXY"
-      [ -n "$FTP_PROXY" ] && echo " * FTP_PROXY=$FTP_PROXY"
-      [ -n "$ALL_PROXY" ] && echo " * ALL_PROXY=$ALL_PROXY"
-      [ -n "$NO_PROXY" ] && echo " * NO_PROXY=$NO_PROXY"
+      [[ -n "$HTTP_PROXY" ]] && echo " * HTTP_PROXY=$HTTP_PROXY"
+      [[ -n "$HTTPS_PROXY" ]] && echo " * HTTPS_PROXY=$HTTPS_PROXY"
+      [[ -n "$FTP_PROXY" ]] && echo " * FTP_PROXY=$FTP_PROXY"
+      [[ -n "$ALL_PROXY" ]] && echo " * ALL_PROXY=$ALL_PROXY"
+      [[ -n "$NO_PROXY" ]] && echo " * NO_PROXY=$NO_PROXY"
       info ""
 
-      if [ -z "$CURL_ENVVARS_APPROVED" ]; then
+      if [[ -z "$CURL_ENVVARS_APPROVED" ]]; then
         CURL_ENVVARS_APPROVED=$(get_boolean "Do you want to continue with the installation?" "true")
       fi
-      if [ "$CURL_ENVVARS_APPROVED" == "false" ]; then
+      if [[ "$CURL_ENVVARS_APPROVED" == "false" ]]; then
         info "Installation aborted by user"
         exit 0
       fi
@@ -138,7 +138,7 @@ function check_user() {
   info " Currently installing as user: \033[1m$user\033[0m"
   info ""
 
-  if [ "$EUID" -eq 0 ]; then
+  if [[ "$EUID" -eq 0 ]]; then
     info " WARNING: It is strongly advised that the GitMS and Gerrit services"
     info " are not run as root."
     info ""
@@ -164,15 +164,15 @@ function check_executables() {
     fi
   done
   mktemp --tmpdir="$TMPDIR" >/dev/null 2>&1;
-  if [ $? -ne 0 ]; then
-    if [ "$bins" -eq 0 ]; then
+  if [[ $? -ne 0 ]]; then
+    if [[ "$bins" -eq 0 ]]; then
       header
     fi
     info " \033[1mmktemp\033[0m version does not support --tmpdir switch, please install the correct version"
     info ""
     ((bins++))
   fi
-  if [ "$bins" -ne 0 ]; then
+  if [[ "$bins" -ne 0 ]]; then
     exit 1
   fi
 
@@ -191,7 +191,7 @@ function find_gitms() {
 
   if [[ -z "$gitms_config" || ! -e "$gitms_config" ]]; then
     ## check if the default gitms install folder is present
-    if [ -d "/opt/wandisco/git-multisite" ]; then
+    if [[ -d "/opt/wandisco/git-multisite" ]]; then
       GITMS_ROOT="/opt/wandisco/git-multisite"
     else
       return
@@ -270,7 +270,7 @@ function get_password() {
   while true
   do
     read -s -e -p " $1: " USER_PASSWORD
-    if [ ! -z "$USER_PASSWORD" ]; then
+    if [[ ! -z "$USER_PASSWORD" ]]; then
       break
     fi
   done
@@ -284,7 +284,7 @@ function get_directory() {
 
   local create_directory="false"
 
-  if [ "$2" == "true" ]; then
+  if [[ "$2" == "true" ]]; then
     create_directory="true"
   fi
 
@@ -305,9 +305,9 @@ function get_directory() {
     if [[ ! -d "$INPUT_DIR" && ! -e "$INPUT_DIR" && "$create_directory" == "true" ]]; then
       local create_dir=$(get_boolean "The directory [ "$INPUT_DIR" ] does not exist, do you want to create it?" "true")
 
-      if [ "$create_dir" == "true" ]; then
+      if [[ "$create_dir" == "true" ]]; then
         mkdir -p "$INPUT_DIR"
-        if [ "$?" == "0" ]; then
+        if [[ "$?" == "0" ]]; then
           break
         else
           perr "Directory could not be created"
@@ -315,8 +315,8 @@ function get_directory() {
       fi
     fi
 
-    if [ -d "$INPUT_DIR" ]; then
-      if [ -w "$INPUT_DIR" ]; then
+    if [[ -d "$INPUT_DIR" ]]; then
+      if [[ -w "$INPUT_DIR" ]]; then
         break
       else
         perr "$INPUT_DIR is not writable"
@@ -335,18 +335,18 @@ function get_executable() {
 
   local default=""
 
-  if [ ! -z "$2" ]; then
+  if [[ ! -z "$2" ]]; then
     default="[$2] "
   fi
 
   while true
   do
     read -e -p " $1 $default" EXECUTABLE_PATH
-    if [ -z "$EXECUTABLE_PATH" ]; then
+    if [[ -z "$EXECUTABLE_PATH" ]]; then
       EXECUTABLE_PATH=$2
     fi
 
-    if [ -x "$EXECUTABLE_PATH" ]; then
+    if [[ -x "$EXECUTABLE_PATH" ]]; then
       break
     else
       echo "" 1>&2
@@ -363,10 +363,10 @@ function get_string() {
 
   local allow_empty_string="false"
 
-  if [ ! -z "$2" ]; then
+  if [[ ! -z "$2" ]]; then
     allow_empty_string=$(echo "$2" | tr '[:upper:]' '[:lower:]')
 
-    if [ ! "$allow_empty_string" == "true" ]; then
+    if [[ ! "$allow_empty_string" == "true" ]]; then
       allow_empty_string="false"
     fi
   else
@@ -376,11 +376,11 @@ function get_string() {
   while true
   do
     read -e -p " $1: " INPUT
-    if [ ! -z "$INPUT" ]; then
+    if [[ ! -z "$INPUT" ]]; then
       break
     fi
 
-    if [ "$allow_empty_string" == "true" ]; then
+    if [[ "$allow_empty_string" == "true" ]]; then
       break
     fi
   done
@@ -392,9 +392,9 @@ function get_string() {
 function to_boolean() {
   local bool=$(echo "$1" | tr '[:lower:]' '[:upper:]')
 
-  if [ "$bool" == "Y" ]; then
+  if [[ "$bool" == "Y" ]]; then
     echo "true"
-  elif [ "$bool" == "N" ]; then
+  elif [[ "$bool" == "N" ]]; then
     echo "false"
   fi
 }
@@ -408,7 +408,7 @@ function get_boolean() {
   local option_no="n"
   local default=$(echo "$2" | tr '[:upper:]' '[:lower:]')
 
-  if [ "$default" == "true" ]; then
+  if [[ "$default" == "true" ]]; then
     option_yes="Y"
   else
     ## force default to false if it's not true
@@ -422,7 +422,7 @@ function get_boolean() {
   do
     INPUT=$(get_string "$1 $option_string" "true")
 
-    if [ -z "$INPUT" ]; then
+    if [[ -z "$INPUT" ]]; then
       echo "$default"
       break
     fi
@@ -446,7 +446,7 @@ function get_gerrit_replication_group_id() {
   local tmpFile=$(mktemp --tmpdir="$SCRATCH")
 
   ## The port GitMS uses will depend on whether SSL is enabled or not.
-  if [ "$SSL_ENABLED" == "true" ]; then
+  if [[ "$SSL_ENABLED" == "true" ]]; then
     local protocol="https://"
     local rest_port="$GITMS_SSL_REST_PORT"
   else
@@ -673,11 +673,11 @@ function get_config_from_user() {
   info ""
   find_gitms
 
-  if [ ! "$NON_INTERACTIVE" == "1" ]; then
+  if [[ ! "$NON_INTERACTIVE" == "1" ]]; then
     while true
     do
       read -e -p " Git Multisite root directory$GITMS_ROOT_PROMPT: " INPUT
-      if [ -z "$INPUT" ]; then
+      if [[ -z "$INPUT" ]]; then
         INPUT=$GITMS_ROOT
       fi
 
@@ -686,7 +686,7 @@ function get_config_from_user() {
         APPLICATION_PROPERTIES="$INPUT"
         APPLICATION_PROPERTIES+="/replicator/properties/application.properties"
 
-        if [ ! -e "$APPLICATION_PROPERTIES" ]; then
+        if [[ ! -e "$APPLICATION_PROPERTIES" ]]; then
           echo "" 1>&2
           perr "$APPLICATION_PROPERTIES cannot be found"
           echo "" 1>&2
@@ -756,12 +756,12 @@ function get_config_from_user() {
   ## not already set.
   remove_legacy_config_from_application_properties
 
-  if [ -z "$GERRIT_ENABLED" ]; then
+  if [[ -z "$GERRIT_ENABLED" ]]; then
     set_property "gerrit.enabled" "true"
   fi
 
   ## Check if Gerrit is running now that we know the Gerrit root
-  if check_gerrit_status -ne 0; then
+  if ! check_gerrit_status ; then
     ##Gerrit was detected as running, display a warning
     echo "" 1>&2
     perr "A process has been detected on the Gerrit HTTP port $(get_gerrit_port)."
@@ -778,13 +778,13 @@ function get_config_from_user() {
     info ""
   fi
 
-  if [ ! "$NON_INTERACTIVE" == "1" ]; then
-    if [ -n "$GERRIT_USERNAME" ]; then
+  if [[ ! "$NON_INTERACTIVE" == "1" ]]; then
+    if [[ -n "$GERRIT_USERNAME" ]]; then
       info ""
       bold " Gerrit Admin Username and Password"
       info ""
       REMOVE_UNAME_AND_PASSWD=$(get_boolean "It is no longer necessary to keep your Gerrit Admin Username or Password. Would you like to remove them?" "true")
-      if [ "$REMOVE_UNAME_AND_PASSWD" == "true" ]; then
+      if [[ "$REMOVE_UNAME_AND_PASSWD" == "true" ]]; then
         remove_property "gerrit.username" "gerrit.password"
       else
         info " Not removing Gerrit Admin Username and Password."
@@ -796,7 +796,7 @@ function get_config_from_user() {
   fi
   info
 
-  if [ -z "$GERRIT_REPO_HOME" ]; then
+  if [[ -z "$GERRIT_REPO_HOME" ]]; then
     get_directory "Gerrit Repository Directory" "false"
     GERRIT_REPO_HOME="$INPUT_DIR"
   else
@@ -819,7 +819,7 @@ function get_config_from_user() {
 
   set_property "gerrit.events.basepath" "$GERRIT_EVENTS_PATH"
 
-  if [ -z "$GERRIT_REPLICATED_EVENTS_SEND" ]; then
+  if [[ -z "$GERRIT_REPLICATED_EVENTS_SEND" ]]; then
     GERRIT_REPLICATED_EVENTS_SEND=$(get_boolean "Will this node send Replicated Events to other Gerrit nodes?" "true")
   else
     info " Gerrit Receive Replicated Events: $GERRIT_REPLICATED_EVENTS_SEND"
@@ -828,7 +828,7 @@ function get_config_from_user() {
   set_property "gerrit.replicated.events.enabled.send" "$GERRIT_REPLICATED_EVENTS_SEND"
 
 
-  if [ -z "$GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL" ]; then
+  if [[ -z "$GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL" ]]; then
     GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL=$(get_boolean "Will this node receive Replicated Events from other Gerrit nodes?" "true")
   else
     info " Gerrit Send Replicated Events: $GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL"
@@ -836,7 +836,7 @@ function get_config_from_user() {
 
   set_property "gerrit.replicated.events.enabled.receive.original" "$GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL"
 
-  if [ -z "$GERRIT_REPLICATED_CACHE_ENABLED" ]; then
+  if [[ -z "$GERRIT_REPLICATED_CACHE_ENABLED" ]]; then
     GERRIT_REPLICATED_CACHE_ENABLED="true"
   else
     info " Gerrit Replicated Cache enabled: $GERRIT_REPLICATED_CACHE_ENABLED"
@@ -846,7 +846,7 @@ function get_config_from_user() {
   ## Array of caches we do not wish to reload.  We need to deal with fresh install / upgrade scenarios and user changes to this field.
   CACHE_NAMES_NOT_TO_RELOAD=(changes projects groups_byinclude groups_byname groups_byuuid groups_external groups_members groups_bysubgroup groups_bymember)
 
-  if [ -z "$GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD" ]; then
+  if [[ -z "$GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD" ]]; then
     # to avoid keeping 2 lists of same info, just build from our array above.
     printf -v GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD ',%s' "${CACHE_NAMES_NOT_TO_RELOAD[@]}" # yields ",changes,projects,....."
     GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD=${GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD:1} # drop leading comma
@@ -861,12 +861,12 @@ function get_config_from_user() {
   fi
   set_property "gerrit.replicated.cache.names.not.to.reload" "$GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD"
 
-  if [ -z "$GERRIT_RPGROUP_ID" ]; then
+  if [[ -z "$GERRIT_RPGROUP_ID" ]]; then
     while true
     do
       GERRIT_RPGROUP_ID=$(get_gerrit_replication_group_id)
 
-      if [ ! -z "$GERRIT_RPGROUP_ID" ]; then
+      if [[ ! -z "$GERRIT_RPGROUP_ID" ]]; then
         info ""
         info " Replication Group found with ID: $GERRIT_RPGROUP_ID"
         break
@@ -883,7 +883,7 @@ function get_config_from_user() {
   set_property "gerrit.rpgroupid" "$GERRIT_RPGROUP_ID"
 
 
-  if [ -z "$GERRIT_DB_SLAVEMODE_SLEEPTIME" ]; then
+  if [[ -z "$GERRIT_DB_SLAVEMODE_SLEEPTIME" ]]; then
     set_property "gerrit.db.slavemode.sleepTime" "0"
   fi
 
@@ -927,7 +927,7 @@ function get_config_from_user() {
 
   set_property "deleted.repo.directory" $DELETED_REPO_DIRECTORY
 
-  if [ -z "$GERRIT_HELPER_SCRIPT_INSTALL_DIR" ]; then
+  if [[ -z "$GERRIT_HELPER_SCRIPT_INSTALL_DIR" ]]; then
   
     info ""
     bold " Helper Scripts"
@@ -943,7 +943,7 @@ function get_config_from_user() {
       read -e -p " Helper Script Install Directory [$GERRIT_HELPER_SCRIPT_DEFAULT_INSTALL_DIR]: " INPUT
 
       #If the input is empty then set the directory to the default directory
-      if [ -z "$INPUT" ]; then
+      if [[ -z "$INPUT" ]]; then
         INPUT=$GERRIT_HELPER_SCRIPT_DEFAULT_INSTALL_DIR
         GERRIT_HELPER_SCRIPT_INSTALL_DIR=$INPUT
         break
@@ -988,11 +988,13 @@ function is_gitms_running() {
 # $1 port to check
 # returns 0 if port isn't in use
 function is_port_available() {
-  netstat -an | grep "$1" | grep -i "LISTEN" > /dev/null 2>&1
-  if [ $? -eq 0 ]; then
-    return 0
+  # This command will have a command exit status of 1 whenever
+  # a port is free and a command exit status of 0 if port is in use.
+  ss -ant | grep '^LISTEN ' | grep ":$1 " > /dev/null 2>&1
+  if [[ $? -ne 0 ]]; then
+    return 0 # Port is available, return 0
   else
-    return 1
+    return 1 # Port is in use, return 1
   fi
 }
 
@@ -1019,7 +1021,7 @@ function create_backup() {
   info " be saved?"
   info ""
 
-  if [ ! "$NON_INTERACTIVE" == "1" ]; then
+  if [[ ! "$NON_INTERACTIVE" == "1" ]]; then
     get_directory "Backup Location" "true"
     BACKUP_ROOT="$INPUT_DIR"
   else
@@ -1028,7 +1030,7 @@ function create_backup() {
 
   mkdir -p "$SCRATCH/backup/gerrit"
 
-  if [ "$FIRST_NODE" == "true" ]; then
+  if [[ "$FIRST_NODE" == "true" ]]; then
     ## Fetch some properties from gerrit.config to potentially backup the database
     local db_name=$(GIT_CONFIG="$GERRIT_ROOT/etc/gerrit.config" git config database.database)
 
@@ -1105,7 +1107,7 @@ function replace_gerrit_war() {
   OLD_WAR="$GERRIT_ROOT/bin/gerrit.war"
 
   cp "$RELEASE_WAR" "$OLD_WAR"
-  if [ $? -ne 0 ]; then
+  if [[ $? -ne 0 ]]; then
     echo "Failed to copy $RELEASE_WAR to $OLD_WAR"
     exit 1
   fi
@@ -1114,7 +1116,7 @@ function replace_gerrit_war() {
 function remove_gitms_gerrit_plugin() {
   local plugin_location="$GERRIT_ROOT/plugins/gitms-gerrit-event-plugin.jar"
 
-  if [ -e "$plugin_location" ]; then
+  if [[ -e "$plugin_location" ]]; then
     rm -f "$plugin_location"
   fi
 }
@@ -1126,7 +1128,29 @@ function remove_gitms_gerrit_plugin() {
 # functional service file.
 function update_gerrit_service_template() {
   temp_dir=$(mktemp -d)
+
   cp -f "gerrit.service.template" "$temp_dir"
+
+  GITMS_REP_SERVICE_FILE="$GITMS_ROOT/systemd/wdgitmsrep.service"
+  DEFAULT_VAL=65536
+  # Check if the wdgitmsrep.service file exists. If it does then attempt
+  # to parse the values for TasksMax, LimitNOFILE and LimitNPROC
+  if [[ -e "$GITMS_REP_SERVICE_FILE" ]]; then
+      TASKS_MAX=$(sed -n 's/^TasksMax=//p' "$GITMS_REP_SERVICE_FILE")
+      LIMIT_NO_FILE=$(sed -n 's/^LimitNOFILE=//p' "$GITMS_REP_SERVICE_FILE")
+      LIMIT_N_PROC=$(sed -n 's/^LimitNPROC=//p' "$GITMS_REP_SERVICE_FILE")
+  fi
+
+  #If no value found, or property line commented out, then providing a default
+  TasksMaxVal=${TASKS_MAX:-"$DEFAULT_VAL"}
+  LimitNOFILEVal=${LIMIT_NO_FILE:-"$DEFAULT_VAL"}
+  LimitNPROCVal=${LIMIT_N_PROC:-"$DEFAULT_VAL"}
+
+  #Replacing the placeholder variables in the gerrit.service.template before it is
+  #copied
+  sed -i -e "s/\${TasksMax}/$TasksMaxVal/" "${temp_dir}/gerrit.service.template"
+  sed -i -e "s/\${LimitNOFILE}/$LimitNOFILEVal/" "${temp_dir}/gerrit.service.template"
+  sed -i -e "s/\${LimitNPROC}/$LimitNPROCVal/" "${temp_dir}/gerrit.service.template"
 
   sed -i -e 's:${Gerrit_install_directory}:'"${GERRIT_ROOT}"':g' "${temp_dir}/gerrit.service.template"
 
@@ -1190,7 +1214,7 @@ function finalize_install() {
     local gerrit_base_path=$(get_gerrit_base_path "$GERRIT_ROOT")
     local syncRepoCmdPath=$(sanitize_path "${GERRIT_HELPER_SCRIPT_INSTALL_DIR}/sync_repo.sh")
 
-    if [ ! "$REPLICATED_UPGRADE" == "true" ]; then
+    if [[ ! "$REPLICATED_UPGRADE" == "true" ]]; then
       echo " * rsync $GERRIT_ROOT to all of your GerritMS nodes."
       if [[ "${gerrit_base_path#$GERRIT_ROOT/}" = /* ]]; then
         echo " * rsync $gerrit_base_path to all of your GerritMS nodes."
@@ -1213,7 +1237,7 @@ function finalize_install() {
 
   echo ""
 
-  if [ "$NON_INTERACTIVE" == "1" ]; then
+  if [[ "$NON_INTERACTIVE" == "1" ]]; then
     echo "Non-interactive install completed"
   fi
 }
@@ -1322,7 +1346,7 @@ function check_for_non_interactive_mode() {
     APPLICATION_PROPERTIES="$GITMS_ROOT"
     APPLICATION_PROPERTIES+="/replicator/properties/application.properties"
 
-    if [ ! -e "$APPLICATION_PROPERTIES" ]; then
+    if [[ ! -e "$APPLICATION_PROPERTIES" ]]; then
       perr "Non-interactive installation aborted, the file $APPLICATION_PROPERTIES does not exist"
       exit 1
     fi
@@ -1341,15 +1365,15 @@ function check_for_non_interactive_mode() {
     local tmp_gerrit_helper_script_install_directory=$(fetch_property "gerrit.helper.scripts.install.directory")
 
     ## Override env variables where the property already exists
-    if [ ! -z "$tmp_gerrit_root" ]; then
+    if [[ ! -z "$tmp_gerrit_root" ]]; then
       GERRIT_ROOT="$tmp_gerrit_root"
     fi
 
-    if [ ! -z "$tmp_gerrit_rpgroup_id" ]; then
+    if [[ ! -z "$tmp_gerrit_rpgroup_id" ]]; then
       GERRIT_RPGROUP_ID="$tmp_gerrit_rpgroup_id"
     fi
 
-    if [ ! -z "$tmp_gerrit_repo_home" ]; then
+    if [[ ! -z "$tmp_gerrit_repo_home" ]]; then
       GERRIT_REPO_HOME="$tmp_gerrit_repo_home"
     fi
 
@@ -1362,23 +1386,23 @@ function check_for_non_interactive_mode() {
       GERRIT_EVENTS_PATH="$tmp_gerrit_events_path"
     fi
 
-    if [ ! -z "$tmp_gerrit_replicated_events_send" ]; then
+    if [[ ! -z "$tmp_gerrit_replicated_events_send" ]]; then
       GERRIT_REPLICATED_EVENTS_SEND="$tmp_gerrit_replicated_events_send"
     fi
 
-    if [ ! -z "$tmp_gerrit_replicated_events_receive_original" ]; then
+    if [[ ! -z "$tmp_gerrit_replicated_events_receive_original" ]]; then
       GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL="$tmp_gerrit_replicated_events_receive_original"
     fi
 
-    if [ ! -z "$tmp_gerrit_replicated_cache_enabled" ]; then
+    if [[ ! -z "$tmp_gerrit_replicated_cache_enabled" ]]; then
       GERRIT_REPLICATED_CACHE_ENABLED="$tmp_gerrit_replicated_cache_enabled"
     fi
 
-    if [ ! -z "$tmp_gerrit_replicated_cache_names_not_to_reload" ]; then
+    if [[ ! -z "$tmp_gerrit_replicated_cache_names_not_to_reload" ]]; then
       GERRIT_REPLICATED_CACHE_NAMES_NOT_TO_RELOAD="$tmp_gerrit_replicated_cache_names_not_to_reload"
     fi
     
-    if [ ! -z "$tmp_gerrit_helper_script_install_directory" ]; then
+    if [[ ! -z "$tmp_gerrit_helper_script_install_directory" ]]; then
       GERRIT_HELPER_SCRIPT_INSTALL_DIR="$tmp_gerrit_helper_script_install_directory"
     fi
 
@@ -1391,7 +1415,7 @@ function check_for_non_interactive_mode() {
 
       ## On an upgrade, some extra variables must be set. If they are not, non-interactive
       ## mode will not be set
-      if [ ! -z "$UPGRADE" ]; then
+      if [[ ! -z "$UPGRADE" ]]; then
         if [[ -z "$RUN_GERRIT_INIT" || -z "$UPDATE_REPO_CONFIG" || -z "$REMOVE_PLUGIN" ]]; then
           ## not non-interactive, need to set upgrade variables
           NON_INTERACTIVE=0
@@ -1400,13 +1424,13 @@ function check_for_non_interactive_mode() {
       fi
 
       ## GERRIT_ROOT must exist as well
-      if [ ! -d "$GERRIT_ROOT" ]; then
+      if [[ ! -d "$GERRIT_ROOT" ]]; then
         perr "Non-interactive installation aborted, the GERRIT_ROOT at $GERRIT_ROOT does not exist"
         exit 1
       fi
       
       ## CURL_ENVVARS_APPROVED must be either true or false
-      if [ ! "$CURL_ENVVARS_APPROVED" == "true" ] && [ ! "$CURL_ENVVARS_APPROVED" == "false" ]; then
+      if [[ ! "$CURL_ENVVARS_APPROVED" == "true" ]] && [ ! "$CURL_ENVVARS_APPROVED" == "false" ]; then
         perr "Non-interactive installation aborted, the CURL_ENVVARS_APPROVED must be either \"true\" or \"false\". Currently is \"$CURL_ENVVARS_APPROVED\""
         exit 1
       fi
@@ -1528,7 +1552,7 @@ SPINNER=("|" "/" "-" "\\")
 
 check_for_non_interactive_mode
 
-if [ "$NON_INTERACTIVE" == "1" ]; then
+if [[ "$NON_INTERACTIVE" == "1" ]]; then
   echo "Starting non-interactive install of GerritMS..."
   echo ""
   echo "Using settings: "

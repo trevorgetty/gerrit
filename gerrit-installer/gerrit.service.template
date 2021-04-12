@@ -23,6 +23,9 @@ ExecStop=${Gerrit_install_directory}/bin/gerrit.sh stop
 ExecReload=${Gerrit_install_directory}/bin/gerrit.sh stop; ${Gerrit_install_directory}/bin/gerrit.sh start
 RemainAfterExit=yes
 SyslogIdentifier=GerritCodeReview
+TasksMax=${TasksMax}
+LimitNOFILE=${LimitNOFILE}
+LimitNPROC=${LimitNPROC}
 
 [Install]
 WantedBy=multi-user.target
