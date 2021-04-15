@@ -1612,6 +1612,33 @@ repository data manipulation.
 +
 Default on JGit is 128 file descriptors on all platforms.
 
+[[core.packedgitopenfilescachecleanenabled]]core.packedgitopenfilescachecleanenabled::
++
+Flag to enable a scheduled task to clean out stale references to
+deleted packfiles from the WindowCache. Stale references ie. open
+file descriptors now marked deleted can be caused by running an out
+of band GC using CGit from the command line.
++
+Default on JGit is true
+
+[[core.packedgitopenfilescachecleandelay]]core.packedgitopenfilescachecleandelay::
++
+Initial delay of the scheduled task to clean out stale packfile references.
++
+To reduce startup overhead, this should not be set to a very
+low value. The value is denoted in milliseconds.
++
+Default on JGit is 3600000 (1 hour).
+
+[[core.packedgitopenfilescachecleanperiod]]core.packedgitopenfilescachecleanperiod::
++
+Period of time between runs of scheduled task to clean out stale packfile
+references.
++
+The value is denoted in milliseconds.
++
+Default on JGit is 86400000 (1 day).
+
 [[core.streamFileThreshold]]core.streamFileThreshold::
 +
 Largest object size, in bytes, that JGit will allocate as a
