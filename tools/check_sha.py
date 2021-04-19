@@ -49,9 +49,12 @@ from __future__ import print_function
 import argparse
 import re
 import subprocess
+from copy import copy
 from hashlib import sha1
-from os import getcwd, getpid, path, remove, rmdir, walk
+from os import getcwd, getpid, path, remove, walk
+from subprocess import CalledProcessError
 from sys import stderr
+from tempfile import gettempdir
 
 ## Globals
 debug = False
@@ -86,6 +89,12 @@ class Asset:
         self.repository = None
         self.sha1 = None
         self.src_sha1 = None
+
+    def __copy__(self):
+        new = Asset()
+        for key in self.__dict__:
+            new[key] = self.__dict__[key]
+        return new
 
     def __setitem__(self, key, val):
         """Provide a map style setter for Assets but reject keys that are not
@@ -334,9 +343,6 @@ def assets_from_repository(repo_name, reference_assets):
     """
     asset_group = AssetGroup('REPO', repo_name)
     assets = []
-    exception_occurred = False
-
-    output_dir = "/tmp/check_sha_{0}".format(getpid())
 
     # Resolve repository name, if we can't we need to raise an error:
     if repo_name.endswith(':'):
@@ -347,31 +353,7 @@ def assets_from_repository(repo_name, reference_assets):
         raise ValueError, "Unknown repository: {0}".format(repo_name)
 
     for asset in reference_assets:
-        vendor,name,version = asset.artifact.split(':')
-
-        jar_name = "{0}-{1}.jar".format(name, version)
-        output_file = path.join(output_dir, jar_name)
-        url = '/'.join([repo_name,
-                        vendor.replace('.','/'),
-                        name,
-                        version,
-                        jar_name])
-
-        exception_occurred = not fetch_jar(output_file, url)
-
-        if path.isfile(output_file):
-            assets.append(asset_from_jar(output_file))
-            remove(output_file)
-
-    rmdir(output_dir)
-
-    if exception_occurred:
-        print('*' * 80, file=stderr)
-        print("""Exceptions occurred while fetching assets. If some of these
-were due to files already existing in the output location you may have
-stale jars from a previous run. Please check and remove relevant jars
-from /tmp/ before re-running the script.""", file=stderr)
-        print('*' * 80, file=stderr)
+        assets.append(asset_from_repo(asset, repo_name))
 
     asset_group.assets = assets
     return asset_group
@@ -386,9 +368,6 @@ def assets_from_default_repository(reference_assets):
     """
     asset_group = AssetGroup('REPO', "(Repository from Asset)")
     assets = []
-    exception_occurred = False
-
-    output_dir = "/tmp/check_sha_{0}".format(getpid())
 
     for asset in reference_assets:
         if not asset.repository:
@@ -396,34 +375,62 @@ def assets_from_default_repository(reference_assets):
                 print("Asset {0} does not name a repository, skipping...".format(asset.name), file=stderr)
             continue
 
-        vendor,name,version = asset.artifact.split(':')
-
-        jar_name = "{0}-{1}.jar".format(name, version)
-        output_file = path.join(output_dir, jar_name)
-        url = '/'.join([asset.repository,
-                        vendor.replace('.','/'),
-                        name,
-                        version,
-                        jar_name])
-
-        exception_occurred = not fetch_jar(output_file, url)
-
-        if path.isfile(output_file):
-            assets.append(asset_from_jar(output_file))
-            remove(output_file)
-
-    rmdir(output_dir)
-
-    if exception_occurred:
-        print('*' * 80, file=stderr)
-        print("""Exceptions occurred while fetching assets. If some of these
-were due to files already existing in the output location you may have
-stale jars from a previous run. Please check and remove relevant jars
-from /tmp/ before re-running the script.""", file=stderr)
-        print('*' * 80, file=stderr)
+        assets.append(asset_from_repo(asset, asset.repository))
 
     asset_group.assets = assets
     return asset_group
+
+
+def asset_from_repo(asset, repo_name):
+    """Given an input `asset', will look on the repository given in
+    `repo_name' for the latest corresponding asset and return a copy with
+    the new SHA1 digest.
+    """
+    vendor,name,version = asset.artifact.split(':')
+
+    jar_name = "{0}-{1}.jar".format(name, version)
+    tmp_file = path.join(gettempdir(), "{0}.{1}".format(jar_name, getpid()))
+    url = '/'.join([repo_name,
+                    vendor.replace('.','/'),
+                    name,
+                    version,
+                    jar_name])
+
+    new_asset = copy(asset)
+
+    if (verbose):
+        print("Checking {0} for {1} ({2})...".format(repo_name, jar_name, asset.sha1))
+
+    # We always pass a fake SHA1 to this command as we want it to fail
+    # the cache lookup and tell us the actual SHA1 in the repository.
+    cmd = ["tools/download_file.py", "-o", tmp_file, "-u", url, "-v", 'xxxxxxxxxxx']
+
+    try:
+        subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+    except CalledProcessError as e:
+        new_sha = None
+        for line in e.output.split('\n'):
+            # Failed command output will contain:
+            #   expected xxxxxxxxxxxx
+            #   received abcdef...123456
+            # We want to keep the received line which is the repo SHA1.
+            if line.startswith('received'):
+                new_sha = line.split(' ')[1]
+
+        # If new_asset.sha1 is not updated by a found asset the
+        # subsequent replace operation will be a no-op which is
+        # safe. The verbose log will show found/not found assets.
+        if new_sha:
+            if (verbose):
+                print("\tFound: {0}".format(new_sha))
+            new_asset.sha1 = new_sha
+        elif verbose:
+            print("\tNot found")
+
+    if path.isfile(tmp_file):
+        remove(tmp_file)
+
+    return new_asset
 
 
 def asset_from_jar(filename):
@@ -553,27 +560,6 @@ def parse_property(s, delim='='):
     val = parts[1].split('#')[0].strip().replace('"','').replace(',','')
 
     return (key,val)
-
-
-def fetch_jar(output_file, url):
-    """Download file located at `url' to `output_file' and return whether
-    the subprocess completed sucessfully.
-    """
-    cmd = ["tools/download_file.py", "-o", output_file, "-u", url]
-
-    try:
-        # Don't silence the error output of this command as we lose the
-        # specific error in what we get back from the subprocess.
-        subprocess.check_output(cmd)
-    except Exception as e:
-        # We can't assume a total failure as we will fail on 404s or
-        # file already exists. Usually we can just proceed to build up
-        # whatever assets we can. We'll log the error and just check if
-        # the jar exists at the output location.
-        print("Command failed: {0}\n{1}".format(' '.join(cmd), e))
-        return False
-
-    return True
 
 
 def sha1sum(filename):
