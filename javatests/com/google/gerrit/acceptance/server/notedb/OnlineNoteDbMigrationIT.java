@@ -523,17 +523,24 @@ public class OnlineNoteDbMigrationIT extends AbstractDaemonTest {
     PushOneCommit.Result r2 = pushFactory.create(db, admin.getIdent(), tr2).to("refs/for/master");
     Change.Id id2 = r2.getChange().getId();
 
-    // TODO(davido): Find an easier way to wipe out a repository from the file system.
-    MoreFiles.deleteRecursively(
-        FileKey.lenient(
-                sitePaths
-                    .resolve(cfg.getString("gerrit", null, "basePath"))
-                    .resolve(p2.get())
-                    .toFile(),
-                FS.DETECTED)
-            .getFile()
-            .toPath(),
-        RecursiveDeleteOption.ALLOW_INSECURE);
+    try {
+      // TODO(davido): Find an easier way to wipe out a repository from the file system.
+      MoreFiles.deleteRecursively(
+              FileKey.lenient(
+                      sitePaths
+                              .resolve(cfg.getString("gerrit", null, "basePath"))
+                              .resolve(p2.get())
+                              .toFile(),
+                      FS.DETECTED)
+                     .getFile()
+                     .toPath(),
+              RecursiveDeleteOption.ALLOW_INSECURE);
+    } catch (IOException e) {
+      // The recursive delete above occasionally trips over gc.log.lock. deleteRecursively reads the attributes of
+      // each file it's about to delete, but if a gc is in progress short-lived files might interfere. No need to
+      // fail the test if this intermittent exception is thrown, just log it.
+      System.err.println("Failed to delete some files during test: " + e.getMessage());
+    }
 
     migrate(b -> b);
     assertNotesMigrationState(NOTE_DB, false, false);
