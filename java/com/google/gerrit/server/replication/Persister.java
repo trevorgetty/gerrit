@@ -65,8 +65,6 @@ public class Persister<T extends Persistable> {
   private final File baseDir;
 
   private static final EventFileFilter fileFilter = new EventFileFilter(PERSISTED_EVENT_FILE_PREFIX);
-
-  private static final long GC_NOW = 0;
   private static long lastGCTime = 0;
 
   public Persister(File baseDir) throws IOException {
@@ -81,11 +79,7 @@ public class Persister<T extends Persistable> {
       if (!created) {
         throw new IOException("Cannot create directory "+baseDir);
       }
-    } else {
-      // On startup start with a clean incoming persisted directory
-      gcOldPersistedFiles(GC_NOW);
     }
-
   }
 
   public <T extends Persistable> List<T> getObjectsFromPath(Class<T> clazz) {
