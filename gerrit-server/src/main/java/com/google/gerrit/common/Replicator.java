@@ -23,14 +23,22 @@ import com.google.gerrit.server.events.Event;
 import com.google.gerrit.server.events.EventDeserializer;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
-import com.google.gerrit.server.events.EventWrapper;
 import com.google.gerrit.server.events.SupplierDeserializer;
 import com.google.gerrit.server.events.SupplierSerializer;
 import com.google.gson.GsonBuilder;
+import static com.wandisco.gerrit.gitms.shared.util.StringUtils.getProjectNameSha1;
+
+import com.wandisco.gerrit.gitms.shared.events.ChainedEventComparator;
+import com.wandisco.gerrit.gitms.shared.events.EventNanoTimeComparator;
+import com.wandisco.gerrit.gitms.shared.events.EventTime;
+import com.wandisco.gerrit.gitms.shared.events.EventTimestampComparator;
+import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
+import com.wandisco.gerrit.gitms.shared.events.GerritEventData;
+import com.wandisco.gerrit.gitms.shared.events.exceptions.InvalidEventJsonException;
+import com.wandisco.gerrit.gitms.shared.util.ObjectUtils;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileFilter;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -42,18 +50,17 @@ import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
+import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.Map;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
-
-import net.minidev.json.JSONObject;
-import net.minidev.json.JSONValue;
 
 import org.eclipse.jgit.errors.ConfigInvalidException;
 import org.eclipse.jgit.lib.Config;
@@ -97,8 +104,11 @@ public class Replicator implements Runnable {
   public static final String DEFAULT_REPLICATED_INDEX_UNIQUE_CHANGES_QUEUE_WAIT_TIME = "20";
   public static final String DEFAULT_MINUTES_SINCE_CHANGE_LAST_INDEXED_CHECK_PERIOD = "60";
 
-  public static final String CURRENT_EVENTS_FILE = "current-events.json";
-  public static final String NEXT_EVENTS_FILE = "events-%s-%s-%02d.json";
+  private static final String FIRST_PART="events";
+  public static final String DEFAULT_NANO = "0000000000000000";
+  //event file is now following the format
+  //events_<eventTimeStamp>x<eventNanoTime>_<nodeId>_<repo-sha1>_<hashOfEvent>.json
+  public static final String NEXT_EVENTS_FILE = FIRST_PART+"_%s_%s_%s_%s.json";
   public static String eventsFileName = "";
 
   public static final String GERRIT_REPLICATION_THREAD_NAME = "ReplicatorStreamReplication";
@@ -128,7 +138,7 @@ public class Replicator implements Runnable {
   public static long minutesSinceChangeLastIndexedCheckPeriod;
 
   private static final ArrayList<String> cacheNamesNotToReload = new ArrayList<>();
-  private static final IncomingEventsToReplicateFileFilter incomingEventsToReplicateFileFilter = new IncomingEventsToReplicateFileFilter();
+  private static final ReplicatedEventsFileFilter incomingEventsToReplicateFileFilter = new ReplicatedEventsFileFilter(FIRST_PART);
   private static boolean incomingEventsAreGZipped = false; // on the landing node the text maybe already unzipped by the replicator
   private static Thread eventReaderAndPublisherThread = null;
   private static File internalLogFile = null; // used for debug
@@ -145,7 +155,7 @@ public class Replicator implements Runnable {
 
   private FileOutputStream lastWriter = null;
   private String lastProjectName = null;
-  private int writtenMessageCount = 0;
+  private int writtenEventCount = 0;
   private File lastWriterFile = null;
   private long lastWriteTime;
   private boolean finished = false;
@@ -460,23 +470,34 @@ public class Replicator implements Runnable {
     boolean result = false;
 
     Stats.totalPublishedLocalEvents++;
-    setCurrentEventsFile();
+    //We have received a new event for a given project in gerrit. Creating
+    //a file which is temporarily named a current-events.json if it doesn't
+    //exist already and setting it as the lastWriter.
+    setNewCurrentEventsFile();
 
     if (lastWriter != null) {
-      if (lastProjectName != null && !lastProjectName.equals(originalEvent.projectName)) {
-        //If the project is different, set a new current-events.json file and set the file ready
+
+      //* We are checking the projectName here in the event itself. If the project is
+      //* different to what was last seen then we set the existing file that was
+      //* written to be picked up for proposing. We do not want to write multiple events
+      //* to a file all for different projects.
+      if (lastProjectName != null && !lastProjectName.equals(originalEvent.getProjectName())) {
+        log.debug("Last project name seen [ "+lastProjectName+" ], new event project name is [ "+originalEvent.getProjectName()+" ]");
         setFileReady();
-        setCurrentEventsFile();
+        //* lastWriter will have been set to null after the renameAndReset takes
+        //* place as part of setFileReady. We can then set a new current-events.json
+        //* for events to be written
+        setNewCurrentEventsFile();
       }
       //If the project is the same, write the file
-      final String msg = gson.toJson(originalEvent) + '\n';
-      byte[] bytes = msg.getBytes(ENC);
+      final String wrappedEvent = gson.toJson(originalEvent) + '\n';
+      byte[] bytes = wrappedEvent.getBytes(ENC);
 
-      log.debug("RE Last json to be sent: {}", msg);
+      log.debug("RE Last json to be sent: {}", wrappedEvent);
       Stats.totalPublishedLocalEventsBytes += bytes.length;
       Stats.totalPublishedLocalGoodEventsBytes += bytes.length;
       Stats.totalPublishedLocalGoodEvents++;
-      Stats.totalPublishedLocalEventsByType.add(originalEvent.originator);
+      Stats.totalPublishedLocalEventsByType.add(originalEvent.getEventOrigin());
 
       writeEventsToFile(originalEvent, bytes);
       result = true;
@@ -502,20 +523,24 @@ public class Replicator implements Runnable {
   }
 
   /**
-   * If the number of writtenMessageCount exceeds max (default is 30)
-   * then return true
-   *
+   * If the number of written events to the event file is greater than
+   * or equal to the maxNumberOfEventsBeforeProposing then return true.
+   * If we have reached the maxNumberOfEventsBeforeProposing then we must
+   * propose, otherwise we can just continue to add events to the file.
+   * The default value for maxNumberOfEventsBeforeProposing is 30 although this
+   * is configurable by setting gerrit.replicated.events.max.append.before.proposing
+   * in the application.properties.
    * @return
    */
   public boolean exceedsMaxEventsBeforeProposing() {
-    return writtenMessageCount >= maxNumberOfEventsBeforeProposing;
+    return writtenEventCount >= maxNumberOfEventsBeforeProposing;
   }
 
   /**
    * Set the file ready by syncing with the filesystem and renaming
    */
   private void setFileReady() {
-    if (writtenMessageCount == 0) {
+    if (writtenEventCount == 0) {
       log.debug("RE No events to send. Waiting...");
       return;
     }
@@ -549,72 +574,84 @@ public class Replicator implements Runnable {
     if (lastWriter != null) {
       lastWriter.write(bytes);
       lastWriteTime = System.currentTimeMillis();
-      writtenMessageCount++;
+      //The write has taken place so increase the writtenEventCount
+      writtenEventCount++;
+      log.debug("Number of events written to the events file is currently : [ " + writtenEventCount
+          + " ]");
       //Set projectName upon writing the file
-      lastProjectName = originalEvent.projectName;
+      lastProjectName = originalEvent.getProjectName();
+      //Here we are setting the events file name based on the last event to be written to the file.
+      //In the case of multiple events being written to a single file, the events file name will take
+      //the name and details of the last event to be written to it.
       setEventsFileName(originalEvent);
     }
   }
 
-  /**
-   * Inner class dedicated to parsing json for an event timestamp
-   * and nodeIdentity which will be used for labelling the events file.
-   */
-  static class ParseEventJson {
-    public static String[] jsonEventParse(String jsonStr) {
-      String [] jsonData = null;
-      Object eventJsonObj = JSONValue.parse(jsonStr);
-
-      if(eventJsonObj == null){
-        log.error("There was an error parsing the json from the event, {}", jsonStr);
-        return null;
-      }
-      JSONObject eventJson = (JSONObject) eventJsonObj;
-      if(eventJson.containsKey("eventTimestamp") && eventJson.containsKey("nodeIdentity")){
-        jsonData = new String[2];
-        jsonData[0] = eventJson.get("eventTimestamp").toString();
-        jsonData[1] = eventJson.get("nodeIdentity").toString();
-      } else {
-        log.error("RC Encountered an Event that did not contain an " +
-            "originating nodeIdentity or an eventTimestamp. {}", jsonStr);
-      }
-      return jsonData;
-    }
-  }
 
   /**
    * Parse the timestamp and nodeIdentity from which the event originated
    * and label the events file them.
+   *
    * @param originalEvent
    */
-  private void setEventsFileName(final EventWrapper originalEvent){
-    String [] jsonData = ParseEventJson.jsonEventParse(originalEvent.event);
-    if(jsonData == null || jsonData.length == 0){
-        log.error("Unable to set event filename as there was a JSON parsing error "
-            + originalEvent.event);
-        return;
+  private void setEventsFileName(final EventWrapper originalEvent) throws IOException {
+
+    //Creating a GerritEventData object from the inner event JSON of the EventWrapper object.
+    GerritEventData eventData =
+        ObjectUtils.createObjectFromJson(originalEvent.getEvent(), GerritEventData.class);
+
+    if(eventData == null){
+      log.error("Unable to set event filename, could not create "
+          + "GerritEventData object from JSON {}", originalEvent.getEvent());
+      return;
     }
-    if(jsonData[0] != null && jsonData[0].matches("[0-9]+")){
-      eventsFileName = String.format(NEXT_EVENTS_FILE, jsonData[0], jsonData[1], 0);
-    } else {
-      eventsFileName = String.format(NEXT_EVENTS_FILE, System.currentTimeMillis(), getThisNodeIdentity(), 0);
-      log.error("RE Could not parse JSON from events file correctly, " +
-          "events file will be labeled with current system time and this NodeIdentity {}", eventsFileName);
+
+    //If there are event types added in future that do not support the projectName member
+    //then we should generate an error. The default sha1 will be used.
+    if(originalEvent.getProjectName() == null){
+      log.error(String.format("The following Event Type %s has a Null project name. "
+          + "Unable to set the event filename using the sha1 of the project name. "
+          + "Using All-Projects as the default project", originalEvent.getEvent()));
     }
+
+    String eventTimestamp = eventData.getEventTimestamp();
+    // The java.lang.System.nanoTime() method returns the current value of
+    // the most precise available system timer, in nanoseconds. The value returned represents
+    // nanoseconds since some fixed but arbitrary time (in the future, so values may be negative)
+    // and provides nanosecond precision, but not necessarily nanosecond accuracy.
+
+    // The long value returned will be represented as a padded hexadecimal value to 16 digits in order to have a
+    //guaranteed fixed length as System.nanoTime() varies in length on each OS.
+    // If we are dealing with older event files where eventNanoTime doesn't exist as part of the event
+    // then we will set the eventNanoTime portion to 16 zeros, same length as a nanoTime represented as HEX.
+    String eventNanoTime = eventData.getEventNanoTime() != null ?
+        ObjectUtils.getHexStringOfLongObjectHash(Long.parseLong(eventData.getEventNanoTime())) : DEFAULT_NANO;
+    String eventTimeStr = String.format("%sx%s", eventTimestamp, eventNanoTime);
+    String objectHash = ObjectUtils.getHexStringOfIntObjectHash(originalEvent.hashCode());
+
+    //event file is now following the format
+    //events_<eventTimeStamp>x<eventNanoTime>_<nodeId>_<repo-sha1>_<hashOfEventContents>.json
+
+    //The NEXT_EVENTS_FILE variable is formatted with the timestamp and nodeId of the event and
+    //a sha1 of the project name. This ensures that it will remain unique under heavy load across projects.
+    //Note that a project name includes everything below the root so for example /path/subpath/repo01 is a valid project name.
+    eventsFileName = String.format(NEXT_EVENTS_FILE, eventTimeStr, eventData.getNodeIdentity(),
+        getProjectNameSha1(originalEvent.getProjectName()), objectHash);
+
   }
 
   /**
    * Based on the project name, if the project is different, create/append a new file
    * @throws FileNotFoundException
    */
-  private void setCurrentEventsFile() throws FileNotFoundException {
+  private void setNewCurrentEventsFile() throws IOException {
     if(lastWriter == null) {
       createOutgoingEventsDir();
       if (outgoingReplEventsDirectory.exists() && outgoingReplEventsDirectory.isDirectory()) {
-        lastWriterFile = new File(outgoingReplEventsDirectory, CURRENT_EVENTS_FILE);
+        lastWriterFile = File.createTempFile("events-", ".tmp", outgoingReplEventsDirectory);
         lastWriter = new FileOutputStream(lastWriterFile, true);
         lastProjectName = null;
-        writtenMessageCount = 0;
+        writtenEventCount = 0;
       } else {
         throw new FileNotFoundException("Outgoing replicated events directory not found");
       }
@@ -637,70 +674,49 @@ public class Replicator implements Runnable {
   }
 
   /**
-   * Rename the current-events.json file to a unique filename
+   * Rename the outgoing events-<randomnum>.tmp file to a unique filename
    * Resetting the lastWriter and count of the writtenMessageCount
    */
-  private void renameAndReset(){
-    File newFile = getNewFile();
+  private void renameAndReset() {
+
+    //eventsFileName should not be null or empty at this point as it should have been set by
+    //the setEventsFileName() method
+    if(Strings.isNullOrEmpty(eventsFileName)) {
+      log.error("RE eventsFileName was not set correctly, losing events!");
+      return;
+    }
+
+    File newFile = new File(outgoingReplEventsDirectory, eventsFileName);
+
+    //Documentation states the following for 'renameTo'
+    //* Many aspects of the behavior of this method are inherently
+    //* platform-dependent: The rename operation might not be able to move a
+    //* file from one filesystem to another, it might not be atomic, and it
+    //* might not succeed if a file with the destination abstract pathname
+    //* already exists. The return value should always be checked to make sure
+    //* that the rename operation was successful.
+    //We should therefore consider an alternative in future.
     boolean renamed = lastWriterFile.renameTo(newFile);
+
     if (!renamed) {
       log.error("RE Could not rename file to be picked up, losing events! {}",
           lastWriterFile.getAbsolutePath());
-    } else {
-      log.debug("RE Created new file {} to be proposed",
-          newFile.getAbsolutePath());
     }
+
+    //The rename was successful
+    log.info("RE Created new file {} to be proposed", newFile.getAbsolutePath());
+
+    //As we are renaming the file and syncing it with the disk,
+    //this means it is officially written. We then must reset all the variables
+    //in order to prepare for the next event file to be written.
     lastWriter = null;
     lastWriterFile = null;
     lastWriteTime = 0;
-    writtenMessageCount = 0;
+    writtenEventCount = 0;
     lastProjectName = null;
     Stats.totalPublishedLocalEventsProsals++;
   }
 
-  /**
-   * Return a unique events filename that takes the format
-   * events-<milliseconds-since-epoch-timestamp>-<node.identity>-<non-zero-if-not-unique-bit>.json
-   * @return
-   */
-  private File getNewFile(){
-
-    File uniqueFile = new File(outgoingReplEventsDirectory, eventsFileName);
-
-    if(!eventsFileName.isEmpty()) {
-      String[] jsonData = eventsFileName.split("-");
-      //If for some reason the file is not set correctly, log an error
-      if(!jsonData[1].matches("[0-9]+")) {
-        log.error("RE, Event filename does not contain a timestamp.");
-      }
-      // Check the outgoing events.
-      File outgoingEventFile = new File(outgoingReplEventsDirectory, eventsFileName);
-      //In the unlikely event the file already exists in the dir, increment the 0 bit at the end of the filename.
-      int nonUniqueIdentifier = 0;
-      while (outgoingEventFile.exists()) {
-
-        log.info("RE, Event file with name {} already exists, incrementing the nonUniqueIdentifier",
-            outgoingEventFile.getAbsolutePath());
-
-        //An outgoing events file with the same name already exists, so we need to create a
-        //unique file. We increment, then use the nonUniqueIdentifier to create a new unique
-        //file.
-        //Example: events-1533899416153-node_id_Node1-00.json -> events-1533899416153-node_id_Node1-01.json
-
-        uniqueFile = new File(outgoingReplEventsDirectory, String.format(NEXT_EVENTS_FILE,
-            jsonData[1], thisNodeIdentity, ++nonUniqueIdentifier));
-
-        //Check that the newly created file also doesn't exist. If it does exist we will continue
-        //round the loop. If it doesn't exist, we break out of the loop and return the uniqueFile.
-        if (!uniqueFile.exists()) {
-          break;
-        }
-      }
-    } else{
-      log.error("RE Something has gone wrong, Events file name was not set correctly");
-    }
-    return uniqueFile;
-  }
 
   /**
    * Look for files written by the replicator in the right directory
@@ -712,7 +728,8 @@ public class Replicator implements Runnable {
     boolean result = false;
     if (!incomingReplEventsDirectory.exists()) {
       if (!incomingReplEventsDirectory.mkdirs()) {
-        log.error("RE {} path cannot be created! Replicated events will not work!",incomingReplEventsDirectory.getAbsolutePath());
+        log.error("RE {} path cannot be created! Replicated events will not work!",
+            incomingReplEventsDirectory.getAbsolutePath());
         return result;
       }
 
@@ -721,7 +738,8 @@ public class Replicator implements Runnable {
     try {
       File[] listFiles = incomingReplEventsDirectory.listFiles(incomingEventsToReplicateFileFilter);
       if (listFiles == null) {
-        log.error("RE Cannot read files in directory {}. Too many files open?",incomingReplEventsDirectory,new IllegalStateException("RE Cannot read files"));
+        log.error("RE Cannot read files in directory {}. Too many files open?",
+            incomingReplEventsDirectory,new IllegalStateException("RE Cannot read files"));
       } else if (listFiles.length > 0) {
         log.debug("RE Found {} files",listFiles.length);
 
@@ -750,12 +768,19 @@ public class Replicator implements Runnable {
 
             // if some events failed copy the file to the failed directory
             if (failedEvents > 0) {
-              log.error("RE There was {} failed events in this file {}",failedEvents, file.getAbsolutePath());
+              log.error("RE There was {} failed events in this file {}, "
+                  + "moving the failed event file to the failed events directory", failedEvents, file.getAbsolutePath());
               Persister.moveFileToFailed(incomingReplEventsDirectory, file);
+              //Once we move the failed events file to the failed events directory
+              //then there is nothing more to do here. We should just return at this point.
+              //result will be false at this point.
+              return result;
             }
 
+            //result gets set to true if we have no failed events.
             result = true;
-
+            //We want to delete events files that have been successfully published
+            //as there is no need for them to linger in the incoming directory.
             boolean deleted = file.delete();
             if (!deleted) {
               log.error("RE Could not delete file {}",file.getAbsolutePath());
@@ -765,8 +790,6 @@ public class Replicator implements Runnable {
           }
         }
       }
-    } catch (RuntimeException e) {
-      log.error("RE error while reading events from incoming queue", e);
     } catch (Exception e) {
       log.error("RE error while reading events from incoming queue", e);
     }
@@ -787,6 +810,52 @@ public class Replicator implements Runnable {
     return thisNodeIdentity;
   }
 
+
+  /**
+   * Method recreate wrapped events and builds a list of EventData objects which
+   * are used to sort upon. EventData object contain the eventTimestamp,
+   * eventNanoTime of the event along with the EventWrapper object. A sort is
+   * performed using a comparator which sorts on both times of the object.
+   * @param eventsBytes
+   * @return
+   * @throws IOException
+   */
+  private List<EventTime> sortEvents(byte[] eventsBytes)
+      throws IOException, InvalidEventJsonException {
+
+    List<EventTime> eventDataList = new ArrayList<>();
+    String[] events =
+        new String(eventsBytes,StandardCharsets.UTF_8).split("\n");
+
+    for (String event : events) {
+
+     if(event == null){
+        throw new InvalidEventJsonException("Event file is invalid, missing / null events.");
+      }
+
+      EventWrapper originalEvent;
+      try {
+        originalEvent = gson.fromJson(event, EventWrapper.class);
+      } catch (JsonSyntaxException e){
+        throw new InvalidEventJsonException(String.format("Event file contains Invalid JSON. \"%s\", \"%s\"",
+            event, e.getMessage()));
+      }
+
+      GerritEventData eventData =
+          ObjectUtils.createObjectFromJson(originalEvent.getEvent(), GerritEventData.class);
+
+      eventDataList.add(new EventTime(
+          Long.parseLong(eventData.getEventTimestamp()),
+          Long.parseLong(eventData.getEventNanoTime()), originalEvent));
+    }
+
+    //sort the event data list using a chained comparator.
+    Collections.sort(eventDataList, new ChainedEventComparator(
+        new EventTimestampComparator(),
+        new EventNanoTimeComparator()));
+    return eventDataList;
+  }
+
   /**
    * From the bytes we read from disk, which the replicator provided, we
    * recreate the event using the name of the class embedded in the json text.
@@ -796,77 +865,68 @@ public class Replicator implements Runnable {
    */
   private int publishEvents(byte[] eventsBytes) {
     log.debug("RE Trying to publish original events...");
-
-    String[] events = new String(eventsBytes,StandardCharsets.UTF_8).split("\n");
     Stats.totalPublishedForeignEventsBytes += eventsBytes.length;
     Stats.totalPublishedForeignEventsProsals++;
     int failedEvents = 0;
 
-    for (String event: events) {
-      Stats.totalPublishedForeignEvents++;
-      if (event.length() > 2) {
-        try {
-          EventWrapper changeEventWrapper = gson.fromJson(event, EventWrapper.class);
+    List<EventTime> sortedEvents = null;
+    try {
+      sortedEvents = sortEvents(eventsBytes);
+    } catch (IOException | InvalidEventJsonException e) {
+      log.error("RE Unable to sort events as there are invalid events in the event file {}",
+          e.getMessage());
+      failedEvents++;
+    }
 
-          if (changeEventWrapper == null) {
-            log.error("RE fromJson method returned null for {}", event.toString());
-            failedEvents++;
-            continue;
-          }
+    if(sortedEvents != null){
+      for (EventTime event: sortedEvents) {
+        Stats.totalPublishedForeignEvents++;
+        EventWrapper originalEvent = event.getEventWrapper();
 
-          Stats.totalPublishedForeignGoodEventsBytes += eventsBytes.length;
-          Stats.totalPublishedForeignGoodEvents++;
-          synchronized(eventListeners) {
-            Stats.totalPublishedForeignEventsByType.add(changeEventWrapper.originator);
-            Set<GerritPublishable> clients = eventListeners.get(changeEventWrapper.originator);
-            if (clients != null) {
-              if (changeEventWrapper.originator == EventWrapper.Originator.FOR_REPLICATOR_EVENT) {
-                continue;
-              }
-              for(GerritPublishable gp: clients) {
-                try {
-                  boolean result = gp.publishIncomingReplicatedEvents(changeEventWrapper);
+        if (originalEvent == null) {
+          log.error("RE fromJson method returned null for {}", event.toString());
+          failedEvents++;
+          continue;
+        }
 
-                  if (result == false) {
+        if (originalEvent.getEvent().length() > 2) {
+          try {
+            Stats.totalPublishedForeignGoodEventsBytes += eventsBytes.length;
+            Stats.totalPublishedForeignGoodEvents++;
+            synchronized (eventListeners) {
+              Stats.totalPublishedForeignEventsByType.add(originalEvent.getEventOrigin());
+              Set<GerritPublishable> clients = eventListeners.get(originalEvent.getEventOrigin());
+              if (clients != null) {
+                if (originalEvent.getEventOrigin() == EventWrapper.Originator.DELETE_PROJECT_MESSAGE_EVENT) {
+                  continue;
+                }
+                for (GerritPublishable gp : clients) {
+                  try {
+                    boolean result = gp.publishIncomingReplicatedEvents(originalEvent);
+
+                    if (!result) {
+                      failedEvents++;
+                    }
+                  } catch (Exception e) {
+                    log.error("RE While publishing events", e);
                     failedEvents++;
                   }
-                } catch (Exception e) {
-                  log.error("RE While publishing events",e);
-                  failedEvents++;
                 }
               }
             }
+          } catch (JsonSyntaxException e) {
+            log.error("RE event has been lost. Could not rebuild obj using GSON", e);
+            failedEvents++;
           }
-        } catch(JsonSyntaxException e) {
-          log.error("RE event has been lost. Could not rebuild obj using GSON",e);
-          failedEvents++;
+        } else {
+          log.error("RE event GSON string is empty!",
+              new Exception("Internal error, event is empty: " + event));
         }
-      } else {
-        log.error("RE event GSON string is empty!", new Exception("Internal error, event is empty: "+event));
       }
     }
-
     return failedEvents;
   }
 
-  final static class IncomingEventsToReplicateFileFilter implements FileFilter {
-    // These values are just to do a minimal filtering
-    static final String FIRST_PART = "events-";
-    static final String LAST_PART = ".json";
-
-    @Override
-    public boolean accept(File pathname) {
-      String name = pathname.getName();
-      try {
-        if (name.startsWith(FIRST_PART) && name.endsWith(LAST_PART)) {
-          return true;
-        }
-      } catch (Exception e) {
-        log.error("File {} is not allowed here, remove it please ",pathname,e);
-      }
-      return false;
-    }
-  }
 
   /**
    * If in the Gerrit Configuration file the cache value for memoryLimit is 0 then

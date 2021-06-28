@@ -1,5 +1,6 @@
 include_defs('//lib/maven.defs')
 include_defs('//lib/GUAVA_VERSION')
+include_defs('//lib/WD_REPOSITORY')
 
 define_license(name = 'antlr')
 define_license(name = 'Apache1.1')
@@ -39,10 +40,11 @@ define_license(name = 'DO_NOT_DISTRIBUTE')
 
 maven_jar(
   name = 'gwtorm_client',
-  id = 'com.google.gerrit:gwtorm:1.15',
-  bin_sha1 = '26a2459f543ed78977535f92e379dc0d6cdde8bb',
-  src_sha1 = '9524088d6e46e299b12791cb1a63c4ba6a478b96',
+  id = 'com.google.gerrit:gwtorm:1.15.0.1-WD',
+  bin_sha1 = '7fac73528bf7c8ed11973f2cfb3a22717de66e94',
+  src_sha1 = '0f3dd7b848b47d1b34da9ac9959e8b7fed4625b4',
   license = 'Apache2.0',
+  repository = REPO_WD,
 )
 
 java_library(
@@ -58,7 +60,6 @@ maven_jar(
   bin_sha1 = '25adea6ef102b761993688e80dfc7203e0f5edf0',
   src_sha1 = '4401b5868976460f8fac504cf730425ed95481ff',
   license = 'Apache2.0',
-	
 )
 
 maven_jar(

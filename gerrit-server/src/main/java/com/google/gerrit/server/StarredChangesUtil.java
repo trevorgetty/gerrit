@@ -452,9 +452,9 @@ public class StarredChangesUtil {
     RefUpdate.Result result = u.delete();
     switch (result) {
       case FORCED:
+      case NO_CHANGE:
         return;
       case NEW:
-      case NO_CHANGE:
       case FAST_FORWARD:
       case IO_FAILURE:
       case LOCK_FAILURE:

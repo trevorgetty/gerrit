@@ -33,6 +33,7 @@ public abstract class Event {
   public final String type;
   public long eventCreatedOn = TimeUtil.nowMs() / 1000L;
   public long eventTimestamp = System.currentTimeMillis();
+  public long eventNanoTime = System.nanoTime();
   public String nodeIdentity;
 
   /**
@@ -46,6 +47,7 @@ public abstract class Event {
   protected Event(String type) {
     this.type = type;
     this.eventTimestamp = System.currentTimeMillis();
+    this.eventNanoTime = System.nanoTime();
   }
 
   public void setNodeIdentity(String nodeIdentity) {

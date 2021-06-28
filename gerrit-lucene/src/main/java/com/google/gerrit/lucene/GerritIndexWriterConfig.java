@@ -25,9 +25,13 @@ import org.apache.lucene.analysis.util.CharArraySet;
 import org.apache.lucene.index.ConcurrentMergeScheduler;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.IndexWriterConfig.OpenMode;
+import org.apache.lucene.util.InfoStream;
 import org.eclipse.jgit.lib.Config;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
+
 
 /**
  * Combination of Lucene {@link IndexWriterConfig} with additional
@@ -40,7 +44,12 @@ class GerritIndexWriterConfig {
   private final IndexWriterConfig luceneConfig;
   private long commitWithinMs;
   private final CustomMappingAnalyzer analyzer;
-
+  private static final Logger log = LoggerFactory.getLogger(GerritIndexWriterConfig.class);
+  public static final InfoStream VERBOSE = new VerboseOutput();
+  /*
+   Note that GerritIndexWriterConfig takes both a cfg object and a name,
+   name is the name of the subsection, i.e changes_open / change_closed
+   */
   GerritIndexWriterConfig(Config cfg, String name) {
     analyzer =
         new CustomMappingAnalyzer(new StandardAnalyzer(
@@ -77,6 +86,28 @@ class GerritIndexWriterConfig {
     } catch (IllegalArgumentException e) {
       commitWithinMs = cfg.getLong("index", name, "commitWithin", 0);
     }
+
+    //Checking that it has been set correctly and if so turn the verbose logging on
+    //for Lucene.
+    if ( cfg.getBoolean("index", name, "verboseLogging", false)) {
+      // turn on verbose logging for lucene
+      luceneConfig.setInfoStream(VERBOSE);
+      // Show the current configuration.
+      log.info("Current lucene configuration: {}", luceneConfig.toString());
+    }
+  }
+
+  private static class VerboseOutput extends InfoStream {
+    public VerboseOutput() { }
+
+    public void message(String component, String message) {
+      log.info(message);
+    }
+    public boolean isEnabled(String component) {
+      return true;
+    }
+    public void close() {
+    }
   }
 
   CustomMappingAnalyzer getAnalyzer() {
@@ -91,3 +122,5 @@ class GerritIndexWriterConfig {
     return commitWithinMs;
   }
 }
+
+

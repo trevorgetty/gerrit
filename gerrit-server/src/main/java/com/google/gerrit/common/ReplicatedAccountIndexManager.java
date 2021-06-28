@@ -14,7 +14,6 @@
 package com.google.gerrit.common;
 
 import com.google.gerrit.reviewdb.client.Account;
-import com.google.gerrit.server.events.EventWrapper;
 import com.google.gerrit.server.index.account.AccountIndexerImpl;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
@@ -23,6 +22,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+
+import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.ACCOUNT_INDEX_EVENT;
+
+import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
 
 /**
  * This class is for replication of Account Index events
@@ -46,7 +49,8 @@ public class ReplicatedAccountIndexManager implements Replicator.GerritPublishab
   public static void replicateAccountReindex(Account.Id id){
     AccountIndexEvent accountIndexEvent = new AccountIndexEvent(id.get(),replicatorInstance.getThisNodeIdentity());
     log.debug("RC AccountReIndex reindex being replicated for ID: {} ",id.get());
-    replicatorInstance.queueEventForReplication(new EventWrapper("All-Users",accountIndexEvent));
+    replicatorInstance.queueEventForReplication(GerritEventFactory.createReplicatedAccountIndexEvent(
+        "All-Users", accountIndexEvent, ACCOUNT_INDEX_EVENT));
   }
 
   public static synchronized void initAccountIndexer(AccountIndexerImpl indexer){
@@ -54,7 +58,7 @@ public class ReplicatedAccountIndexManager implements Replicator.GerritPublishab
       instance = new ReplicatedAccountIndexManager(indexer);
       log.info("RC ReplicatedAccountIndexManager New instance created");
       replicatorInstance = Replicator.getInstance(true);
-      replicatorInstance.subscribeEvent(EventWrapper.Originator.ACCOUNT_INDEX_EVENT, instance);
+      Replicator.subscribeEvent(ACCOUNT_INDEX_EVENT, instance);
     }
   }
 
@@ -62,15 +66,15 @@ public class ReplicatedAccountIndexManager implements Replicator.GerritPublishab
   public boolean publishIncomingReplicatedEvents(
       EventWrapper newEvent) {
     boolean result = false;
-    if (newEvent != null && newEvent.originator ==  EventWrapper.Originator.ACCOUNT_INDEX_EVENT) {
+    if (newEvent != null && newEvent.getEventOrigin() ==  EventWrapper.Originator.ACCOUNT_INDEX_EVENT) {
       try {
-        Class<?> eventClass = Class.forName(newEvent.className);
+        Class<?> eventClass = Class.forName(newEvent.getClassName());
           result = reindexAccount(newEvent, eventClass);
       } catch(ClassNotFoundException e) {
-        log.error("RC AccountReIndex has been lost. Could not find {}",newEvent.className,e);
+        log.error("RC AccountReIndex has been lost. Could not find {}",newEvent.getClassName(),e);
       }
-    } else if (newEvent != null && newEvent.originator !=  EventWrapper.Originator.ACCOUNT_INDEX_EVENT) {
-      log.error("RC AccountReIndex event has been sent here but originator is not the right one ({})",newEvent.originator);
+    } else if (newEvent != null && newEvent.getEventOrigin() !=  EventWrapper.Originator.ACCOUNT_INDEX_EVENT) {
+      log.error("RC AccountReIndex event has been sent here but originator is not the right one ({})",newEvent.getEventOrigin());
     }
     return result;
   }
@@ -84,7 +88,7 @@ public class ReplicatedAccountIndexManager implements Replicator.GerritPublishab
     AccountIndexEvent originalEvent = null;
     boolean result = false;
     try {
-      originalEvent = (AccountIndexEvent) gson.fromJson(newEvent.event, eventClass);
+      originalEvent = (AccountIndexEvent) gson.fromJson(newEvent.getEvent(), eventClass);
       indexer.indexRepl(new Account.Id(originalEvent.indexNumber));
       return true;
     } catch (JsonSyntaxException je) {

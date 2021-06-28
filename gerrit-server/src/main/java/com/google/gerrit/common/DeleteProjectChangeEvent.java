@@ -17,32 +17,31 @@ import com.google.gerrit.reviewdb.client.Change;
 import com.google.gerrit.reviewdb.client.Change.Id;
 import com.google.gerrit.reviewdb.client.Project;
 
+import com.wandisco.gerrit.gitms.shared.events.ReplicatedEvent;
+
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
   /**
    * This is an Event to allow us to pass around the changes that need to be deleted
    * on all nodes when we delete a Project
-   *
    */
-  public class DeleteProjectChangeEvent{
+  public class DeleteProjectChangeEvent extends ReplicatedEvent {
     public Project project;
     public boolean preserve;
     public int changes[];
     public String taskUuid;
-    public long eventTimestamp;
-    public String nodeIdentity;
     public transient boolean replicated = false;
 
-    public DeleteProjectChangeEvent() {
+    public DeleteProjectChangeEvent(final String nodeIdentity) {
+      super(nodeIdentity);
     }
 
-    public DeleteProjectChangeEvent(Project project, boolean preserve, List<Change.Id> changesToBeDeleted, String taskUuid, String nodeIdentity) {
+    public DeleteProjectChangeEvent(Project project, boolean preserve, List<Change.Id> changesToBeDeleted, final String taskUuid, final String nodeIdentity) {
+      super(nodeIdentity);
       this.project = project;
       this.preserve = preserve;
       this.taskUuid = taskUuid;
-      this.eventTimestamp = System.currentTimeMillis();
-      this.nodeIdentity = nodeIdentity;
       changes = new int[changesToBeDeleted.size()];
       int index = 0;
       for (Iterator<Id> iterator = changesToBeDeleted.iterator(); iterator.hasNext();) {
@@ -51,19 +50,18 @@ import java.util.List;
     }
 
     public void setNodeIdentity(String nodeIdentity) {
-      this.nodeIdentity = nodeIdentity;
+      super.setNodeIdentity(nodeIdentity);
     }
 
-    @Override
-    public String toString() {
-      return "DeleteProjectChangeEvent{" +
-          "project=" + project +
-          ", preserve=" + preserve +
-          ", changes=" + Arrays.toString(changes) +
-          ", taskUuid='" + taskUuid + '\'' +
-          ", eventTimestamp=" + eventTimestamp +
-          ", nodeIdentity='" + nodeIdentity + '\'' +
-          ", replicated=" + replicated +
-          '}';
+    @Override public String toString() {
+      final StringBuilder sb = new StringBuilder("DeleteProjectChangeEvent{");
+      sb.append("project=").append(project);
+      sb.append(", preserve=").append(preserve);
+      sb.append(", changes=").append(Arrays.toString(changes));
+      sb.append(", taskUuid='").append(taskUuid).append('\'');
+      sb.append(", ").append(super.toString()).append('\'');
+      sb.append(", replicated=").append(replicated);
+      sb.append('}');
+      return sb.toString();
     }
   }

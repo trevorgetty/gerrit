@@ -19,6 +19,8 @@
  */
 package com.google.gerrit.common;
 
+import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.GERRIT_EVENT;
+
 import com.google.common.base.Supplier;
 import com.google.gerrit.reviewdb.client.Branch;
 import com.google.gerrit.reviewdb.client.Change;
@@ -27,7 +29,6 @@ import com.google.gerrit.reviewdb.server.ReviewDb;
 import com.google.gerrit.server.data.ChangeAttribute;
 import com.google.gerrit.server.events.ChangeAbandonedEvent;
 import com.google.gerrit.server.events.ChangeEvent;
-import com.google.gerrit.server.events.EventWrapper;
 import com.google.gerrit.server.events.ChangeMergedEvent;
 import com.google.gerrit.server.events.ChangeRestoredEvent;
 import com.google.gerrit.server.events.CommentAddedEvent;
@@ -49,6 +50,8 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
 import com.google.gwtorm.server.OrmException;
 import com.google.gwtorm.server.SchemaFactory;
+
+import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
 
 import org.eclipse.jgit.errors.ConfigInvalidException;
 import org.eclipse.jgit.lib.Config;
@@ -143,7 +146,7 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
 
       if (eventReaderAndPublisherThread == null) {
         instance = new ReplicatedEventsManager(changeHookRunner, schemaFactory);
-        Replicator.subscribeEvent(EventWrapper.Originator.GERRIT_EVENT, instance);
+        Replicator.subscribeEvent(GERRIT_EVENT, instance);
 
         eventReaderAndPublisherThread = new Thread(instance);
         eventReaderAndPublisherThread.setName(EVENTS_REPLICATION_THREAD_NAME);
@@ -160,7 +163,7 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
     } else {
       if (instance != null) {
         instance.finished = true;
-        Replicator.unsubscribeEvent(EventWrapper.Originator.GERRIT_EVENT, instance);
+        Replicator.unsubscribeEvent(GERRIT_EVENT, instance);
       }
       instance = null;
     }
@@ -305,7 +308,9 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
     newEvent = queue.poll(maxSecsToWaitForEventOnQueue, TimeUnit.MILLISECONDS);
     if (newEvent != null && !newEvent.replicated) {
       newEvent.setNodeIdentity(replicatorInstance.getThisNodeIdentity());
-      replicatorInstance.queueEventForReplication(new EventWrapper(newEvent,getChangeEventInfo(newEvent),distinctEventPrefix));
+      replicatorInstance.queueEventForReplication(
+          GerritEventFactory.createReplicatedChangeEvent(newEvent, getChangeEventInfo(newEvent), distinctEventPrefix));
+
       eventGot = true;
     }
     return eventGot;
@@ -323,8 +328,8 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
     boolean result = true;
     if (receiveReplicatedEventsEnabled) {
       try {
-        Class<?> eventClass = Class.forName(newEvent.className);
-        Event originalEvent = (Event) gson.fromJson(newEvent.event, eventClass);
+        Class<?> eventClass = Class.forName(newEvent.getClassName());
+        Event originalEvent = (Event) gson.fromJson(newEvent.getEvent(), eventClass);
 
         if (originalEvent == null) {
           log.error("fromJson method returned null for {}", newEvent.toString());
@@ -343,7 +348,7 @@ public final class ReplicatedEventsManager implements Runnable,Replicator.Gerrit
         }
 
         if (replicatedEventsReplicateDistinctEvents) {
-          if (!publishIncomingReplicatedEvents(makeDistinct(originalEvent,newEvent.prefix))) {
+          if (!publishIncomingReplicatedEvents(makeDistinct(originalEvent,newEvent.getPrefix()))) {
             log.error("RE distinct event has been lost, not supported");
             result = false;
           }

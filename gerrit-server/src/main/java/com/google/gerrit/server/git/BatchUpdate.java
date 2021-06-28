@@ -10,7 +10,7 @@
  * Apache License, Version 2.0
  *
  ********************************************************************************/
- 
+
 // Copyright (C) 2015 The Android Open Source Project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -43,6 +43,7 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.gerrit.common.BatchUpdateLockManager;
 import com.google.gerrit.common.Nullable;
 import com.google.gerrit.common.ReplicatedIndexEventManager;
 import com.google.gerrit.extensions.restapi.ResourceConflictException;
@@ -929,6 +930,7 @@ public class BatchUpdate implements AutoCloseable {
       @SuppressWarnings("resource") // Not always opened.
       NoteDbUpdateManager updateManager = null;
       try {
+        BatchUpdateLockManager.getInstance().obtainLock(id.get());
         ChangeContext ctx;
         db.changes().beginTransaction(id);
         try {
@@ -1004,6 +1006,7 @@ public class BatchUpdate implements AutoCloseable {
         if (updateManager != null) {
           updateManager.close();
         }
+        BatchUpdateLockManager.getInstance().releaseLock(id.get());
       }
     }
 
