@@ -936,6 +936,13 @@ maven_jar(
     sha1 = "3e127311a86fc2e8f550ef8ee4abe094bbcf7e7e",
 )
 
+# External plugin dep for its-jira tests.
+maven_jar(
+  name = "wiremock",
+  artifact = "com.github.tomakehurst:wiremock-standalone:2.12.0",
+  sha1 = "25f45d45091627a3bae5510495c99a561b2633c4",
+)
+
 maven_jar(
     name = "derby",
     artifact = "org.apache.derby:derby:10.12.1.1",

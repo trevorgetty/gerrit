@@ -39,4 +39,14 @@
 [submodule "plugins/delete-project"]
 	path = plugins/delete-project
 	url = ../gerrit-delete-project-plugin
-    branch = .
+	branch = .
+
+[submodule "plugins/its-base"]
+	path = plugins/its-base
+	url = ../gerrit-its-base-plugin
+	branch = .
+
+[submodule "plugins/its-jira"]
+	path = plugins/its-jira
+	url = ../gerrit-its-jira-plugin
+	branch = .

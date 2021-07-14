@@ -78,6 +78,7 @@ function check_for_asset(){
 check_for_asset "$ASSETS_PATH/plugins/delete-project/delete-project.jar" $TRUE
 # TODO: for moment during 2.16 dev lfs is optional, put back to required.
 check_for_asset "$ASSETS_PATH/plugins/lfs/lfs.jar" $TRUE
+check_for_asset "$ASSETS_PATH/plugins/its-jira/its-jira.jar" $TRUE
 check_for_asset "$ASSETS_PATH/release.war" $TRUE
 check_for_asset "$ASSETS_PATH/gerrit-console-api/console-api.jar" $TRUE
 check_for_asset "$GERRIT_REPO_ROOT/target/gerritms-installer.sh" $TRUE
