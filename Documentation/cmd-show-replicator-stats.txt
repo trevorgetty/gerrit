@@ -39,7 +39,6 @@ Intended for interactive use only.
  GERRIT_EVENT messages:                             |                   3 |                   0 |
  CACHE_EVENT messages:                              |                   1 |                   0 |
  INDEX_EVENT messages:                              |                   0 |                   0 |
- PACKFILE_EVENT messages:                           |                   0 |                   0 |
  DELETE_PROJECT_EVENT messages:                     |                   0 |                   0 |
  DELETE_PROJECT_MESSAGE_EVENT messages:             |                   0 |                   0 |
  ACCOUNT_USER_INDEX_EVENT messages:                 |                   0 |                   0 |

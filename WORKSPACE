@@ -938,9 +938,9 @@ maven_jar(
 
 # External plugin dep for its-jira tests.
 maven_jar(
-  name = "wiremock",
-  artifact = "com.github.tomakehurst:wiremock-standalone:2.12.0",
-  sha1 = "25f45d45091627a3bae5510495c99a561b2633c4",
+    name = "wiremock",
+    artifact = "com.github.tomakehurst:wiremock-standalone:2.12.0",
+    sha1 = "25f45d45091627a3bae5510495c99a561b2633c4",
 )
 
 maven_jar(
@@ -1069,13 +1069,13 @@ maven_jar(
 )
 
 # WANdisco maven assets
-_GERRIT_GITMS_VERSION = "1.1.1.1"
+_GERRIT_GITMS_VERSION = "1.1.2.1-SNAPSHOT"
 
 maven_jar(
     name = "gerrit-gitms-interface",
     artifact = "com.wandisco:gerrit-gitms-interface:" + _GERRIT_GITMS_VERSION,
     repository = WANDISCO_ASSETS,
-        sha1 = "e3e1e99861016b2f92a3586aa61861297c066b84",
+    sha1 = "655ecba47b8824d83e6b682f5bedca36ac437ee5",
 )
 
 load("//tools/bzl:js.bzl", "bower_archive", "npm_binary")

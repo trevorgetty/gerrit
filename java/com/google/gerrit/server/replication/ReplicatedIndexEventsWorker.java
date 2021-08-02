@@ -32,23 +32,14 @@ import com.google.gson.JsonSyntaxException;
 import com.google.gwtorm.server.OrmException;
 import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.INDEX_EVENT;
-import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.PACKFILE_EVENT;
 import static com.wandisco.gerrit.gitms.shared.events.filter.EventFileFilter.INDEX_EVENT_FILE_PREFIX;
 import static com.wandisco.gerrit.gitms.shared.events.filter.EventFileFilter.TEMPORARY_EVENT_FILE_EXTENSION;
 
-import com.wandisco.gerrit.gitms.shared.events.PackFileEvent;
 import com.wandisco.gerrit.gitms.shared.events.ReplicatedEvent;
 import com.wandisco.gerrit.gitms.shared.events.exceptions.InvalidEventJsonException;
 import com.wandisco.gerrit.gitms.shared.events.filter.EventFileFilter;
-import org.eclipse.jgit.lib.NullProgressMonitor;
-import org.eclipse.jgit.lib.ObjectInserter;
-import org.eclipse.jgit.lib.ProgressMonitor;
-import org.eclipse.jgit.lib.Repository;
-import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
-import org.eclipse.jgit.transport.PackParser;
 
 import java.io.File;
-import java.io.FileFilter;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -140,7 +131,6 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
     }
 
     Replicator.subscribeEvent(INDEX_EVENT, this);
-    Replicator.subscribeEvent(PACKFILE_EVENT, this);
 
     setIndexEventDirectory();
 
@@ -165,7 +155,6 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
     if (!finished) {
       finished = true;
       Replicator.unsubscribeEvent(INDEX_EVENT, this);
-      Replicator.unsubscribeEvent(PACKFILE_EVENT, this);
     }
   }
 
@@ -362,28 +351,22 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
    * Called by the (gerrit) Replicator when it receives a replicated event of type INDEX_CHANGE
    * Puts the events in a queue which will be looked after by the IndexIncomingReplicatedEvents thread
    *
-   * @param newEvent
+   * @param event: An event wrapped by EventWrapper instance
    * @return True if successful, otherwise false.
    */
   @Override
-  public boolean publishIncomingReplicatedEvents(EventWrapper newEvent) {
-    boolean success = false;
+  public boolean publishIncomingReplicatedEvents(EventWrapper event) {
 
-    if (newEvent != null) {
-      switch (newEvent.getEventOrigin()) {
-        case INDEX_EVENT:
-          success = unwrapAndSendIndexEvent(newEvent);
-          break;
-        case PACKFILE_EVENT:
-          success = unwrapAndReadPackFile(newEvent);
-          break;
-        default:
-          logger.atSevere().log("RC INDEX_EVENT has been sent here but originator is not the right one (%s)", newEvent.getEventOrigin());
-      }
-    } else {
-      logger.atSevere().log("RC null event has been sent here");
+    if(event == null){
+      return false;
     }
-    return success;
+
+    if(event.getEventOrigin() != INDEX_EVENT){
+      logger.atSevere().log("RC Received Invalid event type (%s)", event.getEventOrigin());
+      return false;
+    }
+
+    return unwrapAndSendIndexEvent(event);
   }
 
   /**
@@ -427,113 +410,6 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
       }
     } catch (ClassNotFoundException e) {
       logger.atSevere().withCause(e).log("RC INDEX_EVENT has been lost. Could not find %s", newEvent.getClassName());
-    }
-    return success;
-  }
-
-
-  /**
-   * We have received an event, ensuring that the wrapped event has an origin of
-   * PACKFILE_EVENT, then returning the rebuilt PackFileEvent object from JSON.
-   *
-   * @param event
-   * @return PackFileEvent
-   */
-  private PackFileEvent getPackFileEvent(EventWrapper event) {
-
-    Class<?> eventClass = null;
-    try {
-      eventClass = Class.forName(event.getClassName());
-    } catch (ClassNotFoundException e) {
-      logger.atSevere().withCause(e).log("Could not get the class name from the event %s", event.toString());
-    }
-
-    return (PackFileEvent) gson.fromJson(event.getEvent(), eventClass);
-  }
-
-  /**
-   * GitMS can tell Gerrit when a new packfile is available. This way Gerrit can read the packfile to cache it avoiding the
-   * MissingObjectException. Gerrit will only be notified about packfiles if gitms.copy.packfile.for.gerrit is set to true.
-   * This property is false by default.
-   *
-   * @param event
-   * @return True if successful, otherwise false.
-   */
-  private boolean unwrapAndReadPackFile(EventWrapper event) {
-    boolean success = false;
-
-    if(event == null) {
-      logger.atFine().log("RC : Received null event");
-      return false;
-    }
-
-    // Event is not null at this point so we can just check the origin.
-    // Getting the PackFileEvent from JSON in the event file.
-    if(event.getEventOrigin() == PACKFILE_EVENT) {
-      PackFileEvent packFileEvent = getPackFileEvent(event);
-
-      if (packFileEvent == null) {
-        logger.atSevere().log("fromJson method returned null for %s", event.toString());
-        return false;
-      }
-
-      File packFilePath = packFileEvent.getPackFile();
-      File gitDir = new File(packFileEvent.getGitDir());
-
-      logger.atInfo().log("RC Received packfile event from the replication. PackFile: %s, git dir: %s", packFilePath, gitDir);
-      if (packFilePath.exists()) {
-        final FileRepositoryBuilder builder = new FileRepositoryBuilder();
-        final ProgressMonitor receiving = NullProgressMonitor.INSTANCE;
-        final ProgressMonitor resolving = NullProgressMonitor.INSTANCE;
-
-        Repository repo;
-
-        try {
-          // The repo must exist.
-          builder.setGitDir(gitDir);
-          builder.setMustExist(true);
-          repo = builder.build();
-        } catch (IOException e) {
-          logger.atSevere().withCause(e).log("Error while initing git repo %s", gitDir);
-          return false;
-        }
-
-        // Need an ObjectInserter to unpack the packfile into the repo
-        try (FileInputStream fileIn = new FileInputStream(packFilePath);
-             ObjectInserter ins = repo.newObjectInserter()) {
-          // parser will parser the objects out of the packfile.
-          final PackParser parser = ins.newPackParser(fileIn);
-          // The packfile will be thin.
-          parser.setAllowThin(true);
-          parser.setNeedNewObjectIds(true);
-          parser.setNeedBaseObjectIds(true);
-          // Reading from a file not socket.
-          parser.setCheckEofAfterPackFooter(true);
-          parser.setExpectDataAfterPackFooter(false);
-          parser.setObjectChecking(true);
-          // no limit on the Object size.
-          parser.setMaxObjectSizeLimit(0);
-          // Following returns a PackLock but we are ignoring that. Packlock
-          // is used by Git but we are doing our own GC.
-          parser.parse(receiving, resolving);
-          ins.flush();
-          logger.atInfo().log("Successfully unpacked file %s", packFilePath);
-        } catch (IOException e) {
-          logger.atSevere().withCause(e).log("Error while unpacking");
-        } finally {
-          repo.close();
-        }
-        // Even if the packfile load was unsuccessful there is still no point to leave the packfile in the incoming directory
-        // Gerrit will anyway try to rescan the git directory at a later time
-        boolean deleted = packFilePath.delete();
-        if (!deleted) {
-          logger.atSevere().log("Cannot delete packfile %s", packFilePath);
-        }
-        success = true;
-      } else {
-        logger.atSevere().withCause(new IllegalStateException(packFilePath.getAbsolutePath())).log(
-            "Packfile %s doesn't exist", packFilePath);
-      }
     }
     return success;
   }
