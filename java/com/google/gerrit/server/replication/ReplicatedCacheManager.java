@@ -20,16 +20,15 @@ import com.google.common.collect.ImmutableMultiset;
 import com.google.common.collect.Multiset;
 import com.google.common.flogger.FluentLogger;
 import com.google.gerrit.server.project.ProjectCache;
-import com.google.gson.Gson;
-import com.google.gson.JsonSyntaxException;
 import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
+import com.wandisco.gerrit.gitms.shared.events.ReplicatedEvent;
+
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.CACHE_EVENT;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.List;
@@ -92,9 +91,8 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * @author antonio
  */
-public class ReplicatedCacheManager implements Replicator.GerritPublishable {
+public class ReplicatedCacheManager implements ReplicatedEventProcessor {
   private static final FluentLogger logger = FluentLogger.forEnclosingClass();
-  private static final Gson gson = new Gson();
   private static final Map<String, CacheWrapper> caches = new ConcurrentHashMap<>();
   private static final Map<String, Object> cacheObjects = new ConcurrentHashMap<>();
   private static volatile ReplicatedCacheManager instance = null;
@@ -239,7 +237,7 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
         Objects.requireNonNull(Replicator.getInstance()).getThisNodeIdentity());
 
     EventWrapper eventWrapper = GerritEventFactory.createReplicatedAllProjectsCacheEvent(cacheKeyWrapper);
-    logger.atFine().log("CACHE About to call replicated cache event: %s,%s", cacheName, key);
+    logger.atFine().log("CACHE About to call replicated cache event: %s, %s", cacheName, key);
 
     //Block to force cache update to the All-Users repo so it is triggered in sequence after event that caused the eviction.
     if(getCacheEvictList().contains(cacheName)){
@@ -254,9 +252,9 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
    * Replicate a method call from a cache to the other caches, make sure to use the
    * local only update on the remote nodes so as to avoid a recursive loop of event processing.
    *
-   * @param cacheName
-   * @param methodName
-   * @param key
+   * @param cacheName : Name of the cache to apply method call to.
+   * @param methodName : Method name which can be a declared method and not just public access methods.
+   * @param key : The key is the Project.NameKey project name.
    */
   public static void replicateMethodCallFromCache(String cacheName, String methodName, Object key) {
     if (Replicator.isReplicationDisabled()) {
@@ -298,6 +296,13 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
     }
   }
 
+  /**
+   * Applies the same method to the local instance of the cache instance.
+   * @param cacheName The name of the cache to get a cache object for
+   * @param key Used to determine the project name which is used as the method invocation argument.
+   * @param methodName The name of the method to invoke.
+   * @return true if invoking the method was a success.
+   */
   private static boolean applyMethodCallOnCache(String cacheName, Object key, String methodName) {
     boolean result = false;
     Object obj = cacheObjects.get(cacheName);
@@ -308,52 +313,54 @@ public class ReplicatedCacheManager implements Replicator.GerritPublishable {
         method.invoke(obj, key);
         logger.atFine().log("Success for %s!", methodName);
         result = true;
-      } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException | SecurityException ex) {
-        logger.atSevere().withCause(ex).log("CACHE method call has been lost, could not call %s.%s", cacheName, methodName);
+      } catch (IllegalAccessException | IllegalArgumentException |
+          InvocationTargetException | NoSuchMethodException | SecurityException ex) {
+        logger.atSevere().withCause(ex).log("CACHE method call has been lost, could not call %s.%s",
+            cacheName, methodName);
       }
     }
     return result;
   }
 
+  /**
+   * Processes incoming CACHE_EVENTs. The cache processing involves processing replicated method
+   * calls from the ProjectCacheImpl OR replicated calls for cache evictions over a variety of
+   * cache impls. We can then apply the replicated cache events to the local cache.
+   * @param replicatedEvent cast to a CacheKeyWrapper. If the CacheKeyWrapper instance is an instance
+   *                        of CacheObjectCallWrapper then we are dealing with a replicated method call.
+   * @return true if we have applied the replicated method call or cache eviction successfully.
+   */
   @Override
-  public boolean publishIncomingReplicatedEvents(EventWrapper newEvent) {
-    boolean result = false;
-    if (newEvent != null && newEvent.getEventOrigin() == CACHE_EVENT) {
-      try {
-        Class<?> eventClass = Class.forName(newEvent.getClassName());
-        CacheKeyWrapper originalEvent = null;
-
-        try {
-          originalEvent = (CacheKeyWrapper) gson.fromJson(newEvent.getEvent(), eventClass);
-        } catch (JsonSyntaxException e) {
-          logger.atSevere().withCause(e).log("PR Could not decode json event {}", newEvent.toString());
-          return result;
-        }
-
-        if (originalEvent == null) {
-          logger.atSevere().log("fromJson method returned null for %s", newEvent.toString());
-          return result;
-        }
-
-        originalEvent.rebuildOriginal();
-        logger.atFine().log("RE Original event: %s", originalEvent.toString());
-        originalEvent.replicated = true; // not needed, but makes it clear
-        originalEvent.setNodeIdentity(Replicator.getInstance().getThisNodeIdentity());
-
-        if (originalEvent instanceof CacheObjectCallWrapper) {
-          CacheObjectCallWrapper originalObj = (CacheObjectCallWrapper) originalEvent;
-          result = applyMethodCallOnCache(originalObj.cacheName, originalObj.key, originalObj.methodName);
-        } else {
-          applyReplicatedEvictionFromCache(originalEvent.cacheName, originalEvent.key);
-          result = true;
-        }
-      } catch (ClassNotFoundException e) {
-        logger.atSevere().withCause(e).log("CACHE event has been lost. Could not find {}", newEvent.getClassName());
-      }
-    } else if (newEvent != null && newEvent.getEventOrigin() != CACHE_EVENT) {
-      logger.atSevere().log("CACHE event has been sent here but originartor is not the right one (%s)", newEvent.getEventOrigin());
-    }
-    return result;
+  public boolean processIncomingReplicatedEvent(final ReplicatedEvent replicatedEvent) {
+    return replicatedEvent != null && applyCacheMethodOrEviction((CacheKeyWrapper) replicatedEvent);
   }
 
+  /**
+   * Will apply a cache eviction or invoke a method call on a cache.
+   * @param cacheKeyWrapper The replicated cache event
+   * @return true if successful eviction or method invocation.
+   */
+  private boolean applyCacheMethodOrEviction(CacheKeyWrapper cacheKeyWrapper) {
+
+    try {
+      cacheKeyWrapper.rebuildOriginal();
+    } catch (ClassNotFoundException e) {
+      logger.atSevere().withCause(e).log("Event has been lost. Could not find class %s to rebuild original event",
+          cacheKeyWrapper.getClass().getName());
+      return false;
+    }
+    cacheKeyWrapper.replicated = true;
+    cacheKeyWrapper.setNodeIdentity(Objects.requireNonNull(Replicator.getInstance()).getThisNodeIdentity());
+
+    if (cacheKeyWrapper instanceof CacheObjectCallWrapper) {
+      CacheObjectCallWrapper originalObj = (CacheObjectCallWrapper) cacheKeyWrapper;
+      // Invokes a particular method on a cache. The CacheObjectCallWrapper carries the method
+      // to be invoked on the cache. At present we make only two replicated cache method calls from ProjectCacheImpl.
+      return applyMethodCallOnCache(originalObj.cacheName, originalObj.key, originalObj.methodName);
+    }
+
+    // Perform an eviction for a specified key on the specified local cache
+    applyReplicatedEvictionFromCache(cacheKeyWrapper.cacheName, cacheKeyWrapper.key);
+    return true;
+  }
 }

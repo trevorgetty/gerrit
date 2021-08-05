@@ -44,11 +44,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.Map;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
 
@@ -86,8 +84,8 @@ import static com.wandisco.gerrit.gitms.shared.ReplicationConstants.INCOMING_DIR
 import static com.wandisco.gerrit.gitms.shared.ReplicationConstants.OUTGOING_DIR;
 import static com.wandisco.gerrit.gitms.shared.ReplicationConstants.REPLICATED_EVENTS_DIR;
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator;
-import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.DELETE_PROJECT_MESSAGE_EVENT;
 
+import com.wandisco.gerrit.gitms.shared.events.ReplicatedEvent;
 import com.wandisco.gerrit.gitms.shared.events.filter.EventFileFilter;
 import com.wandisco.gerrit.gitms.shared.exception.ConfigurationException;
 import com.wandisco.gerrit.gitms.shared.events.GerritEventData;
@@ -221,11 +219,8 @@ public class Replicator implements Runnable {
     return !isReplicationDisabled();
   }
 
-  public interface GerritPublishable {
-    boolean publishIncomingReplicatedEvents(EventWrapper newEvent);
-  }
 
-  private final static Map<Originator, Set<GerritPublishable>> eventListeners = new HashMap<>();
+  private final static Map<Originator, ReplicatedEventProcessor> replicatedEventProcessors = new ConcurrentHashMap<>();
 
   // Queue of events to replicate
   private final ConcurrentLinkedQueue<EventWrapper> queue = new ConcurrentLinkedQueue<>();
@@ -291,34 +286,21 @@ public class Replicator implements Runnable {
    */
   public boolean isSubscribed(Originator eventType){
     boolean subscribed=false;
-    synchronized (eventListeners) {
-        if(eventListeners.containsKey(eventType)){
-          subscribed = true;
-        }
+    if(replicatedEventProcessors.containsKey(eventType)){
+      subscribed = true;
     }
     return subscribed;
   }
 
-  public static void subscribeEvent(Originator eventType, GerritPublishable toCall) {
-    synchronized (eventListeners) {
-      Set<GerritPublishable> set = eventListeners.get(eventType);
-      if (set == null) {
-        set = new HashSet<>();
-        eventListeners.put(eventType, set);
-      }
-      set.add(toCall);
-      logger.atInfo().log("Subscriber added to %s", eventType);
-    }
+  public static void subscribeEvent(Originator eventType, ReplicatedEventProcessor processor) {
+    //Only put in the map if it is not present
+    replicatedEventProcessors.putIfAbsent(eventType, processor);
+    logger.atInfo().log("Subscriber added to %s", eventType);
   }
 
-  public static void unsubscribeEvent(Originator eventType, GerritPublishable toCall) {
-    synchronized (eventListeners) {
-      Set<GerritPublishable> set = eventListeners.get(eventType);
-      if (set != null) {
-        set.remove(toCall);
-        logger.atInfo().log("Subscriber removed of type %s", eventType);
-      }
-    }
+
+  public static void unsubscribeEvent(Originator eventType) {
+       replicatedEventProcessors.remove(eventType);
   }
 
   File getIndexingEventsDirectory() {
@@ -918,6 +900,22 @@ public class Replicator implements Runnable {
     return eventDataList;
   }
 
+
+  /**
+   * Gets a ReplicatedEventProcessor instance by originator from the replicatedEventProcessors map
+   * and calls the method processIncomingReplicatedEvent on the instance. Classes that implement
+   * the ReplicatedEventProcessor interface are subscribed to a single originator.
+   * @param originator This is the type of event such as GERRIT_EVENT, INDEX_EVENT etc
+   * @param replicatedEvent All replicated events including server events inherit the ReplicatedEvent base class
+   *                        and can be cast to this event type. We deal with ReplicatedEvent in order to deal with
+   *                        all replicated events using a single interface method.
+   * @return true if the instance successfully processed the incoming replicated event.
+   * @throws IOException
+   */
+  private boolean sendEventForProcessing(Originator originator, ReplicatedEvent replicatedEvent) throws IOException {
+    return replicatedEventProcessors.get(originator).processIncomingReplicatedEvent(replicatedEvent);
+  }
+
   /**
    * From the bytes we read from disk, which the replicator provided, we
    * recreate the event using the name of the class embedded in the json text.
@@ -978,29 +976,54 @@ public class Replicator implements Runnable {
         try {
           Stats.totalPublishedForeignGoodEventsBytes += eventsBytes.length;
           Stats.totalPublishedForeignGoodEvents++;
-          synchronized (eventListeners) {
-            Stats.totalPublishedForeignEventsByType.add(originalEvent.getEventOrigin());
-            Set<GerritPublishable> clients = eventListeners.get(originalEvent.getEventOrigin());
-            if (clients != null) {
-              if (originalEvent.getEventOrigin() == DELETE_PROJECT_MESSAGE_EVENT) {
+          Stats.totalPublishedForeignEventsByType.add(originalEvent.getEventOrigin());
+
+          //Get the classname from the origin wrapper event as it will be needed
+          //for de-serializing the event from json
+          Class<?> eventClass = Class.forName(originalEvent.getClassName());
+
+          switch(originalEvent.getEventOrigin()){
+            case INDEX_EVENT:
+            case GERRIT_EVENT:
+            case CACHE_EVENT:
+            case ACCOUNT_USER_INDEX_EVENT:
+            case ACCOUNT_GROUP_INDEX_EVENT :
+            case PROJECTS_INDEX_EVENT:
+            case DELETE_PROJECT_EVENT:
+              // De-serializing the event from json. Event is is cast to its supertype so that we can pass
+              // it to the processIncomingReplicatedEvents method of the ReplicatedEventProcessor interface.
+              // ReplicatedEvent can then be downcast to its underlying type in the respective processing method.
+              ReplicatedEvent replicatedEvent = (ReplicatedEvent) gson.fromJson(originalEvent.getEvent(), eventClass);
+
+              if(replicatedEvent == null){
+                logger.atSevere().log("ReplicatedEvent was null after de-serialising from JSON!");
+                failedEvents++;
                 continue;
               }
-              for (GerritPublishable gp : clients) {
-                try {
-                  boolean result = gp.publishIncomingReplicatedEvents(originalEvent);
 
-                  if (!result) {
-                    failedEvents++;
-                  }
-                } catch (Exception e) {
-                  logger.atSevere().withCause(e).log("RE While publishing events");
-                  failedEvents++;
-                }
+              if(!sendEventForProcessing(originalEvent.getEventOrigin(), replicatedEvent)){
+                failedEvents++;
               }
-            }
+              break;
+            // DELETE_PROJECT_MESSAGE_EVENT is used in the case we want to communicate with the GitMS replicator
+            // on the originator or in the case of a single node membership. We should not
+            // be handling it here as this is an incoming replicated events path which is only performed on remote
+            // sites and not on the originating node.
+            case DELETE_PROJECT_MESSAGE_EVENT:
+              logger.atFine().log("Received DELETE_PROJECT_MESSAGE_EVENT. Ignoring");
+              break;
+            default:
+              logger.atWarning().log("Encountered unknown Event Originator type %s",
+                  originalEvent.getEventOrigin());
+              failedEvents++;
           }
-        } catch (JsonSyntaxException e) {
-          logger.atSevere().withCause(e).log("RE event has been lost. Could not rebuild obj using GSON");
+
+        } catch (JsonSyntaxException ex) {
+          logger.atSevere().withCause(ex).log("Could not decode json event %s", originalEvent.toString());
+          failedEvents++;
+        } catch (ClassNotFoundException | IOException ex) {
+          logger.atSevere().withCause(ex).log("Event has been lost. Could not find %s",
+              originalEvent.getClassName());
           failedEvents++;
         }
       }

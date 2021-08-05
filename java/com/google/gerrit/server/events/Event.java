@@ -28,13 +28,12 @@
 package com.google.gerrit.server.events;
 
 import com.google.gerrit.server.replication.Replicator;
-import com.google.gerrit.server.util.time.TimeUtil;
+import com.wandisco.gerrit.gitms.shared.events.ReplicatedEvent;
 
-public abstract class Event {
+import java.util.Objects;
+
+public abstract class Event extends ReplicatedEvent {
   public final String type;
-  public long eventTimestamp = System.currentTimeMillis();
-  public long eventNanoTime = System.nanoTime();
-  public String nodeIdentity;
 
   /**
    * WANdisco replication for Gerrit with GitMS
@@ -44,19 +43,11 @@ public abstract class Event {
    */
   public transient boolean hasBeenReplicated = false;
 
-
   protected Event(String type) {
     this.type = type;
     if(!Replicator.isReplicationDisabled()) {
-      this.eventTimestamp = System.currentTimeMillis();
-      this.nodeIdentity = Replicator.getInstance().getThisNodeIdentity();
-      this.eventNanoTime = System.nanoTime();
+      setNodeIdentity(Objects.requireNonNull(Replicator.getInstance()).getThisNodeIdentity());
     }
-  }
-
-  @Deprecated
-  public void setNodeIdentity(String nodeIdentity) {
-    this.nodeIdentity = nodeIdentity;
   }
 
   public String getType() {

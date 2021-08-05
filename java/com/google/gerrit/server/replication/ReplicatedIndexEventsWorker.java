@@ -1,4 +1,3 @@
-
 /********************************************************************************
  * Copyright (c) 2014-2020 WANdisco
  *
@@ -30,7 +29,6 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
 import com.google.gwtorm.server.OrmException;
-import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.INDEX_EVENT;
 import static com.wandisco.gerrit.gitms.shared.events.filter.EventFileFilter.INDEX_EVENT_FILE_PREFIX;
 import static com.wandisco.gerrit.gitms.shared.events.filter.EventFileFilter.TEMPORARY_EVENT_FILE_EXTENSION;
@@ -66,7 +64,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritPublishable {
+public class ReplicatedIndexEventsWorker implements Runnable, ReplicatedEventProcessor {
 
   private static final FluentLogger logger = FluentLogger.forEnclosingClass();
   // readonly constants
@@ -154,7 +152,7 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
   public synchronized void stop() {
     if (!finished) {
       finished = true;
-      Replicator.unsubscribeEvent(INDEX_EVENT, this);
+      Replicator.unsubscribeEvent(INDEX_EVENT);
     }
   }
 
@@ -348,72 +346,44 @@ public class ReplicatedIndexEventsWorker implements Runnable, Replicator.GerritP
   }
 
   /**
-   * Called by the (gerrit) Replicator when it receives a replicated event of type INDEX_CHANGE
+   * Called by the (gerrit) Replicator when it receives a replicated event of type INDEX_EVENT
    * Puts the events in a queue which will be looked after by the IndexIncomingReplicatedEvents thread
-   *
-   * @param event: An event wrapped by EventWrapper instance
+   * @param replicatedEvent: An event wrapped by EventWrapper instance
    * @return True if successful, otherwise false.
    */
   @Override
-  public boolean publishIncomingReplicatedEvents(EventWrapper event) {
-
-    if(event == null){
-      return false;
-    }
-
-    if(event.getEventOrigin() != INDEX_EVENT){
-      logger.atSevere().log("RC Received Invalid event type (%s)", event.getEventOrigin());
-      return false;
-    }
-
-    return unwrapAndSendIndexEvent(event);
+  public boolean processIncomingReplicatedEvent(final ReplicatedEvent replicatedEvent) {
+    return replicatedEvent != null && queueAndPersistIndexToReplicate((IndexToReplicate) replicatedEvent);
   }
+
 
   /**
-   * Deserialise event from EventWrapper, publish to indexing queue and persist to disk.
-   *
-   * @param newEvent
-   * @return success
-   * @throws JsonSyntaxException
+   * Adds an IndexToReplicateComparable to the incomingChangeEventsToIndex queue
+   * and persists the index in a persist file.
+   * @param indexToReplicate Holds information needed to index the change on the nodes,
+   *                         and also to make it replicate across the other nodes
+   * @return true if successfully added to the queue.
    */
-  private boolean unwrapAndSendIndexEvent(EventWrapper newEvent) throws JsonSyntaxException {
-    boolean success = false;
+  private boolean queueAndPersistIndexToReplicate(IndexToReplicate indexToReplicate) {
+
+    IndexToReplicateComparable originalEvent = new IndexToReplicateComparable(indexToReplicate);
+    logger.atFine().log("RC Received this event from replication: %s", originalEvent);
+    incomingChangeEventsToIndex.add(originalEvent);
+
     try {
-      Class<?> eventClass = Class.forName(newEvent.getClassName());
-      IndexToReplicateComparable originalEvent = null;
-
-      try {
-        IndexToReplicate index = (IndexToReplicate) gson.fromJson(newEvent.getEvent(), eventClass);
-
-        if (index == null) {
-          logger.atSevere().log("fromJson method returned null for %s", newEvent.toString());
-          return success;
-        }
-
-        originalEvent = new IndexToReplicateComparable(index);
-      } catch (JsonSyntaxException je) {
-        logger.atSevere().log("PR Could not decode json event %s", newEvent.toString(), je);
-        return success;
-      }
-      logger.atFine().log("RC Received this event from replication: %s", originalEvent);
-      // add the data to index the change
-      incomingChangeEventsToIndex.add(originalEvent);
-      try {
-        persister.persistIfNotAlready(originalEvent, originalEvent.projectName);
-      } catch (IOException e) {
-        logger.atSevere().withCause(e).log("RC Could not persist event %s", originalEvent);
-      }
-      success = true;
-
-      synchronized (indexEventsAreReady) {
-        indexEventsAreReady.notifyAll();
-      }
-    } catch (ClassNotFoundException e) {
-      logger.atSevere().withCause(e).log("RC INDEX_EVENT has been lost. Could not find %s", newEvent.getClassName());
+      persister.persistIfNotAlready(originalEvent, originalEvent.projectName);
+    } catch (IOException e) {
+      logger.atSevere().withCause(e).log("RC Could not persist event %s", originalEvent);
     }
-    return success;
-  }
 
+    // The IndexIncomingReplicatedEvents thread is waiting to be notified
+    // when the incomingChangeEventsToIndex queue has items added to it.
+    synchronized (indexEventsAreReady) {
+      indexEventsAreReady.notifyAll();
+    }
+
+    return true;
+  }
 
   private class IndexIncomingReplicatedEvents implements Runnable {
 

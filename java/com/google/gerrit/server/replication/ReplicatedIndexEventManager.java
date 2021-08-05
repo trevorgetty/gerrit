@@ -31,7 +31,6 @@ import com.google.gwtorm.server.SchemaFactory;
 import com.google.inject.Inject;
 import com.google.inject.Provider;
 import com.google.inject.Singleton;
-import com.google.inject.assistedinject.Assisted;
 import com.google.inject.util.Providers;
 
 import org.eclipse.jgit.lib.Config;

@@ -77,8 +77,8 @@ public class EventJsonTest extends GerritBaseTests {
     refUpdatedAttribute.refName = REF;
     event.refUpdate = createSupplier(refUpdatedAttribute);
     event.submitter = newAccount("submitter");
-    event.eventTimestamp = EVENT_TIMESTAMP;
-    event.eventNanoTime = EVENT_NANO_TIME;
+    event.setEventTimestamp(EVENT_TIMESTAMP);
+    event.setEventNanoTime(EVENT_NANO_TIME);
 
     assertThatJsonMap(event)
         .isEqualTo(
@@ -103,8 +103,8 @@ public class EventJsonTest extends GerritBaseTests {
     PatchSetCreatedEvent event = new PatchSetCreatedEvent(change);
     event.change = asChangeAttribute(change);
     event.uploader = newAccount("uploader");
-    event.eventTimestamp = EVENT_TIMESTAMP;
-    event.eventNanoTime = EVENT_NANO_TIME;
+    event.setEventTimestamp(EVENT_TIMESTAMP);
+    event.setEventNanoTime(EVENT_NANO_TIME);
 
     assertThatJsonMap(event)
         .isEqualTo(
@@ -144,8 +144,8 @@ public class EventJsonTest extends GerritBaseTests {
     event.change = asChangeAttribute(change);
     event.changer = newAccount("changer");
     event.oldAssignee = newAccount("oldAssignee");
-    event.eventTimestamp = EVENT_TIMESTAMP;
-    event.eventNanoTime = EVENT_NANO_TIME;
+    event.setEventTimestamp(EVENT_TIMESTAMP);
+    event.setEventNanoTime(EVENT_NANO_TIME);
 
     assertThatJsonMap(event)
         .isEqualTo(
@@ -191,8 +191,8 @@ public class EventJsonTest extends GerritBaseTests {
     ChangeDeletedEvent event = new ChangeDeletedEvent(change);
     event.change = asChangeAttribute(change);
     event.deleter = newAccount("deleter");
-    event.eventTimestamp = EVENT_TIMESTAMP;
-    event.eventNanoTime = EVENT_NANO_TIME;
+    event.setEventTimestamp(EVENT_TIMESTAMP);
+    event.setEventNanoTime(EVENT_NANO_TIME);
 
     assertThatJsonMap(event)
         .isEqualTo(
@@ -234,8 +234,8 @@ public class EventJsonTest extends GerritBaseTests {
     event.added = new String[] {"added"};
     event.removed = new String[] {"removed"};
     event.hashtags = new String[] {"hashtags"};
-    event.eventTimestamp = EVENT_TIMESTAMP;
-    event.eventNanoTime = EVENT_NANO_TIME;
+    event.setEventTimestamp(EVENT_TIMESTAMP);
+    event.setEventNanoTime(EVENT_NANO_TIME);
 
     assertThatJsonMap(event)
         .isEqualTo(
@@ -278,8 +278,8 @@ public class EventJsonTest extends GerritBaseTests {
     event.change = asChangeAttribute(change);
     event.abandoner = newAccount("abandoner");
     event.reason = "some reason";
-    event.eventTimestamp = EVENT_TIMESTAMP;
-    event.eventNanoTime = EVENT_NANO_TIME;
+    event.setEventTimestamp(EVENT_TIMESTAMP);
+    event.setEventNanoTime(EVENT_NANO_TIME);
 
     assertThatJsonMap(event)
         .isEqualTo(
@@ -318,8 +318,8 @@ public class EventJsonTest extends GerritBaseTests {
     Change change = newChange();
     ChangeMergedEvent event = new ChangeMergedEvent(change);
     event.change = asChangeAttribute(change);
-    event.eventTimestamp = EVENT_TIMESTAMP;
-    event.eventNanoTime = EVENT_NANO_TIME;
+    event.setEventTimestamp(EVENT_TIMESTAMP);
+    event.setEventNanoTime(EVENT_NANO_TIME);
 
     assertThatJsonMap(event)
         .isEqualTo(
@@ -350,8 +350,8 @@ public class EventJsonTest extends GerritBaseTests {
     Change change = newChange();
     ChangeRestoredEvent event = new ChangeRestoredEvent(change);
     event.change = asChangeAttribute(change);
-    event.eventTimestamp = EVENT_TIMESTAMP;
-    event.eventNanoTime = EVENT_NANO_TIME;
+    event.setEventTimestamp(EVENT_TIMESTAMP);
+    event.setEventNanoTime(EVENT_NANO_TIME);
 
     assertThatJsonMap(event)
         .isEqualTo(
@@ -382,8 +382,8 @@ public class EventJsonTest extends GerritBaseTests {
     Change change = newChange();
     CommentAddedEvent event = new CommentAddedEvent(change);
     event.change = asChangeAttribute(change);
-    event.eventTimestamp = EVENT_TIMESTAMP;
-    event.eventNanoTime = EVENT_NANO_TIME;
+    event.setEventTimestamp(EVENT_TIMESTAMP);
+    event.setEventNanoTime(EVENT_NANO_TIME);
 
     assertThatJsonMap(event)
         .isEqualTo(
@@ -414,8 +414,8 @@ public class EventJsonTest extends GerritBaseTests {
     Change change = newChange();
     PrivateStateChangedEvent event = new PrivateStateChangedEvent(change);
     event.change = asChangeAttribute(change);
-    event.eventTimestamp = EVENT_TIMESTAMP;
-    event.eventNanoTime = EVENT_NANO_TIME;
+    event.setEventTimestamp(EVENT_TIMESTAMP);
+    event.setEventNanoTime(EVENT_NANO_TIME);
 
     assertThatJsonMap(event)
         .isEqualTo(
@@ -446,8 +446,8 @@ public class EventJsonTest extends GerritBaseTests {
     Change change = newChange();
     ReviewerAddedEvent event = new ReviewerAddedEvent(change);
     event.change = asChangeAttribute(change);
-    event.eventTimestamp = EVENT_TIMESTAMP;
-    event.eventNanoTime = EVENT_NANO_TIME;
+    event.setEventTimestamp(EVENT_TIMESTAMP);
+    event.setEventNanoTime(EVENT_NANO_TIME);
 
     assertThatJsonMap(event)
         .isEqualTo(
@@ -478,8 +478,8 @@ public class EventJsonTest extends GerritBaseTests {
     Change change = newChange();
     ReviewerDeletedEvent event = new ReviewerDeletedEvent(change);
     event.change = asChangeAttribute(change);
-    event.eventTimestamp = EVENT_TIMESTAMP;
-    event.eventNanoTime = EVENT_NANO_TIME;
+    event.setEventTimestamp(EVENT_TIMESTAMP);
+    event.setEventNanoTime(EVENT_NANO_TIME);
 
     assertThatJsonMap(event)
         .isEqualTo(
@@ -510,8 +510,8 @@ public class EventJsonTest extends GerritBaseTests {
     Change change = newChange();
     VoteDeletedEvent event = new VoteDeletedEvent(change);
     event.change = asChangeAttribute(change);
-    event.eventTimestamp = EVENT_TIMESTAMP;
-    event.eventNanoTime = EVENT_NANO_TIME;
+    event.setEventTimestamp(EVENT_TIMESTAMP);
+    event.setEventNanoTime(EVENT_NANO_TIME);
 
     assertThatJsonMap(event)
         .isEqualTo(
@@ -542,8 +542,8 @@ public class EventJsonTest extends GerritBaseTests {
     Change change = newChange();
     WorkInProgressStateChangedEvent event = new WorkInProgressStateChangedEvent(change);
     event.change = asChangeAttribute(change);
-    event.eventTimestamp = EVENT_TIMESTAMP;
-    event.eventNanoTime = EVENT_NANO_TIME;
+    event.setEventTimestamp(EVENT_TIMESTAMP);
+    event.setEventNanoTime(EVENT_NANO_TIME);
 
     assertThatJsonMap(event)
         .isEqualTo(
@@ -574,8 +574,8 @@ public class EventJsonTest extends GerritBaseTests {
     Change change = newChange();
     TopicChangedEvent event = new TopicChangedEvent(change);
     event.change = asChangeAttribute(change);
-    event.eventTimestamp = EVENT_TIMESTAMP;
-    event.eventNanoTime = EVENT_NANO_TIME;
+    event.setEventTimestamp(EVENT_TIMESTAMP);
+    event.setEventNanoTime(EVENT_NANO_TIME);
 
     assertThatJsonMap(event)
         .isEqualTo(
@@ -606,8 +606,8 @@ public class EventJsonTest extends GerritBaseTests {
     ProjectCreatedEvent event = new ProjectCreatedEvent();
     event.projectName = PROJECT;
     event.headName = REF;
-    event.eventTimestamp = EVENT_TIMESTAMP;
-    event.eventNanoTime = EVENT_NANO_TIME;
+    event.setEventTimestamp(EVENT_TIMESTAMP);
+    event.setEventNanoTime(EVENT_NANO_TIME);
 
     assertThatJsonMap(event)
         .isEqualTo(

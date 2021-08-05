@@ -17,12 +17,11 @@ import com.google.gerrit.reviewdb.client.Account;
 import com.google.gerrit.reviewdb.client.AccountGroup;
 import com.google.gerrit.server.index.account.AccountIndexerImpl;
 import com.google.gerrit.server.index.group.GroupIndexerImpl;
-import com.google.gson.Gson;
-import com.google.gson.JsonSyntaxException;
-import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
+import com.wandisco.gerrit.gitms.shared.events.ReplicatedEvent;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Objects;
 
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator;
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.ACCOUNT_GROUP_INDEX_EVENT;
@@ -38,10 +37,9 @@ import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.AC
  *
  * @author Ronan Conway
  */
-public class ReplicatedAccountsIndexManager implements Replicator.GerritPublishable {
+public class ReplicatedAccountsIndexManager implements ReplicatedEventProcessor {
 
   private static final FluentLogger logger = FluentLogger.forEnclosingClass();
-  private static final Gson gson = new Gson();
 
   private ReplicatedAccountIndexer indexer = null;
   private Originator originator = null;
@@ -64,6 +62,7 @@ public class ReplicatedAccountsIndexManager implements Replicator.GerritPublisha
 
   // Using instance variables, to avoid contention / thread issues now this is a non-singleton class.
   private Replicator replicatorInstance = null;
+
 
   public interface Factory {
 
@@ -138,43 +137,33 @@ public class ReplicatedAccountsIndexManager implements Replicator.GerritPublisha
   }
 
 
+  /**
+   * Process incoming replicated events for ACCOUNT_USER_INDEX_EVENT or
+   * ACCOUNT_GROUP_INDEX_EVENT. We pass the incoming ReplicatedEvent to
+   * reindexAccount so that a decision can be made to perform a local
+   * reindex of account user / group indexes.
+   * @param replicatedEvent cast to AccountIndexEventBase which is a parent
+   *              class of AccountUserIndexEvent and AccountGroupIndexEvent
+   *
+   * @return true if we succeed in performing a local reindex of the
+   * respective accounts index
+   */
   @Override
-  public boolean publishIncomingReplicatedEvents(EventWrapper newEvent) {
-    boolean result = false;
-
-    if (newEvent == null) {
-      logger.atFine().log("RC : Received null event");
-      return false;
-    }
-    //If originator is a ACCOUNT_GROUP_INDEX_EVENT or ACCOUNT_USER_INDEX_EVENT.
-    if (newEvent.getEventOrigin() == originator) {
-      try {
-        Class<?> eventClass = Class.forName(newEvent.getClassName());
-        //Making the call to reindexAccountGroup for the local site.
-        //i.e we don't need to make a replicated reindex now as we are receiving the
-        //incoming replicated event to reindex.
-        result = reindexAccount(newEvent, eventClass);
-      } catch (ClassNotFoundException e) {
-        logger.atSevere().withCause(e).log("RC Account event reindex has been lost. Could not find %s", newEvent.getClassName());
-      }
-    }
-    return result;
+  public boolean processIncomingReplicatedEvent(final ReplicatedEvent replicatedEvent) {
+    return replicatedEvent != null && reindexAccount((AccountIndexEventBase) replicatedEvent);
   }
 
   /**
    * Local reindex of the AccountUser or AccountGroup event.
-   *
-   * @param newEvent
-   * @param eventClass
-   * @return
+   * @return true|false based on whether the local reindex was performed or not.
    */
-  private boolean reindexAccount(EventWrapper newEvent, Class<?> eventClass) {
+  private boolean reindexAccount(AccountIndexEventBase indexEventBase) {
     try {
-      AccountIndexEventBase indexEventBase = (AccountIndexEventBase) gson.fromJson(newEvent.getEvent(), eventClass);
       indexer.indexNoRepl(indexEventBase.getIdentifier());
       return true;
-    } catch (JsonSyntaxException | IOException e) {
-      logger.atSevere().withCause(e).log("RC AccountGroup reindex, Could not decode json event %s", newEvent.toString());
+    } catch (IOException e) {
+      logger.atSevere().log("Unable to perform local reindex on Node with identity %s",
+          Objects.requireNonNull(Replicator.getInstance()).getThisNodeIdentity());
       return false;
     }
   }

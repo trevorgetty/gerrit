@@ -12,7 +12,6 @@
 
 package com.google.gerrit.server.replication;
 
-import com.google.common.base.Supplier;
 import com.google.common.flogger.FluentLogger;
 import com.google.gerrit.reviewdb.client.Branch;
 import com.google.gerrit.reviewdb.client.Change;
@@ -22,7 +21,6 @@ import com.google.gerrit.server.events.ChangeDeletedEvent;
 import com.google.gerrit.server.events.ChangeEvent;
 import com.google.gerrit.server.events.Event;
 import com.google.gerrit.server.events.EventBroker;
-import com.google.gerrit.server.events.EventDeserializer;
 import com.google.gerrit.server.events.EventListener;
 import com.google.gerrit.server.events.EventTypes;
 import com.google.gerrit.server.events.PatchSetEvent;
@@ -31,15 +29,10 @@ import com.google.gerrit.server.events.ProjectEvent;
 import com.google.gerrit.server.events.RefEvent;
 import com.google.gerrit.server.events.RefUpdatedEvent;
 import com.google.gerrit.server.events.SkipReplication;
-import com.google.gerrit.server.events.SupplierDeserializer;
-import com.google.gerrit.server.events.SupplierSerializer;
 import com.google.gerrit.server.notedb.ChangeNotes;
 import com.google.gerrit.server.permissions.PermissionBackendException;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonSyntaxException;
 import com.google.gwtorm.server.OrmException;
-import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
+import com.wandisco.gerrit.gitms.shared.events.ReplicatedEvent;
 
 import static com.google.gerrit.server.replication.ReplicationConstants.EVENTS_REPLICATION_THREAD_NAME;
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.GERRIT_EVENT;
@@ -58,7 +51,7 @@ import static java.nio.file.StandardOpenOption.APPEND;
 import static java.nio.file.StandardOpenOption.CREATE;
 
 @Singleton
-public class ReplicatedEventsWorker implements Runnable, Replicator.GerritPublishable {
+public class ReplicatedEventsWorker implements Runnable, ReplicatedEventProcessor {
 
   private final ReplicatedEventsManager replicatedEventsManager;
 
@@ -78,11 +71,6 @@ public class ReplicatedEventsWorker implements Runnable, Replicator.GerritPublis
   private static final String errorReplicatedEventMessage = "Error while trying to replicate event: %s";
   private static Thread eventReaderAndPublisherThread = null;
   private static FluentLogger logger = FluentLogger.forEnclosingClass();
-  private static final Gson gson = new GsonBuilder()
-      .registerTypeAdapter(Supplier.class, new SupplierSerializer())
-      .registerTypeAdapter(Event.class, new EventDeserializer())
-      .registerTypeAdapter(Supplier.class, new SupplierDeserializer())
-      .create();
 
   public ReplicatedEventsWorker(
       ReplicatedEventsManager replicatedEventsManager,
@@ -120,7 +108,7 @@ public class ReplicatedEventsWorker implements Runnable, Replicator.GerritPublis
   public synchronized void stopReplicationThread() {
     if (!finished) {
       finished = true;
-      Replicator.unsubscribeEvent(GERRIT_EVENT, this);
+      Replicator.unsubscribeEvent(GERRIT_EVENT);
     }
   }
 
@@ -208,9 +196,6 @@ public class ReplicatedEventsWorker implements Runnable, Replicator.GerritPublis
       } catch (InterruptedException e) {
         logger.atInfo().withCause(e).log("RE Exiting");
         finished = true;
-      } catch (RuntimeException e) {
-        logger.atSevere().withCause(e).log("RE Unexpected exception");
-        logMe("Unexpected exception", e);
       } catch (Exception e) {
         logger.atSevere().withCause(e).log("RE Unexpected exception");
         logMe("Unexpected exception", e);
@@ -241,51 +226,38 @@ public class ReplicatedEventsWorker implements Runnable, Replicator.GerritPublis
     return eventGot;
   }
 
+
   /**
-   * This is the function implementing the Replicator.GerritPublishable interface
-   * aimed at receiving the event to be published
-   *
-   * @param newEvent
-   * @return result
+   * Process incoming GERRIT_EVENTS that are of type Event. Event is the base class
+   * of all server events. If we are receiving an incoming event we need to put the
+   * event on our event stream. This is done by posting the event to the event broker.
+   * @param replicatedEvent which is cast to Event.
+   * @return true if we have succeeded in putting the event on the local event stream.
    */
   @Override
-  public boolean publishIncomingReplicatedEvents(EventWrapper newEvent) {
-    boolean result = true;
-    if (replicatedEventsManager.isReplicatedEventsEnabled()) {
-      try {
-        Class<?> eventClass = Class.forName(newEvent.getClassName());
-        Event originalEvent = (Event) gson.fromJson(newEvent.getEvent(), eventClass);
+  public boolean processIncomingReplicatedEvent(final ReplicatedEvent replicatedEvent) {
+    return replicatedEvent != null && publishIncomingToEventStream((Event) replicatedEvent);
+  }
 
-        if (originalEvent == null) {
-          logger.atSevere().log("fromJson method returned null for %s", newEvent.toString());
-          return false;
-        }
-
-        logger.atFine().log("RE Original event: %s", originalEvent.toString());
-        // All events we read in are replicated events.
-        originalEvent.hasBeenReplicated = true;
-
-        if (replicatedEventsManager.isReplicatedEventsReplicateOriginalEvents()) {
-          if (!publishIncomingReplicatedEventsLocalImpl(originalEvent)) {
-            logger.atSevere().log("RE event has been lost, not supported");
-            result = false;
-          }
-        }
-
-      } catch (JsonSyntaxException e) {
-        logger.atSevere().withCause(e).log("PR Could not decode json event %s", newEvent.toString());
-        return result;
-      } catch (ClassNotFoundException e) {
-        logger.atInfo().log(errorReplicatedEventMessage, newEvent.getEvent());
-        logger.atFine().withCause(e).log(errorReplicatedEventMessage, newEvent.getEvent());
-        result = false;
-      } catch (RuntimeException e) {
-        logger.atSevere().withCause(e).log(errorReplicatedEventMessage, newEvent.getEvent());
-        result = false;
-      }
-
+  /**
+   * Publish the incoming GERRIT_EVENTs to the local gerrit event stream.
+   * @param event Gerrit server event that has been replicated.
+   * @return true if server event is published to the gerrit event stream.
+   */
+  private boolean publishIncomingToEventStream(Event event) {
+    if(!replicatedEventsManager.isReplicatedEventsEnabled()){
+      return false;
     }
-    return result;
+
+    event.hasBeenReplicated = true;
+
+    // If the boolean isReplicatedEventsReplicateOriginalEvents is true then we
+    // want to publish those incoming server events to the event stream
+    if (replicatedEventsManager.isReplicatedEventsReplicateOriginalEvents()) {
+        return publishIncomingReplicatedEventsLocalImpl(event);
+    }
+
+    return false;
   }
 
   /**

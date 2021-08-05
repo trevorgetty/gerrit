@@ -1,4 +1,3 @@
-
 /********************************************************************************
  * Copyright (c) 2014-2020 WANdisco
  *
@@ -13,19 +12,16 @@
 
 package com.google.gerrit.server.replication;
 
+import com.google.common.flogger.FluentLogger;
 import com.google.gerrit.reviewdb.client.Change;
 import com.google.gerrit.reviewdb.client.Project;
-import com.google.gson.Gson;
-import com.google.gson.JsonSyntaxException;
 
 import com.wandisco.gerrit.gitms.shared.events.DeleteProjectMessageEvent;
-import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.DELETE_PROJECT_EVENT;
 import static com.wandisco.gerrit.gitms.shared.events.DeleteProjectMessageEvent.DeleteMessage.DO_NOT_DELETE_PROJECT_FROM_DISK;
 import static com.wandisco.gerrit.gitms.shared.events.DeleteProjectMessageEvent.DeleteMessage.DELETE_PROJECT_FROM_DISK;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.wandisco.gerrit.gitms.shared.events.ReplicatedEvent;
 
 import com.google.gerrit.server.git.GitRepositoryManager;
 
@@ -36,11 +32,11 @@ import org.eclipse.jgit.lib.RepositoryCache;
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
-import java.util.UUID;
 
-public class ReplicatedProjectManager implements Replicator.GerritPublishable {
-  private static final Logger log = LoggerFactory.getLogger(ReplicatedProjectManager.class);
-  private static final Gson gson = new Gson();
+public class ReplicatedProjectManager implements ReplicatedEventProcessor {
+
+  private static final FluentLogger logger = FluentLogger.forEnclosingClass();
+
   private static volatile ReplicatedProjectManager instance = null;
   private static GitRepositoryManager repoManager;
 
@@ -58,14 +54,14 @@ public class ReplicatedProjectManager implements Replicator.GerritPublishable {
 
   public static void replicateProjectDeletion(String projectName, boolean preserve, String taskUuid) {
     ProjectInfoWrapper projectInfoWrapper = new ProjectInfoWrapper(projectName, preserve, taskUuid, Replicator.getInstance().getThisNodeIdentity());
-    log.info("PROJECT About to call replicated project deletion event: {}, {}, {}", projectName, preserve, taskUuid);
+    logger.atInfo().log("PROJECT About to call replicated project deletion event: %s, %s, %s", projectName, preserve, taskUuid);
     Replicator.getInstance().queueEventForReplication(GerritEventFactory.createReplicatedDeleteProjectEvent(projectInfoWrapper));
   }
 
   public static void replicateProjectChangeDeletion(Project project, boolean preserve, List<Change.Id> changesToBeDeleted, String taskUuid) {
     DeleteProjectChangeEvent deleteProjectChangeEvent =
         new DeleteProjectChangeEvent(project, preserve, changesToBeDeleted, taskUuid, Replicator.getInstance().getThisNodeIdentity());
-    log.info("PROJECT About to call replicated project change deletion event: {}, {}, {}, {}",
+    logger.atInfo().log("PROJECT About to call replicated project change deletion event: %s, %s, %s, %s",
              project.getName(), preserve, changesToBeDeleted, taskUuid);
     Replicator.getInstance().queueEventForReplication(GerritEventFactory.createReplicatedDeleteProjectChangeEvent(deleteProjectChangeEvent));
   }
@@ -74,9 +70,9 @@ public class ReplicatedProjectManager implements Replicator.GerritPublishable {
    * We call this method if we are dealing with a single node replication
    * group. For a single node membership we need to create a DeleteProjectMessageEvent
    * instead of using a wrapped ProjectInfoWrapper.
-   * @param project
-   * @param preserve
-   * @param taskUuid
+   * @param project : Gerrit project to be deleted.
+   * @param preserve : When preserve is true, the project is not removed from disk
+   * @param taskUuid : unique UUID which allows for tracking the delete request.
    */
   public static void deleteProjectSingleNodeGroup(Project project, boolean preserve,
                                                   final String taskUuid) {
@@ -124,36 +120,37 @@ public class ReplicatedProjectManager implements Replicator.GerritPublishable {
         .createReplicatedDeleteProjectMessageEvent(deleteProjectMessageEvent));
   }
 
+  /**
+   * Processes an incoming replicated event that can be cast to one of two types. A DeleteProjectChangeEvent
+   * details changes that need to be deleted from all nodes. ProjectInfoWrapper is used in a context of deciding
+   * to delete a project from disk or preserve the project on disk.
+   * @param replicatedEvent Will be cast to either a DeleteProjectChangeEvent or ProjectInfoWrapper
+   * @return true if the deletion of project changes or indeed the entire project succeeds.
+   * @throws IOException if there are issues with deleting open changes or issues with deleting the repository
+   * on disk.
+   */
   @Override
-  public boolean publishIncomingReplicatedEvents(EventWrapper newEvent) {
-    boolean result = false;
-    if (newEvent != null && newEvent.getEventOrigin() == DELETE_PROJECT_EVENT) {
-      // We can get into the if statement in 2 ways :
-      // 1. we are doing a hard delete on the project, i.e. we want to completely remove the repo
-      // 2. we are doing a soft delete, i.e. we only want to remove the projects changes, reviews etc
-      try {
-        Class<?> eventClass = Class.forName(newEvent.getClassName());
-        if (newEvent.getClassName().equals(DeleteProjectChangeEvent.class.getName())) {
-          result = deleteProjectChanges(newEvent, eventClass);
-        }else {
-          result = deleteProject(newEvent, eventClass);
-        }
-
-      } catch(ClassNotFoundException e) {
-        log.error("PROJECT event has been lost. Could not find {}",newEvent.getClassName(),e);
-      }
-    } else if (newEvent != null && newEvent.getEventOrigin() !=  DELETE_PROJECT_EVENT) {
-        log.error("DELETE_PROJECT_EVENT event has been sent here but originartor is not the right one ({})",newEvent.getEventOrigin());
+  public boolean processIncomingReplicatedEvent(final ReplicatedEvent replicatedEvent) throws IOException {
+    if(replicatedEvent == null) return false;
+    // We can get into the if statement in 2 ways :
+    // 1. we are doing a hard delete on the project, i.e. we want to completely remove the repo
+    // 2. we are doing a soft delete, i.e. we only want to remove the projects changes, reviews etc
+    if (replicatedEvent instanceof DeleteProjectChangeEvent) {
+      DeleteProjectChangeEvent deleteProjectChangeEvent = (DeleteProjectChangeEvent) replicatedEvent;
+      return deleteProjectChanges(deleteProjectChangeEvent);
     }
-    return result;
+
+    ProjectInfoWrapper projectInfoWrapper = (ProjectInfoWrapper) replicatedEvent;
+    return deleteProject(projectInfoWrapper);
   }
+
 
   public static void enableReplicatedProjectManager() {
     if (instance == null) {
       synchronized (ReplicatedProjectManager.class) {
         if (instance == null) {
           instance = new ReplicatedProjectManager();
-          log.info("PROJECT New instance created");
+          logger.atInfo().log("PROJECT New instance created");
           Replicator.subscribeEvent(DELETE_PROJECT_EVENT, instance);
         }
       }
@@ -163,74 +160,60 @@ public class ReplicatedProjectManager implements Replicator.GerritPublishable {
   /**
    * Perform actions to actually delete the project on all nodes and send round a message
    * that the node has successfully deleted the project
-   *
-   * @param newEvent
-   * @param eventClass
+   * @param projectInfoWrapper Wraps data required for a DeleteProjectMessageEvent
+   * @return true if we succeed in deleting the project from the jgit cache and we are able to send
+   * a DeleteProjectMessageEvent with the data from the ProjectInfoWrapper.
    */
-  private boolean deleteProject(EventWrapper newEvent, Class<?> eventClass) {
-    ProjectInfoWrapper originalEvent = null;
-    boolean result = false;
+  private boolean deleteProject(ProjectInfoWrapper projectInfoWrapper) {
+    boolean result;
 
-    try {
-      originalEvent = (ProjectInfoWrapper) gson.fromJson(newEvent.getEvent(), eventClass);
-    } catch (JsonSyntaxException je) {
-      log.error("DeleteProject, Could not decode json event {}", newEvent.toString(), je);
-      return result;
+    if (projectInfoWrapper == null) {
+      logger.atSevere().log("Received null ProjectInfoWrapper");
+      return false;
     }
 
-    if (originalEvent == null) {
-      log.error("DeleteProject, fromJson method returned null for {}", newEvent.toString());
-      return result;
-    }
+    logger.atInfo().log("RE Original event: %s",projectInfoWrapper.toString());
+    projectInfoWrapper.replicated = true; // not needed, but makes it clear
+    projectInfoWrapper.setNodeIdentity(Objects.requireNonNull(Replicator.getInstance()).getThisNodeIdentity());
+    result = applyActionsForDeletingProject(projectInfoWrapper);
 
-    log.info("RE Original event: {}",originalEvent.toString());
-    originalEvent.replicated = true; // not needed, but makes it clear
-    originalEvent.setNodeIdentity(Objects.requireNonNull(Replicator.getInstance()).getThisNodeIdentity());
-    result = applyActionsForDeletingProject(originalEvent);
-
-    createDeleteProjectMessageEvent(originalEvent.taskUuid, result &&
-        !originalEvent.preserve, originalEvent.projectName);
+    createDeleteProjectMessageEvent(projectInfoWrapper.taskUuid, result &&
+        !projectInfoWrapper.preserve, projectInfoWrapper.projectName);
     return result;
   }
 
 
   /**
    * Perform actions to delete all the changes associated with the project on all nodes.
-   *
-   * @param newEvent
-   * @param eventClass
+   * @param deleteProjectChangeEvent : Event type used for the purpose of deleting open changes for a given project
+   * @return true if project changes have been successfully deleted.
    */
-  private boolean deleteProjectChanges(EventWrapper newEvent, Class<?> eventClass) {
-    DeleteProjectChangeEvent originalEvent;
-    boolean result = false;
-    try {
-      originalEvent = (DeleteProjectChangeEvent) gson.fromJson(newEvent.getEvent(), eventClass);
-    } catch (JsonSyntaxException je) {
-      log.error("DeleteProject, Could not decode json event {}", newEvent.toString(), je);
-      return result;
+  private boolean deleteProjectChanges(DeleteProjectChangeEvent deleteProjectChangeEvent) {
+
+    if (deleteProjectChangeEvent == null) {
+      logger.atSevere().log("Received null DeleteProjectChangeEvent");
+      return false;
     }
 
-    if (originalEvent == null) {
-      log.error("DeleteProject, fromJson method returned null for {}", newEvent.toString());
-      return result;
-    }
-
-    log.info("RE Original event: {}",originalEvent.toString());
-    originalEvent.replicated = true; // not needed, but makes it clear
-    originalEvent.setNodeIdentity(Replicator.getInstance().getThisNodeIdentity());
-    result = applyActionsForDeletingProjectChanges(originalEvent);
-    return result;
+    logger.atInfo().log("Original event: %s", deleteProjectChangeEvent.toString());
+    deleteProjectChangeEvent.replicated = true; // not needed, but makes it clear
+    deleteProjectChangeEvent.setNodeIdentity(Objects.requireNonNull(Replicator.getInstance()).getThisNodeIdentity());
+    return applyActionsForDeletingProjectChanges(deleteProjectChangeEvent);
   }
 
 
   /**
    * Remove the project from the jgit cache on all nodes
-   * @param originalEvent
-   * @return
+   * @param projectInfoWrapper : Event type used for the purpose of wrapping a DeleteProjectMessageEvent
+   *                           which carries the data about the project to be removed or preserved.
+   * @return true if the repository is successfully removed from the jgit cache.
    */
-  private static boolean applyActionsForDeletingProject(ProjectInfoWrapper originalEvent) {
-    log.info("PROJECT event is about to remove the project from the jgit cache. Original event was {}!", originalEvent);
-    Project.NameKey nameKey = new Project.NameKey(originalEvent.projectName);
+  private static boolean applyActionsForDeletingProject(ProjectInfoWrapper projectInfoWrapper) {
+
+    logger.atInfo().log("ProjectInfoWrapper event is about to remove the project from the jgit cache. " +
+        "Original event was %s!", projectInfoWrapper);
+
+    Project.NameKey nameKey = new Project.NameKey(projectInfoWrapper.projectName);
     Repository repository;
     try {
       repository = repoManager.openRepository(nameKey);
@@ -239,9 +222,9 @@ public class ReplicatedProjectManager implements Replicator.GerritPublishable {
       RepositoryCache.close(repository);
       return true;
     } catch (RepositoryNotFoundException e) {
-      log.error("Could not locate Repository {}", nameKey, e);
+      logger.atSevere().log("Could not locate Repository %s", nameKey, e);
     } catch (IOException e) {
-      log.error("Could not open Repository {}", nameKey, e);
+      logger.atSevere().log("Could not open Repository %s", nameKey, e);
     }
 
     return false;
@@ -249,16 +232,17 @@ public class ReplicatedProjectManager implements Replicator.GerritPublishable {
 
   /**
    * Remove the changes associated with the project on all nodes
-   * @param originalEvent
-   * @return
+   * @param deleteProjectChangeEvent : Event type used for the purpose of deleting open changes for a given project
+   * @return true if successfully performed a non replicated delete of the open changes.
    */
-  private boolean applyActionsForDeletingProjectChanges(DeleteProjectChangeEvent originalEvent) {
-    log.info("PROJECT event is about to remove the changes related to project {}. Original event was {}!", originalEvent.project.getName(), originalEvent);
+  private boolean applyActionsForDeletingProjectChanges(DeleteProjectChangeEvent deleteProjectChangeEvent) {
+    logger.atInfo().log("DeleteProjectChangeEvent event is about to remove the changes related to project %s. " +
+        "Original event was %s!", deleteProjectChangeEvent.project.getName(), deleteProjectChangeEvent);
     try {
-      ReplicatedIndexEventManager.getInstance().deleteChanges(originalEvent.changes);
+      ReplicatedIndexEventManager.getInstance().deleteChanges(deleteProjectChangeEvent.changes);
       return true;
     } catch (IOException e) {
-      log.error("Error while deleting changes ", e);
+      logger.atSevere().log("Error while deleting changes ", e);
     }
     return false;
  }

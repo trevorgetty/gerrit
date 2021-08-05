@@ -1,21 +1,29 @@
+/********************************************************************************
+ * Copyright (c) 2014-2020 WANdisco
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Apache License, Version 2.0
+ *
+ ********************************************************************************/
+
 package com.google.gerrit.server.replication;
 
 import com.google.common.flogger.FluentLogger;
 import com.google.gerrit.index.project.ProjectIndexer;
 import com.google.gerrit.reviewdb.client.Project;
-import com.google.gson.Gson;
-import com.google.gson.JsonSyntaxException;
-import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
 import com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator;
 import com.wandisco.gerrit.gitms.shared.ReplicationConstants;
+import com.wandisco.gerrit.gitms.shared.events.ReplicatedEvent;
 
 import java.io.IOException;
 
-public class ReplicatedProjectsIndexManager implements Replicator.GerritPublishable {
+public class ReplicatedProjectsIndexManager implements ReplicatedEventProcessor {
 
 	private static final FluentLogger logger = FluentLogger.forEnclosingClass();
-	private static final Gson gson = new Gson();
-
 	private ProjectIndexer indexer = null;
 	private Originator originator = null;
 
@@ -37,7 +45,8 @@ public class ReplicatedProjectsIndexManager implements Replicator.GerritPublisha
 	// Using instance variables, to avoid contention / thread issues now this is a non-singleton class.
 	private Replicator replicatorInstance = null;
 
-	public interface Factory {
+
+  public interface Factory {
 
 		/**
 		 * Returns a ReplicatedProjectsIndexManager instance.
@@ -92,55 +101,34 @@ public class ReplicatedProjectsIndexManager implements Replicator.GerritPublisha
   }
 
 
-
-	@Override
-	public boolean publishIncomingReplicatedEvents(EventWrapper newEvent) {
-		boolean result = false;
-
-		if (newEvent == null) {
-			logger.atFine().log("RC : Received null event");
-			return false;
-		}
-
-		if (newEvent.getEventOrigin() == originator) {
-			try {
-				Class<?> eventClass = Class.forName(newEvent.getClassName());
-				//Making the call for the local site.
-				//i.e we don't need to make a replicated reindex now as we are receiving the
-				//incoming replicated event to reindex.
-				result = reindexProject(newEvent, eventClass);
-			} catch (ClassNotFoundException e) {
-				logger.atSevere().withCause(e).log("RC Projects event reindex has been lost. Could not find %s",
-												   newEvent.getClassName());
-			}
-		}
-		return result;
-	}
+  /**
+   * Processes incoming ReplicatedEvent which is cast to a ProjectIndexEvent
+   * This method then calls reindexProject which will produce a non replicated local reindex
+   * of the Projects Index.
+   * Processes originator type PROJECTS_INDEX_EVENT
+   * @param replicatedEvent Base event type for all replicated events
+   * @return true if the local reindex of the Projects Index has been completed successfully.
+   * @throws IOException if there is an issue when deleting or adding to the local index.
+   */
+  @Override
+  public boolean processIncomingReplicatedEvent(final ReplicatedEvent replicatedEvent) throws IOException {
+      return replicatedEvent != null && reindexProject((ProjectIndexEvent) replicatedEvent);
+  }
 
 	/**
 	 * Local reindex of the Projects event.
 	 * This can be either a deletion from an index or an update to
    * an index.
-	 * @param newEvent: The event wrapped within the EventWrapper
-	 * @param eventClass : The class associated with the event type.
 	 * @return : Returns true if the indexing operation has completed.
 	 */
-  private boolean reindexProject(EventWrapper newEvent, Class<?> eventClass) {
-    try {
-      ProjectIndexEvent indexEvent = (ProjectIndexEvent) gson.fromJson(newEvent.getEvent(), eventClass);
+  private boolean reindexProject(ProjectIndexEvent projectIndexEvent) throws IOException {
       // If the index is to be deleted, indicated by the boolean flag in the ProjectIndexEvent
       // then we will delete the index. Otherwise it is a normal reindex.
-      if (indexEvent.isDeleteIndex()) {
-        indexer.deleteIndexNoRepl(indexEvent.getIdentifier());
+      if (projectIndexEvent.isDeleteIndex()) {
+        indexer.deleteIndexNoRepl(projectIndexEvent.getIdentifier());
       } else {
-        indexer.indexNoRepl(indexEvent.getIdentifier());
+        indexer.indexNoRepl(projectIndexEvent.getIdentifier());
       }
       return true;
-
-    } catch (JsonSyntaxException | IOException e) {
-      logger.atSevere().withCause(e).log("RC Project reindex, Could not decode json event %s",
-          newEvent.toString());
-      return false;
-    }
   }
 }
