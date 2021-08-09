@@ -78,7 +78,11 @@ function process_gerritms_assets(){
             ;;
         'console-api.jar') mvn_upload $WORKSPACE_PATH/$asset gerrit-console-api jar || exit 1
             ;;
-        *) echo "ERROR: Unknown asset $artifact, not performing the mvn deploy" && exit 1;
+        'extension-api.jar') mvn_upload $WORKSPACE_PATH/$asset gerrit-extension-api jar  || exit 1;
+            ;;
+        'plugin-api.jar') mvn_upload $WORKSPACE_PATH/$asset gerrit-plugin-api jar  || exit 1;
+            ;;
+        *) echo "WARNING: Unknown or unsupported asset $artifact, not performing the mvn deploy. NB we dont upload javadoc or srcs yet.";
             ;;
         esac
     done
