@@ -39,3 +39,7 @@ release.war
 target
 
 env\.properties
+
+**/.classpath
+**/.project
+**/.settings/
