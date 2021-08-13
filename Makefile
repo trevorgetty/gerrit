@@ -188,6 +188,15 @@ run-integration-tests: check_gitms_version check_build_assets | $(JENKINS_DIRECT
 	@echo "\n************ Integration Tests Finished **************"
 .PHONY: run-integration-tests
 
+# Lists important gerritms assets which are to be archived or deployed later.  Places this information into
+# an ASSETS_FOUND member, and also into the env.properties file for others to read e.g. in a jenkins job.
+list-assets:
+	@echo "\n************ Listing GerritMS Assets **************"
+	$(BUILD_TOOLS)/list_asset_locations.sh $(JENKINS_WORKSPACE) true
+	@echo "***********************************************************"
+.PHONY:list-assets
+
+
 deploy: deploy-all-gerrit
 .PHONY: deploy
 
