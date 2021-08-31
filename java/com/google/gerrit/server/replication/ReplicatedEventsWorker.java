@@ -212,7 +212,7 @@ public class ReplicatedEventsWorker implements Runnable, ReplicatedEventProcesso
    * read by the replicator. Using milliseconds so that the user can specify sub second
    * periods
    */
-  private boolean pollAndWriteOutgoingEvents() throws InterruptedException {
+  private boolean pollAndWriteOutgoingEvents() throws InterruptedException, IOException {
     boolean eventGot = false;
     Event newEvent;
     newEvent = queue.poll(replicatedEventsManager.getMaxSecsToWaitForEventOnQueue(),

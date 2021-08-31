@@ -11,6 +11,8 @@ import com.google.gson.GsonBuilder;
 import com.wandisco.gerrit.gitms.shared.events.DeleteProjectMessageEvent;
 import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
 
+import java.io.IOException;
+
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.CACHE_EVENT;
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.DELETE_PROJECT_EVENT;
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.DELETE_PROJECT_MESSAGE_EVENT;
@@ -31,7 +33,7 @@ public class GerritEventFactory {
       .create();
 
   public static EventWrapper createReplicatedChangeEvent(Event changeEvent,
-                                                         ReplicatedChangeEventInfo info){
+                                                         ReplicatedChangeEventInfo info) throws IOException {
     String eventString = gson.toJson(changeEvent);
     return new EventWrapper(eventString,
                             changeEvent.getClass().getName(),
@@ -50,7 +52,7 @@ public class GerritEventFactory {
    * @param cacheNameAndKey Wrapper around cache name to affect.
    * @return Outgoing cache event.
    */
-  public static EventWrapper createReplicatedAllProjectsCacheEvent(CacheKeyWrapper cacheNameAndKey){
+  public static EventWrapper createReplicatedAllProjectsCacheEvent(CacheKeyWrapper cacheNameAndKey) throws IOException {
     final String eventString = gson.toJson(cacheNameAndKey);
     final Object key = cacheNameAndKey.key;
     final String projectName = (key instanceof Project.NameKey) ? ((Project.NameKey)key).get() : key.toString();
@@ -62,7 +64,7 @@ public class GerritEventFactory {
   }
 
   public static EventWrapper createReplicatedProjectsIndexEvent(String projectName,
-                                                                ProjectIndexEvent indexEvent){
+                                                                ProjectIndexEvent indexEvent) throws IOException {
     final String eventString = gson.toJson(indexEvent);
     return new EventWrapper(eventString,
                             indexEvent.getClass().getName(),
@@ -70,7 +72,7 @@ public class GerritEventFactory {
                             PROJECTS_INDEX_EVENT);
   }
 
-  public static EventWrapper createReplicatedCacheEvent(String projectName, CacheKeyWrapper cacheNameAndKey){
+  public static EventWrapper createReplicatedCacheEvent(String projectName, CacheKeyWrapper cacheNameAndKey) throws IOException {
     String eventString = gson.toJson(cacheNameAndKey);
     return new EventWrapper(eventString,
                             cacheNameAndKey.getClass().getName(),
@@ -78,7 +80,7 @@ public class GerritEventFactory {
                             CACHE_EVENT);
   }
 
-  public static EventWrapper createReplicatedIndexEvent(ReplicatedIndexEventsWorker.IndexToReplicate indexToReplicate){
+  public static EventWrapper createReplicatedIndexEvent(ReplicatedIndexEventsWorker.IndexToReplicate indexToReplicate) throws IOException {
     String eventString = gson.toJson(indexToReplicate);
     return new EventWrapper(eventString,
                             indexToReplicate.getClass().getName(),
@@ -86,7 +88,7 @@ public class GerritEventFactory {
                             INDEX_EVENT);
   }
 
-  public static EventWrapper createReplicatedDeleteProjectChangeEvent(DeleteProjectChangeEvent deleteProjectChangeEvent){
+  public static EventWrapper createReplicatedDeleteProjectChangeEvent(DeleteProjectChangeEvent deleteProjectChangeEvent) throws IOException {
     String eventString = gson.toJson(deleteProjectChangeEvent);
     return new EventWrapper(eventString,
                             deleteProjectChangeEvent.getClass().getName(),
@@ -94,7 +96,7 @@ public class GerritEventFactory {
                             DELETE_PROJECT_EVENT);
   }
 
-  public static EventWrapper createReplicatedDeleteProjectEvent(ProjectInfoWrapper projectInfoWrapper){
+  public static EventWrapper createReplicatedDeleteProjectEvent(ProjectInfoWrapper projectInfoWrapper) throws IOException {
     String eventString = gson.toJson(projectInfoWrapper);
     return new EventWrapper(eventString,
                             projectInfoWrapper.getClass().getName(),
@@ -102,7 +104,7 @@ public class GerritEventFactory {
                             DELETE_PROJECT_EVENT);
   }
 
-  public static EventWrapper createReplicatedDeleteProjectMessageEvent(DeleteProjectMessageEvent deleteProjectMessageEvent ){
+  public static EventWrapper createReplicatedDeleteProjectMessageEvent(DeleteProjectMessageEvent deleteProjectMessageEvent ) throws IOException {
     String eventString = gson.toJson(deleteProjectMessageEvent);
     return new EventWrapper(eventString,
                             deleteProjectMessageEvent.getClass().getName(),
@@ -113,7 +115,7 @@ public class GerritEventFactory {
   //Will create an EventWrapper for either an ACCOUNT_USER_INDEX_EVENT or a ACCOUNT_GROUP_INDEX_EVENT
   public static EventWrapper createReplicatedAccountIndexEvent(String projectName,
                                                                AccountIndexEventBase accountIndexEventBase,
-                                                               EventWrapper.Originator originator){
+                                                               EventWrapper.Originator originator) throws IOException {
     String eventString = gson.toJson(accountIndexEventBase);
     return new EventWrapper(eventString,
                             accountIndexEventBase.getClass().getName(),

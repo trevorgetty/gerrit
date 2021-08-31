@@ -91,7 +91,7 @@ public class ReplicatedProjectsIndexManager implements ReplicatedEventProcessor 
    * whether or not the index event is to delete the project from the index.
    * @param nameKey: The name of the project to replicate the reindex for.
    */
-  public void replicateReindex(Project.NameKey nameKey, boolean deleteFromIndex) {
+  public void replicateReindex(Project.NameKey nameKey, boolean deleteFromIndex) throws IOException {
 
     ProjectIndexEvent indexEvent = new ProjectIndexEvent(nameKey,
         replicatorInstance.getThisNodeIdentity(), deleteFromIndex);

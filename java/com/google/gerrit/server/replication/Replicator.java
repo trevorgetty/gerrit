@@ -52,7 +52,6 @@ import java.util.zip.GZIPInputStream;
 
 import com.wandisco.gerrit.gitms.shared.events.ChainedEventComparator;
 import com.wandisco.gerrit.gitms.shared.events.EventNanoTimeComparator;
-import com.wandisco.gerrit.gitms.shared.events.EventTime;
 import com.wandisco.gerrit.gitms.shared.events.EventTimestampComparator;
 import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
 
@@ -859,24 +858,27 @@ public class Replicator implements Runnable {
   }
 
   /**
-   * Recreate wrapped events and builds a list of EventData objects which
-   * are used to sort upon. EventData object contain the eventTimestamp,
-   * eventNanoTime of the event along with the EventWrapper object. A sort is
-   * performed using a comparator which sorts on both times of the object.
-   * @param eventsBytes
-   * @return
-   * @throws IOException
+   * Recreates EventWrapper instances from the event bytes and builds a list of
+   * EventWrapper objects which are used to sort upon. When an EventWrapper is
+   * constructed it builds a GerritEventData instance with the eventTimestamp & eventNanoTime
+   * of the JSON event string. A sort is performed using a comparator which
+   * sorts on both times of the object.
+   * @param eventsBytes : The bytes of the event string
+   * @return A sorted list of EventWrapper instances.
+   * @throws InvalidEventJsonException : If invalid JSON encountered in the EventWrapper instance.
    */
-  private List<EventTime> sortEvents(byte[] eventsBytes) throws IOException, InvalidEventJsonException {
+  private List<EventWrapper> checkAndSortEvents(byte[] eventsBytes) throws InvalidEventJsonException {
 
-    List<EventTime> eventDataList = new ArrayList<>();
+    List<EventWrapper> eventDataList = new ArrayList<>();
     String[] events =
             new String(eventsBytes, StandardCharsets.UTF_8).split("\n");
 
     for (String event : events) {
+
       if(event == null){
         throw new InvalidEventJsonException("Event file is invalid, missing / null events.");
       }
+
       EventWrapper originalEvent;
       try {
         originalEvent = gson.fromJson(event, EventWrapper.class);
@@ -885,12 +887,11 @@ public class Replicator implements Runnable {
                                                           event, e.getMessage()));
       }
 
-      GerritEventData eventData =
-              ObjectUtils.createObjectFromJson(originalEvent.getEvent(), GerritEventData.class);
-
-      eventDataList.add(new EventTime(
-              Long.parseLong(eventData.getEventTimestamp()),
-              Long.parseLong(eventData.getEventNanoTime()), originalEvent));
+      // Only adding instances of EventWrapper to the list for sorting after they've had their event JSON
+      // checked for validity.
+      if (checkValidEventWrapperJson(originalEvent)){
+        eventDataList.add(originalEvent);
+      }
     }
 
     //sort the event data list using a chained comparator.
@@ -898,6 +899,28 @@ public class Replicator implements Runnable {
             new EventTimestampComparator(),
             new EventNanoTimeComparator()));
     return eventDataList;
+  }
+
+
+  /**
+   * Check that the event JSON as part of the EventWrapper is well formed. If not throw and InvalidEventJsonException.
+   * @param originalEvent : The EventWrapper instance. Calling getEvent() will get event string for
+   *                      the instance.
+   * @return true if valid event JSON
+   * @throws InvalidEventJsonException if invalid event JSON.
+   */
+  private boolean checkValidEventWrapperJson(EventWrapper originalEvent) throws InvalidEventJsonException {
+    if(originalEvent == null){
+      throw new InvalidEventJsonException("Internal error: event is null after deserialization");
+    }
+    // If the JSON is invalid we will not have been able to get eventTimestamp or eventNanoTime information
+    // from it required for sorting, so all we can do is throw an exception here. If the JSON is empty this case
+    // will cover {} or ""
+    if (originalEvent.getEvent().length() <= 2) {
+      throw new InvalidEventJsonException("Internal error, event JSON is invalid ");
+    }
+
+    return true;
   }
 
 
@@ -931,47 +954,19 @@ public class Replicator implements Runnable {
     Stats.totalPublishedForeignEventsProsals++;
     int failedEvents = 0;
 
-    List<EventTime> sortedEvents = null;
+    List<EventWrapper> sortedEvents = null;
+
     try {
-      sortedEvents = sortEvents(eventsBytes);
-    } catch (IOException | InvalidEventJsonException e) {
+      sortedEvents = checkAndSortEvents(eventsBytes);
+    } catch (InvalidEventJsonException e) {
       logger.atSevere().log("RE Unable to sort events as there are invalid events in the event file %s",
-                e.getMessage());
+          e.getMessage());
       failedEvents++;
     }
 
     if(sortedEvents != null){
-      for (EventTime event: sortedEvents) {
+      for (EventWrapper originalEvent: sortedEvents) {
         Stats.totalPublishedForeignEvents++;
-        EventWrapper originalEvent = event.getEventWrapper();
-
-        if (originalEvent == null) {
-          logger.atSevere().log("RE fromJson method returned null for event -> " +
-                                "eventTimestamp[%d] | eventNanoTime[%d]",
-                                event.getEventTimestamp(), event.getEventNanoTime());
-          failedEvents++;
-          continue;
-        }
-
-        if (originalEvent.getEvent().isEmpty()) {
-          logger.atSevere().withCause(
-                  new Exception(String.format("Internal error, event is empty -> " +
-                                              "eventTimestamp[%d] | eventNanoTime[%d]",
-                                              event.getEventTimestamp(), event.getEventNanoTime())))
-                .log("RE event GSON string is invalid!");
-          failedEvents++;
-          continue;
-        }
-
-        if (originalEvent.getEvent().length() <= 2) {
-          logger.atSevere().withCause(
-                  new Exception(String.format("Internal error, event is invalid -> " +
-                                              "eventTimestamp[%d] | eventNanoTime[%d]",
-                                              event.getEventTimestamp(), event.getEventNanoTime())))
-                .log("RE event GSON string is invalid!");
-          failedEvents++;
-          continue;
-        }
 
         try {
           Stats.totalPublishedForeignGoodEventsBytes += eventsBytes.length;

@@ -122,7 +122,7 @@ public class ReplicatedAccountsIndexManager implements ReplicatedEventProcessor 
    *
    * @param identifier
    */
-  public void replicateReindex(Serializable identifier) {
+  public void replicateReindex(Serializable identifier) throws IOException {
 
     AccountIndexEventBase accountIndexEventBase = null;
     if (identifier instanceof Account.Id) {

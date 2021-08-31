@@ -25,6 +25,7 @@ import com.wandisco.gerrit.gitms.shared.events.ReplicatedEvent;
 
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.CACHE_EVENT;
 
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -236,14 +237,22 @@ public class ReplicatedCacheManager implements ReplicatedEventProcessor {
     CacheKeyWrapper cacheKeyWrapper = new CacheKeyWrapper(cacheName, key,
         Objects.requireNonNull(Replicator.getInstance()).getThisNodeIdentity());
 
-    EventWrapper eventWrapper = GerritEventFactory.createReplicatedAllProjectsCacheEvent(cacheKeyWrapper);
-    logger.atFine().log("CACHE About to call replicated cache event: %s, %s", cacheName, key);
-
-    //Block to force cache update to the All-Users repo so it is triggered in sequence after event that caused the eviction.
-    if(getCacheEvictList().contains(cacheName)){
-      logger.atFine().log("CACHE User Cache event setting update against All-Users Project %s,%s", cacheName, key);
-      eventWrapper = GerritEventFactory.createReplicatedCacheEvent("All-Users", cacheKeyWrapper);
+    EventWrapper eventWrapper;
+    try {
+      //Block to force cache update to the All-Users repo so it is triggered in sequence after event that caused the eviction.
+      if (getCacheEvictList().contains(cacheName)) {
+        logger.atFine().log("CACHE User Cache event setting update against All-Users Project %s,%s", cacheName, key);
+        eventWrapper = GerritEventFactory.createReplicatedCacheEvent("All-Users", cacheKeyWrapper);
+      } else {
+        //All-Projects cache event
+        logger.atFine().log("CACHE About to call replicated cache event for All-Projects: %s, %s", cacheName, key);
+        eventWrapper = GerritEventFactory.createReplicatedAllProjectsCacheEvent(cacheKeyWrapper);
+      }
+    } catch (IOException e){
+      logger.atSevere().log("Unable to create EventWrapper instance from replicated cache event");
+      return;
     }
+
     Replicator.getInstance().queueEventForReplication(eventWrapper);
     evictionsSent.add(cacheName);
   }
@@ -256,7 +265,7 @@ public class ReplicatedCacheManager implements ReplicatedEventProcessor {
    * @param methodName : Method name which can be a declared method and not just public access methods.
    * @param key : The key is the Project.NameKey project name.
    */
-  public static void replicateMethodCallFromCache(String cacheName, String methodName, Object key) {
+  public static void replicateMethodCallFromCache(String cacheName, String methodName, Object key) throws IOException {
     if (Replicator.isReplicationDisabled()) {
       return;
     }

@@ -52,13 +52,13 @@ public class ReplicatedProjectManager implements ReplicatedEventProcessor {
     }
   }
 
-  public static void replicateProjectDeletion(String projectName, boolean preserve, String taskUuid) {
+  public static void replicateProjectDeletion(String projectName, boolean preserve, String taskUuid) throws IOException {
     ProjectInfoWrapper projectInfoWrapper = new ProjectInfoWrapper(projectName, preserve, taskUuid, Replicator.getInstance().getThisNodeIdentity());
     logger.atInfo().log("PROJECT About to call replicated project deletion event: %s, %s, %s", projectName, preserve, taskUuid);
     Replicator.getInstance().queueEventForReplication(GerritEventFactory.createReplicatedDeleteProjectEvent(projectInfoWrapper));
   }
 
-  public static void replicateProjectChangeDeletion(Project project, boolean preserve, List<Change.Id> changesToBeDeleted, String taskUuid) {
+  public static void replicateProjectChangeDeletion(Project project, boolean preserve, List<Change.Id> changesToBeDeleted, String taskUuid) throws IOException {
     DeleteProjectChangeEvent deleteProjectChangeEvent =
         new DeleteProjectChangeEvent(project, preserve, changesToBeDeleted, taskUuid, Replicator.getInstance().getThisNodeIdentity());
     logger.atInfo().log("PROJECT About to call replicated project change deletion event: %s, %s, %s, %s",
@@ -75,7 +75,7 @@ public class ReplicatedProjectManager implements ReplicatedEventProcessor {
    * @param taskUuid : unique UUID which allows for tracking the delete request.
    */
   public static void deleteProjectSingleNodeGroup(Project project, boolean preserve,
-                                                  final String taskUuid) {
+                                                  final String taskUuid) throws IOException {
 
     //Delete the project from the jgit cache on a single node
     boolean jgitCacheChangesRemoved = applyActionsForDeletingProject(
@@ -100,7 +100,7 @@ public class ReplicatedProjectManager implements ReplicatedEventProcessor {
    * @param deleteFromDisk : boolean whether to delete project from disk or not
    * @param name : name of the repository to either delete from disk or to delete changes for.
    */
-  private static void createDeleteProjectMessageEvent(String taskUuid, boolean deleteFromDisk, String name) {
+  private static void createDeleteProjectMessageEvent(String taskUuid, boolean deleteFromDisk, String name) throws IOException {
     Replicator replicator = Replicator.getInstance();
     DeleteProjectMessageEvent deleteProjectMessageEvent;
     if (deleteFromDisk) {
@@ -164,7 +164,7 @@ public class ReplicatedProjectManager implements ReplicatedEventProcessor {
    * @return true if we succeed in deleting the project from the jgit cache and we are able to send
    * a DeleteProjectMessageEvent with the data from the ProjectInfoWrapper.
    */
-  private boolean deleteProject(ProjectInfoWrapper projectInfoWrapper) {
+  private boolean deleteProject(ProjectInfoWrapper projectInfoWrapper) throws IOException {
     boolean result;
 
     if (projectInfoWrapper == null) {
