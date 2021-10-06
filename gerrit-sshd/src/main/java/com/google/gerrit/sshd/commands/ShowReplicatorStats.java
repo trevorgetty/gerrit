@@ -14,11 +14,12 @@
 package com.google.gerrit.sshd.commands;
 
 import com.google.common.collect.ImmutableMultiset;
-import com.google.gerrit.common.Replicator;
 import com.google.gerrit.common.Version;
 import static com.google.gerrit.sshd.CommandMetaData.Mode.MASTER_OR_SLAVE;
 
 import com.google.gerrit.common.data.GlobalCapability;
+import com.google.gerrit.common.replication.ReplicatedConfiguration;
+import com.google.gerrit.common.replication.ReplicatorMetrics;
 import com.google.gerrit.extensions.annotations.RequiresCapability;
 import com.google.gerrit.extensions.events.LifecycleListener;
 import com.google.gerrit.server.IdentifiedUser;
@@ -32,11 +33,14 @@ import com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator;
 
 import org.apache.sshd.server.Environment;
 
+import java.io.File;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Objects;
 
-/** Show the current Wandisco Replicator Statistics */
+
+/** Show the current WANdisco Replicator Statistics */
 @RequiresCapability(GlobalCapability.VIEW_REPLICATOR_STATS)
 @CommandMetaData(name = "show-replicator-stats", description = "Display statistics from the WD replicator",
   runsAt = MASTER_OR_SLAVE)
@@ -45,6 +49,8 @@ final class ShowReplicatorStats extends SshCommand {
 
   @Inject
   private IdentifiedUser currentUser;
+  @Inject
+  private ReplicatedConfiguration replicatedConfiguration;
 
   static class StartupListener implements LifecycleListener {
     @Override
@@ -82,15 +88,13 @@ final class ShowReplicatorStats extends SshCommand {
         uptime(now.getTime() - serverStarted));
     stdout.print('\n');
 
-    Replicator repl = Replicator.getInstance();
-
     stdout.print("---------------------------------------------------------------------------+\n");
     stdout.print(String.format("%-30s | %19s | %19s |\n", //
         "Statistic", "Sent", "Received"));
     stdout.print("---------------------------------------------------------------------------+\n");
 
-    ImmutableMultiset<Originator> totalPublishedForeignEventsByType = repl.getTotalPublishedForeignEventsByType();
-    ImmutableMultiset<Originator> totalPublishedLocalEventsByType = repl.getTotalPublishedLocalEventsByType();
+    ImmutableMultiset<Originator> totalPublishedForeignEventsByType = ReplicatorMetrics.getTotalPublishedForeignEventsByType();
+    ImmutableMultiset<Originator> totalPublishedLocalEventsByType = ReplicatorMetrics.getTotalPublishedLocalEventsByType();
 
     for(Originator orig: Originator.values()) {
       stdout.print(String.format("%-30s | %19s | %19s |\n", //
@@ -100,27 +104,27 @@ final class ShowReplicatorStats extends SshCommand {
     }
     stdout.print(String.format("%-30s | %19s | %19s |\n", //
         "Total published events:",
-        repl.getTotalPublishedLocalEvents(),
-        repl.getTotalPublishedForeignEvents()));
+        ReplicatorMetrics.getTotalPublishedLocalEvents(),
+        ReplicatorMetrics. getTotalPublishedForeignEvents()));
     stdout.print(String.format("%-30s | %19s | %19s |\n", //
         "      of which with errors:",
-        repl.getTotalPublishedLocalEvents()-repl.getTotalPublishedLocalGoodEvents(),
-        repl.getTotalPublishedForeignEvents()-repl.getTotalPublishedForeignGoodEvents()));
+        ReplicatorMetrics.getTotalPublishedLocalEvents()-ReplicatorMetrics.getTotalPublishedLocalGoodEvents(),
+        ReplicatorMetrics.getTotalPublishedForeignEvents()-ReplicatorMetrics.getTotalPublishedForeignGoodEvents()));
     stdout.print(String.format("%-30s | %19s | %19s |\n", //
         "Total bytes published:",
-        repl.getTotalPublishedLocalEventsBytes(),
-        repl.getTotalPublishedForeignEventsBytes()));
+        ReplicatorMetrics.getTotalPublishedLocalEventsBytes(),
+        ReplicatorMetrics.getTotalPublishedForeignEventsBytes()));
     stdout.print(String.format("%-30s | %19s | %19s |\n", //
         "Total MiB published:",
-        (repl.getTotalPublishedLocalEventsBytes()*10/(1024*1024))/10.0,
-        (repl.getTotalPublishedForeignEventsBytes()*10/(1024*1024))/10.0));
+        (ReplicatorMetrics.getTotalPublishedLocalEventsBytes()*10/(1024*1024))/10.0,
+        (ReplicatorMetrics.getTotalPublishedForeignEventsBytes()*10/(1024*1024))/10.0));
     stdout.print(String.format("%-30s | %19s | %19s |\n", //
         "Total gzipped MiB published:",
-        (repl.getTotalPublishedLocalEventsBytes()*6/100/(1024*1024)*10)/10.0,
-        (repl.getTotalPublishedForeignEventsBytes()*6/100/(1024*1024)*10)/10.0));
+        (ReplicatorMetrics.getTotalPublishedLocalEventsBytes()*6/100/(1024*1024)*10)/10.0,
+        (ReplicatorMetrics.getTotalPublishedForeignEventsBytes()*6/100/(1024*1024)*10)/10.0));
 
-    long localProposals = repl.getTotalPublishedLocalEventsProsals();
-    long foreignProposals = repl.getTotalPublishedForeignEventsProsals();
+    long localProposals = ReplicatorMetrics.getTotalPublishedLocalEventsProposals();
+    long foreignProposals = ReplicatorMetrics.getTotalPublishedForeignEventsProsals();
 
     stdout.print(String.format("%-30s | %19s | %19s |\n", //
         "Total proposals published:",
@@ -129,25 +133,67 @@ final class ShowReplicatorStats extends SshCommand {
 
     stdout.print(String.format("%-30s | %19s | %19s |\n", //
         "Avg Events/proposal:",
-        localProposals == 0 ? "n/a": (repl.getTotalPublishedLocalEvents()*10/localProposals)/10.0,
-        foreignProposals == 0 ? "n/a": (repl.getTotalPublishedForeignEvents()*10/foreignProposals)/10.0));
+        localProposals == 0 ? "n/a": (ReplicatorMetrics.getTotalPublishedLocalEvents()*10/localProposals)/10.0,
+        foreignProposals == 0 ? "n/a": (ReplicatorMetrics.getTotalPublishedForeignEvents()*10/foreignProposals)/10.0));
 
     stdout.print(String.format("%-30s | %19s | %19s |\n", //
         "Avg bytes/proposal:",
-        localProposals == 0 ? "n/a": repl.getTotalPublishedLocalEventsBytes()/localProposals,
-        foreignProposals == 0 ? "n/a": repl.getTotalPublishedForeignEventsBytes()/foreignProposals));
+        localProposals == 0 ? "n/a": ReplicatorMetrics.getTotalPublishedLocalEventsBytes()/localProposals,
+        foreignProposals == 0 ? "n/a": ReplicatorMetrics.getTotalPublishedForeignEventsBytes()/foreignProposals));
     stdout.print(String.format("%-30s | %19s | %19s |\n", //
         "Avg gzipped bytes/proposal:",
-        localProposals == 0 ? "n/a": repl.getTotalPublishedLocalEventsBytes()*6/100/localProposals,
-        foreignProposals == 0 ? "n/a": repl.getTotalPublishedForeignEventsBytes()*6/100/foreignProposals));
+        localProposals == 0 ? "n/a": ReplicatorMetrics.getTotalPublishedLocalEventsBytes()*6/100/localProposals,
+        foreignProposals == 0 ? "n/a": ReplicatorMetrics.getTotalPublishedForeignEventsBytes()*6/100/foreignProposals));
     stdout.print(String.format("%-30s | %19s | %19s |\n", //
-        "Files in Incoming directory:", "n/a",repl.getIncomingDirFileCount()));
+        "Files in Incoming directory:", "n/a",getIncomingDirFileCount()));
     stdout.print(String.format("%-30s | %19s | %19s |\n", //
-        "Files in Outgoing directory:", "n/a",repl.getOutgoingDirFileCount()));
+        "Files in Outgoing directory:", "n/a",getOutgoingDirFileCount()));
 
     stdout.println();
   }
-  
+
+  public int getIncomingDirFileCount() {
+    int result = -1;
+    if (replicatedConfiguration.getIncomingFailedReplEventsDirectory() != null) {
+      long now = System.currentTimeMillis();
+      if (now - ReplicatorMetrics.lastCheckedIncomingDirTime > ReplicatorMetrics.DEFAULT_STATS_UPDATE_TIME) {
+        // we cache the last result for lastCheckedIncomingDirTime ms, so that
+        // continuous requests do not disturb
+        File[] listFilesResult =
+            replicatedConfiguration.getIncomingFailedReplEventsDirectory().listFiles();
+
+        if (listFilesResult != null) {
+          ReplicatorMetrics.lastIncomingDirValue = listFilesResult.length;
+
+          result = ReplicatorMetrics.lastIncomingDirValue;
+        }
+        ReplicatorMetrics.lastCheckedIncomingDirTime = now;
+      }
+    }
+    return result;
+  }
+
+  public int getOutgoingDirFileCount() {
+    int result = -1;
+    if (replicatedConfiguration.getOutgoingReplEventsDirectory() != null) {
+      long now = System.currentTimeMillis();
+      if (now - ReplicatorMetrics.lastCheckedOutgoingDirTime > ReplicatorMetrics.DEFAULT_STATS_UPDATE_TIME) {
+        // we cache the last result for lastCheckedOutgoingDirTime ms, so that
+        // continuous requests do not disturb
+        File[] listFilesResult =
+            replicatedConfiguration.getOutgoingReplEventsDirectory().listFiles();
+
+        if (listFilesResult != null) {
+          ReplicatorMetrics.lastOutgoingDirValue = listFilesResult.length;
+
+          result = ReplicatorMetrics.lastOutgoingDirValue;
+        }
+        ReplicatorMetrics.lastCheckedOutgoingDirTime = now;
+      }
+    }
+    return result;
+  }
+
   // Copied from ShowCaches.java to print the uptime
   private String uptime(long uptimeMillis) {
     if (uptimeMillis < 1000) {

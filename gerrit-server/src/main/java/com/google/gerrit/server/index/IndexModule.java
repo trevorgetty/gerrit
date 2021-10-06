@@ -60,11 +60,13 @@ public class IndexModule extends LifecycleModule {
   }
 
   public static final ImmutableCollection<SchemaDefinitions<?>> ALL_SCHEMA_DEFS =
-      ImmutableList.<SchemaDefinitions<?>> of(
+      ImmutableList.<SchemaDefinitions<?>>of(
           AccountSchemaDefinitions.INSTANCE,
           ChangeSchemaDefinitions.INSTANCE);
 
-  /** Type of secondary index. */
+  /**
+   * Type of secondary index.
+   */
   public static IndexType getIndexType(Injector injector) {
     Config cfg = injector.getInstance(
         Key.get(Config.class, GerritServerConfig.class));
@@ -82,7 +84,7 @@ public class IndexModule extends LifecycleModule {
   }
 
   public IndexModule(ListeningExecutorService interactiveExecutor,
-      ListeningExecutorService batchExecutor) {
+                     ListeningExecutorService batchExecutor) {
     this.threads = -1;
     this.interactiveExecutor = interactiveExecutor;
     this.batchExecutor = batchExecutor;
@@ -106,7 +108,7 @@ public class IndexModule extends LifecycleModule {
       AccountIndexDefinition accounts,
       ChangeIndexDefinition changes) {
     Collection<IndexDefinition<?, ?, ?>> result =
-        ImmutableList.<IndexDefinition<?, ?, ?>> of(
+        ImmutableList.<IndexDefinition<?, ?, ?>>of(
             accounts,
             changes);
     Set<String> expected = FluentIterable.from(ALL_SCHEMA_DEFS)
@@ -126,7 +128,7 @@ public class IndexModule extends LifecycleModule {
     if (!expected.equals(actual)) {
       throw new ProvisionException(
           "need index definitions for all schemas: "
-          + expected + " != " + actual);
+              + expected + " != " + actual);
     }
     return result;
   }
@@ -134,7 +136,7 @@ public class IndexModule extends LifecycleModule {
   @Provides
   @Singleton
   AccountIndexer getAccountIndexer(AccountIndexerImpl.Factory factory,
-      AccountIndexCollection indexes) {
+                                   AccountIndexCollection indexes) {
     return factory.create(indexes);
   }
 

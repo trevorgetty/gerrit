@@ -30,8 +30,8 @@ package com.google.gerrit.server.project;
 import com.google.auto.value.AutoValue;
 import com.google.common.cache.Cache;
 import com.google.common.collect.ImmutableList;
-import com.google.gerrit.common.ReplicatedCacheManager;
 import com.google.gerrit.common.data.AccessSection;
+import com.google.gerrit.common.replication.coordinators.ReplicatedEventsCoordinator;
 import com.google.gerrit.server.cache.CacheModule;
 import com.google.gerrit.server.util.MostSpecificComparator;
 import com.google.inject.Inject;
@@ -66,15 +66,21 @@ public class SectionSortCache {
   }
 
   private final Cache<EntryKey, EntryVal> cache;
+  private final ReplicatedEventsCoordinator replicatedEventsCoordinator;
 
   @Inject
-  SectionSortCache(@Named(CACHE_NAME) Cache<EntryKey, EntryVal> cache) {
+  SectionSortCache(@Named(CACHE_NAME) Cache<EntryKey, EntryVal> cache, ReplicatedEventsCoordinator replicatedEventsCoordinator) {
     this.cache = cache;
+    this.replicatedEventsCoordinator = replicatedEventsCoordinator;
     attachToReplication();
   }
 
   final void attachToReplication() {
-    ReplicatedCacheManager.watchCache(CACHE_NAME, this.cache);
+    if (replicatedEventsCoordinator == null || !replicatedEventsCoordinator.isGerritIndexerRunning()) {
+      log.info("Replication is disabled - not hooking in SectionSortCache listeners.");
+      return;
+    }
+    replicatedEventsCoordinator.getReplicatedIncomingCacheEventProcessor().watchCache(CACHE_NAME, this.cache);
   }
 
   void sort(String ref, List<AccessSection> sections) {

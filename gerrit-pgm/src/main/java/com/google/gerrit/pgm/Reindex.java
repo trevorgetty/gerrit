@@ -22,6 +22,9 @@ import com.google.common.collect.FluentIterable;
 import com.google.common.collect.Ordering;
 import com.google.common.collect.Sets;
 import com.google.gerrit.common.Die;
+import com.google.gerrit.common.replication.ReplicatedConfiguration;
+import com.google.gerrit.common.replication.modules.DummyReplicationModule;
+import com.google.gerrit.common.replication.modules.ReplicationModule;
 import com.google.gerrit.extensions.config.FactoryModule;
 import com.google.gerrit.lifecycle.LifecycleManager;
 import com.google.gerrit.lucene.LuceneIndexModule;
@@ -174,6 +177,7 @@ public class Reindex extends SiteProgram {
     }
     modules.add(indexModule);
     modules.add(dbInjector.getInstance(BatchProgramModule.class));
+
     modules.add(new FactoryModule() {
       @Override
       protected void configure() {

@@ -30,7 +30,6 @@ package com.google.gerrit.server.edit;
 import static com.google.common.base.Preconditions.checkArgument;
 
 import com.google.common.base.Optional;
-import com.google.gerrit.common.ReplicatedProjectManager;
 import com.google.gerrit.common.TimeUtil;
 import com.google.gerrit.extensions.client.ChangeKind;
 import com.google.gerrit.extensions.restapi.AuthException;
@@ -111,8 +110,6 @@ public class ChangeEditUtil {
     this.changeKindCache = changeKindCache;
     this.updateFactory = updateFactory;
     this.psUtil = psUtil;
-
-    ReplicatedProjectManager.setRepoManager(gitManager);
   }
 
   /**

@@ -19,6 +19,9 @@ import static com.google.inject.Scopes.SINGLETON;
 import com.google.common.cache.Cache;
 import com.google.common.collect.ImmutableSet;
 import com.google.gerrit.common.data.GroupReference;
+import com.google.gerrit.common.replication.ReplicatedConfiguration;
+import com.google.gerrit.common.replication.modules.DummyReplicationModule;
+import com.google.gerrit.common.replication.modules.ReplicationModule;
 import com.google.gerrit.extensions.api.projects.CommentLinkInfo;
 import com.google.gerrit.extensions.config.FactoryModule;
 import com.google.gerrit.extensions.registration.DynamicMap;
@@ -69,7 +72,9 @@ import com.google.gerrit.server.project.ProjectControl;
 import com.google.gerrit.server.project.ProjectState;
 import com.google.gerrit.server.project.SectionSortCache;
 import com.google.gerrit.server.query.change.ChangeData;
+import com.google.inject.Guice;
 import com.google.inject.Inject;
+import com.google.inject.Injector;
 import com.google.inject.Module;
 import com.google.inject.TypeLiteral;
 import com.google.inject.util.Providers;
@@ -105,6 +110,13 @@ public class BatchProgramModule extends FactoryModule {
     install(new DiffExecutorModule());
     install(new ReceiveCommitsExecutorModule());
     install(PatchListCacheImpl.module());
+
+    /* BatchProgramModule is used by Reindex and RebuildNoteDb entry-points. These should not be replicated.
+     Therefore we do not want to bind the ReplicationModule. We only bind the DummyReplicationModule.
+     Here we are setting a wandisco section and key/val pair for stating that replication is disabled */
+    cfg.setBoolean("wandisco", null, "gerritmsReplicationDisabled", true);
+    install(new ReplicatedConfiguration.Module());
+    install(new DummyReplicationModule());
 
     // Plugins are not loaded and we're just running through each change
     // once, so don't worry about cache removal.

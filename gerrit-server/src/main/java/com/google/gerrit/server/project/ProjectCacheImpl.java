@@ -34,9 +34,8 @@ import com.google.common.cache.LoadingCache;
 import com.google.common.collect.FluentIterable;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Sets;
+import com.google.gerrit.common.replication.coordinators.ReplicatedEventsCoordinator;
 import com.google.gerrit.extensions.events.LifecycleListener;
-import com.google.gerrit.common.ReplicatedCacheManager;
-import com.google.gerrit.common.ReplicatedProjectManager;
 import com.google.gerrit.reviewdb.client.AccountGroup;
 import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.server.cache.CacheModule;
@@ -75,6 +74,7 @@ public class ProjectCacheImpl implements ProjectCache {
 
   private static final String CACHE_NAME = "projects";
   private static final String CACHE_LIST = "project_list";
+  public static String projectCache = "ProjectCacheImpl";
 
   private static final Predicate<AccountGroup.UUID> NON_NULL_UUID =
       new Predicate<AccountGroup.UUID>() {
@@ -112,6 +112,7 @@ public class ProjectCacheImpl implements ProjectCache {
   private final LoadingCache<ListKey, SortedSet<Project.NameKey>> list;
   private final Lock listLock;
   private final ProjectCacheClock clock;
+  private final ReplicatedEventsCoordinator replicatedEventsCoordinator;
 
   @Inject
   ProjectCacheImpl(
@@ -119,7 +120,8 @@ public class ProjectCacheImpl implements ProjectCache {
       final AllUsersName allUsersName,
       @Named(CACHE_NAME) LoadingCache<String, ProjectState> byName,
       @Named(CACHE_LIST) LoadingCache<ListKey, SortedSet<Project.NameKey>> list,
-      ProjectCacheClock clock) {
+      ProjectCacheClock clock,
+      ReplicatedEventsCoordinator replicatedEventsCoordinator) {
     this.allProjectsName = allProjectsName;
     this.allUsersName = allUsersName;
     this.byName = byName;
@@ -127,14 +129,46 @@ public class ProjectCacheImpl implements ProjectCache {
     this.listLock = new ReentrantLock(true /* fair */);
     this.clock = clock;
 
+    /* WD Replicatation support */
+    this.replicatedEventsCoordinator = replicatedEventsCoordinator;
+    /* We may wish to check the isGerritRunning flag and only hook in for the daemon or supported replicated
+    entry points.  Or use dummy coordinator bindings.
+     */
     attachToReplication();
   }
 
   final void attachToReplication() {
-    ReplicatedCacheManager.watchCache(CACHE_NAME, this.byName);
-    ReplicatedCacheManager.watchCache(CACHE_LIST, this.list); // it's never evicted in the code below
-    ReplicatedCacheManager.watchObject(ReplicatedCacheManager.projectCache,this);
-    ReplicatedProjectManager.enableReplicatedProjectManager();
+    if (!replicatedEventsCoordinator.isGerritIndexerRunning()) {
+      log.info("Replication is disabled - not hooking in ProjectCache listeners.");
+      return;
+    }
+    replicatedEventsCoordinator.getReplicatedIncomingCacheEventProcessor().watchCache(CACHE_NAME, this.byName);
+    replicatedEventsCoordinator.getReplicatedIncomingCacheEventProcessor().watchCache(CACHE_LIST, this.list); // it's never evicted in the code below
+    replicatedEventsCoordinator.getReplicatedIncomingCacheEventProcessor().watchObject(projectCache, this);
+  }
+
+  /**
+   * Calls the replicateEvictionFromCache in getReplicatedOutgoingCacheEventsFeed from the replicated coordinator.
+   * @param name : Name of the cache
+   * @param value : Value to evict from the cache
+   */
+  private void replicateEvictionFromCache(final String name, final Object value) {
+    if(replicatedEventsCoordinator.isGerritIndexerRunning()) {
+      replicatedEventsCoordinator.getReplicatedOutgoingCacheEventsFeed().replicateEvictionFromCache(name, value);
+    }
+  }
+
+  /**
+   * Calls the replicateMethodCallFromCache in getReplicatedOutgoingCacheEventsFeed from the replicated coordinator.
+   * @param cacheName : Name of the cache
+   * @param methodName : Method call to replicate
+   * @param key : name of the project
+   */
+  private void replicateMethodCallFromCache(final String cacheName, final String methodName, final Object key) {
+    if(replicatedEventsCoordinator.isGerritIndexerRunning()) {
+      replicatedEventsCoordinator.getReplicatedOutgoingCacheEventsFeed()
+          .replicateMethodCallFromCache(cacheName, methodName, key);
+    }
   }
 
   @Override
@@ -178,7 +212,7 @@ public class ProjectCacheImpl implements ProjectCache {
       if (state != null && state.needsRefresh(clock.read())) {
         byName.invalidate(projectName.get());
         state = byName.get(projectName.get());
-        ReplicatedCacheManager.replicateEvictionFromCache(CACHE_NAME,projectName.get());
+        replicateEvictionFromCache(CACHE_NAME, projectName.get());
       }
       return state;
     } catch (ExecutionException e) {
@@ -195,7 +229,7 @@ public class ProjectCacheImpl implements ProjectCache {
   public void evict(final Project p) {
     if (p != null) {
       byName.invalidate(p.getNameKey().get());
-      ReplicatedCacheManager.replicateEvictionFromCache(CACHE_NAME,p.getNameKey().get());
+      replicateEvictionFromCache(CACHE_NAME, p.getNameKey().get());
     }
   }
 
@@ -204,7 +238,7 @@ public class ProjectCacheImpl implements ProjectCache {
   public void evict(final Project.NameKey p) {
     if (p != null) {
       byName.invalidate(p.get());
-      ReplicatedCacheManager.replicateEvictionFromCache(CACHE_NAME,p.get());
+      replicateEvictionFromCache(CACHE_NAME, p.get());
     }
   }
 
@@ -221,7 +255,7 @@ public class ProjectCacheImpl implements ProjectCache {
       n.remove(name);
       list.put(ListKey.ALL, Collections.unmodifiableSortedSet(n));
     } catch (ExecutionException e) {
-      log.warn("Cannot list avaliable projects", e);
+      log.warn("Cannot list available projects", e);
     } finally {
       listLock.unlock();
     }
@@ -235,9 +269,11 @@ public class ProjectCacheImpl implements ProjectCache {
       SortedSet<Project.NameKey> n = Sets.newTreeSet(list.get(ListKey.ALL));
       n.add(newProjectName);
       list.put(ListKey.ALL, Collections.unmodifiableSortedSet(n));
-      ReplicatedCacheManager.replicateMethodCallFromCache(ReplicatedCacheManager.projectCache, "onReplicatedCreateProject", newProjectName);
+
+      replicateMethodCallFromCache(projectCache, "onReplicatedCreateProject", newProjectName);
+
     } catch (ExecutionException e) {
-      log.warn("Cannot list avaliable projects", e);
+      log.warn("Cannot list available projects", e);
     } finally {
       listLock.unlock();
     }

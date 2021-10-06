@@ -33,6 +33,10 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
 import com.google.gerrit.common.EventBroker;
+import com.google.gerrit.common.replication.ReplicatedConfiguration;
+import com.google.gerrit.common.replication.coordinators.ReplicatedEventsCoordinator;
+import com.google.gerrit.common.replication.modules.DummyReplicationModule;
+import com.google.gerrit.common.replication.modules.ReplicationModule;
 import com.google.gerrit.gpg.GpgModule;
 import com.google.gerrit.httpd.AllRequestFilter;
 import com.google.gerrit.httpd.GerritOptions;
@@ -307,8 +311,13 @@ public class Daemon extends SiteProgram {
       initIndexType();
     }
     sysInjector = createSysInjector();
+
     sysInjector.getInstance(PluginGuiceEnvironment.class)
       .setDbCfgInjector(dbInjector, cfgInjector);
+
+    sysInjector.getInstance(ReplicatedEventsCoordinator.class)
+        .setSysInjector(sysInjector);
+
     manager.add(dbInjector, cfgInjector, sysInjector);
 
     if (!consoleLog) {
@@ -343,6 +352,7 @@ public class Daemon extends SiteProgram {
 
   private Injector createCfgInjector() {
     final List<Module> modules = new ArrayList<>();
+    modules.add(new ReplicatedConfiguration.Module());
     modules.add(new AuthConfigModule());
     return dbInjector.createChildInjector(modules);
   }
@@ -360,6 +370,16 @@ public class Daemon extends SiteProgram {
     modules.add(new WorkQueue.Module());
     modules.add(new StreamEventsApiListener.Module());
     modules.add(new EventBroker.Module());
+    /** Add all replication modules now */
+    ReplicatedConfiguration replicatedConfiguration =
+        cfgInjector.getInstance(ReplicatedConfiguration.class);
+
+    if(replicatedConfiguration.getConfigureReplication().isReplicationDisabled()){
+      modules.add(new DummyReplicationModule());
+    } else {
+      modules.add(new ReplicationModule());
+    }
+
     modules.add(test
         ? new H2AccountPatchReviewStore.InMemoryModule()
         : new JdbcAccountPatchReviewStore.Module(config));

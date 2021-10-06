@@ -30,7 +30,7 @@ package com.google.gerrit.server.account;
 import com.google.common.base.Optional;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
-import com.google.gerrit.common.ReplicatedCacheManager;
+import com.google.gerrit.common.replication.coordinators.ReplicatedEventsCoordinator;
 import com.google.gerrit.reviewdb.client.AccountGroup;
 import com.google.gerrit.reviewdb.client.AccountGroupName;
 import com.google.gerrit.reviewdb.server.ReviewDb;
@@ -90,25 +90,43 @@ public class GroupCacheImpl implements GroupCache {
   private final LoadingCache<String, Optional<AccountGroup>> byName;
   private final LoadingCache<String, Optional<AccountGroup>> byUUID;
   private final SchemaFactory<ReviewDb> schema;
+  private final ReplicatedEventsCoordinator replicatedEventsCoordinator;
 
   @Inject
   GroupCacheImpl(
       @Named(BYID_NAME) LoadingCache<AccountGroup.Id, Optional<AccountGroup>> byId,
       @Named(BYNAME_NAME) LoadingCache<String, Optional<AccountGroup>> byName,
       @Named(BYUUID_NAME) LoadingCache<String, Optional<AccountGroup>> byUUID,
-      SchemaFactory<ReviewDb> schema) {
+      SchemaFactory<ReviewDb> schema,
+      ReplicatedEventsCoordinator replicatedEventsCoordinator) {
     this.byId = byId;
     this.byName = byName;
     this.byUUID = byUUID;
     this.schema = schema;
-
+    this.replicatedEventsCoordinator = replicatedEventsCoordinator;
     attachToReplication();
   }
 
   final void attachToReplication() {
-    ReplicatedCacheManager.watchCache(BYID_NAME, this.byId);
-    ReplicatedCacheManager.watchCache(BYNAME_NAME, this.byName);
-    ReplicatedCacheManager.watchCache(BYUUID_NAME, this.byUUID);
+    if( !replicatedEventsCoordinator.isGerritIndexerRunning() ){
+      log.info("Replication is disabled - not hooking in GroupCache listeners.");
+      return;
+    }
+    replicatedEventsCoordinator.getReplicatedIncomingCacheEventProcessor().watchCache(BYID_NAME, this.byId);
+    replicatedEventsCoordinator.getReplicatedIncomingCacheEventProcessor().watchCache(BYNAME_NAME, this.byName);
+    replicatedEventsCoordinator.getReplicatedIncomingCacheEventProcessor().watchCache(BYUUID_NAME, this.byUUID);
+  }
+
+  /**
+   *  Asks the replicated coordinator for the instance of the ReplicatedOutgoingCacheEventsFeed and calls
+   *  replicateEvictionFromCache on it.
+   * @param name : Name of the cache to evict from.
+   * @param value : Value to evict from the cache.
+   */
+  private void replicateEvictionFromCache(String name, Object value) {
+    if(replicatedEventsCoordinator.isGerritIndexerRunning()) {
+      replicatedEventsCoordinator.getReplicatedOutgoingCacheEventsFeed().replicateEvictionFromCache(name, value);
+    }
   }
 
   @Override
@@ -126,28 +144,30 @@ public class GroupCacheImpl implements GroupCache {
   public void evict(final AccountGroup group) {
     if (group.getId() != null) {
       byId.invalidate(group.getId());
-      ReplicatedCacheManager.replicateEvictionFromCache(BYID_NAME,group.getId());
+      replicateEvictionFromCache(BYID_NAME, group.getId());
     }
     if (group.getNameKey() != null) {
       byName.invalidate(group.getNameKey().get());
-      ReplicatedCacheManager.replicateEvictionFromCache(BYNAME_NAME,group.getNameKey());
+      replicateEvictionFromCache(BYNAME_NAME, group.getNameKey());
     }
     if (group.getGroupUUID() != null) {
       byUUID.invalidate(group.getGroupUUID().get());
-      ReplicatedCacheManager.replicateEvictionFromCache(BYUUID_NAME,group.getGroupUUID());
+      replicateEvictionFromCache(BYUUID_NAME, group.getGroupUUID());
     }
   }
+
 
   @Override
   public void evictAfterRename(final AccountGroup.NameKey oldName,
       final AccountGroup.NameKey newName) {
     if (oldName != null) {
       byName.invalidate(oldName.get());
-      ReplicatedCacheManager.replicateEvictionFromCache(BYNAME_NAME,oldName);
+      replicateEvictionFromCache(BYNAME_NAME, oldName);
     }
     if (newName != null) {
       byName.invalidate(newName.get());
-      ReplicatedCacheManager.replicateEvictionFromCache(BYNAME_NAME,newName);
+      replicateEvictionFromCache(BYNAME_NAME, newName);
+
     }
   }
 
@@ -190,7 +210,7 @@ public class GroupCacheImpl implements GroupCache {
   @Override
   public void onCreateGroup(AccountGroup.NameKey newGroupName) {
     byName.invalidate(newGroupName.get());
-    ReplicatedCacheManager.replicateEvictionFromCache(BYNAME_NAME,newGroupName.get());
+    replicateEvictionFromCache(BYNAME_NAME, newGroupName.get());
   }
 
   private static AccountGroup missing(AccountGroup.Id key) {

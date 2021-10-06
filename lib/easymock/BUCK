@@ -17,6 +17,7 @@ maven_jar(
   id = 'cglib:cglib-nodep:2.2.2',
   sha1 = '00d456bb230c70c0b95c76fb28e429d42f275941',
   license = 'DO_NOT_DISTRIBUTE',
+  visibility = ['PUBLIC'],
   attach_source = False,
 )
 
@@ -25,7 +26,7 @@ maven_jar(
   id = 'org.objenesis:objenesis:2.2',
   sha1 = '3fb533efdaa50a768c394aa4624144cf8df17845',
   license = 'DO_NOT_DISTRIBUTE',
-  visibility = ['//lib/powermock:powermock-reflect'],
+  visibility = ['PUBLIC'],
   attach_source = False,
 )
 

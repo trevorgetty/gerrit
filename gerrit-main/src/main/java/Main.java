@@ -14,6 +14,10 @@
 
 
 public final class Main {
+
+
+  private static final String FLOGGER_BACKEND_PROPERTY = "flogger.backend_factory";
+
   // We don't do any real work here because we need to import
   // the archive lookup code and we cannot import a class in
   // the default package. So this is just a tiny springboard
@@ -22,6 +26,7 @@ public final class Main {
 
   public static void main(final String[] argv) throws Exception {
     if (onSupportedJavaVersion()) {
+      configureFloggerBackend();
       com.google.gerrit.launcher.GerritLauncher.main(argv);
 
     } else {
@@ -38,6 +43,18 @@ public final class Main {
     System.err.println("fatal: Gerrit Code Review requires Java 7 or later");
     System.err.println("       (trying to run on Java " + version + ")");
     return false;
+  }
+
+  private static void configureFloggerBackend() {
+    if (System.getProperty(FLOGGER_BACKEND_PROPERTY) != null) {
+      // Flogger backend is already configured
+      return;
+    }
+
+    // Configure SLF4J backend
+    System.setProperty(
+        FLOGGER_BACKEND_PROPERTY,
+        "com.google.common.flogger.backend.slf4j.Slf4jBackendFactory#getInstance");
   }
 
   private static double parse(String version) {

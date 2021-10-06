@@ -19,6 +19,7 @@ npm_binary(
   name = 'bower',
   version = '1.8.2',
   sha1 = 'adf53529c8d4af02ef24fb8d5341c1419d33e2f7',
+  repository = NPMJS,
 )
 
 npm_binary(

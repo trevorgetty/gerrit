@@ -21,6 +21,9 @@ LIBS = [
   '//gerrit-war:init',
   '//lib:postgresql',
   '//lib/log:impl_log4j',
+  '//lib/flogger:flogger',
+  '//lib/flogger:flogger-slf4j-backend',
+  '//lib/flogger:flogger-system-backend',
 ]
 PGMLIBS = ['//gerrit-pgm:pgm']
 ADDITIONAL_BINARIES = ['//gerritconsoleapi:console-api']

@@ -237,6 +237,26 @@ maven_jar(
     sha1 = "507713504f0ddb75ba512f62763519c43cf46fde",
 )
 
+FLOGGER_VERS = "0.4"
+
+maven_jar(
+    name = "flogger",
+    artifact = "com.google.flogger:flogger:" + FLOGGER_VERS,
+    sha1 = "9c8863dcc913b56291c0c88e6d4ca9715b43df98",
+)
+
+maven_jar(
+    name = "flogger-slf4j-backend",
+    artifact = "com.google.flogger:flogger-slf4j-backend:" + FLOGGER_VERS,
+    sha1 = "0d211cf0e54bf05bda275c897bb3721614410efc",
+)
+
+maven_jar(
+    name = "flogger-system-backend",
+    artifact = "com.google.flogger:flogger-system-backend:" + FLOGGER_VERS,
+    sha1 = "287b569d76abcd82f9de87fe41829fbc7ebd8ac9",
+)
+
 maven_jar(
     name = "json_smart",
     artifact = "net.minidev:json-smart:1.1.1",

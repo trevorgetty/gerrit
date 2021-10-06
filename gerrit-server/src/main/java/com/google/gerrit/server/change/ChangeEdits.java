@@ -31,7 +31,6 @@ import com.google.common.base.Optional;
 import com.google.common.base.Strings;
 import com.google.common.collect.FluentIterable;
 import com.google.gerrit.common.Nullable;
-import com.google.gerrit.common.ReplicatedIndexEventManager;
 import com.google.gerrit.extensions.common.DiffWebLinkInfo;
 import com.google.gerrit.extensions.common.EditInfo;
 import com.google.gerrit.extensions.registration.DynamicMap;

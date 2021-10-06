@@ -19,6 +19,7 @@ current_dir := $PWD
 
 # Gerrit repo root can be set to the mkfile path location
 GERRIT_ROOT= $(mkfile_path)
+GERRIT_BUCKCACHE_PATH := $(shell echo $(realpath $(shell echo ~/.gerritcodereview/buck-cache)))
 
 BUILD_TOOLS := $(GERRIT_ROOT)/build
 
@@ -61,7 +62,7 @@ ARTIFACTORY_SERVER ?= http://artifacts.wandisco.com:8081/artifactory
 ARTIFACT_REPO ?= libs-staging-local
 ARTIFACTORY_DESTINATION := $(ARTIFACTORY_SERVER)/$(ARTIFACT_REPO)
 
-all: display_version fast-assembly installer run-integration-tests
+all: display_version fast-assembly installer run-all-unit-tests
 
 all-skip-tests: display_version fast-assembly installer skip-tests
 
@@ -97,7 +98,6 @@ fast-assembly: fast-assembly-gerrit fast-assembly-console fast-assembly-api
 # Build just gerritMS
 #
 fast-assembly-gerrit:
-
 	@echo "\n************ Compile Gerrit Starting **************"
 	@echo "Building GerritMS"
 	buck build release
@@ -123,16 +123,36 @@ fast-assembly-api:
 	@echo "\n************ Compile Ext API Finished **************"
 .PHONY: fast-assembly-api
 
+run-single-unit-test:
+	$(if $(UNIT_TEST),,$(error UNIT_TEST is not set))
 
+	@echo "\n************ Running single unit test -  Starting **************"
+	@echo "Running test named: $(UNIT_TEST)"
+	buck test -f '$(UNIT_TEST)'
+	@echo "\n************ Running single unit test -  Finished **************"
+
+.PHONY: run-single-unit-test
+
+run-all-unit-tests:
+	@echo "\n************ Running all unit tests -  Starting **************"
+	buck test --no-results-cache --filter '!com.googlesource.gerrit.plugins.cookbook.CookbookIT'
+	@echo "\n************ Running all unit tests -  Finished **************"
+
+.PHONY: run-all-unit-tests
 
 clean: | $(JENKINS_DIRECTORY)
 	@echo "\n************ Clean Phase Starting **************"
 	buck clean
+	@echo "Deleting Buck output base path..."
 	rm -rf $(GERRIT_BUCK_OUT)
+	@echo "Deleting the buck-cache"
+	@ls $(GERRIT_BUCKCACHE_PATH)
+	rm -rf $(GERRIT_BUCKCACHE_PATH)
 	rm -rf $(GERRIT_TEST_LOCATION)/jgit-update-service
 	rm -f $(GERRIT_ROOT)/env.properties
 	@echo "\n************ Clean Phase Finished **************"
 .PHONY: clean
+
 
 check_build_assets:
 	# check that our release.war and console-api.jar items have been built and are available
@@ -145,8 +165,8 @@ check_build_assets:
 	@echo "CONSOLE_API_JAR_PATH=$(CONSOLE_API_JAR_PATH)" >> $(GERRIT_ROOT)/env.properties
 	@echo "Env.properties is saved to: $(GERRIT_ROOT)/env.properties)"
 
-	@[ -f $(RELEASE_WAR_PATH)/release.war ] && echo release.war exists || ( echo releaes.war not exists && exit 1;)
-	@[ -f $(CONSOLE_API_JAR_PATH)/console-api.jar ] && echo console-api.jar exists || ( echo console-api.jar not exists && exit 1;)
+	@[ -f $(RELEASE_WAR_PATH)/release.war ] && echo "release.war exists" || ( echo "release.war does not exist" && exit 1;)
+	@[ -f $(CONSOLE_API_JAR_PATH)/console-api.jar ] && echo "console-api.jar exists" || ( echo "console-api.jar does not exist" && exit 1;)
 .PHONY: check_build_assets
 
 
@@ -179,10 +199,7 @@ run-integration-tests: check_gitms_version check_build_assets | $(JENKINS_DIRECT
 	@echo "\n************ Integration Tests Starting **************"
 	@echo "About to run integration tests -> resetting environment"
 
-	@echo "Release war path in makefile is: $(RELEASE_WAR_PATH)"
-
-	@[ -z $(RELEASE_WAR_PATH)/release.war ] && echo release.war exists || ( echo releaes.war not exists && exit 1;)
-
+	echo "Release war path in makefile is: $(RELEASE_WAR_PATH)"
 	./build/run-integration-tests.sh $(RELEASE_WAR_PATH) $(GERRIT_TEST_LOCATION) $(CONSOLE_API_JAR_PATH) $(GITMS_VERSION)
 
 	@echo "\n************ Integration Tests Finished **************"
@@ -256,7 +273,7 @@ help:
 	@echo "   make clean fast-assembly installer  -> will build the packages and installer asset"
 	@echo "   make installer                    -> will build the installer asset using already built packages"
 	@echo "   make run-integration-tests        -> will run the integration tests, against the already built packages"
-
+	@echo "   make list-assets                  -> will check and show the assets on disk you have built which would later be archived / deployed."
 	@echo "   make deploy                       -> will deploy all packages including installer of GerritMS, ConsoleAPI and plugins to artifactory."
 	@echo "   make deploy-gerrit                -> will deploy the installer package of GerritMS (old deprecated useage.)"
 	@echo "   make deploy-console               -> will deploy the installer package of GerritMS Console API (old deprecated useage.)"

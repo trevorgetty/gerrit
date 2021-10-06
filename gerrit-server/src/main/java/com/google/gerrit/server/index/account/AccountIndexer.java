@@ -26,4 +26,12 @@ public interface AccountIndexer {
    * @param id account id to index.
    */
   void index(Account.Id id) throws IOException;
+
+  /**
+   * Synchronously index an account, and replicate to another site.
+   * @param id
+   * @throws IOException
+   */
+  void indexNoRepl(Account.Id id) throws IOException;
+
 }

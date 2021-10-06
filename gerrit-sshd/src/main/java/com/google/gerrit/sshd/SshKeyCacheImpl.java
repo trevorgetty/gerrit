@@ -31,7 +31,7 @@ import static com.google.gerrit.reviewdb.client.AccountExternalId.SCHEME_USERNAM
 
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
-import com.google.gerrit.common.ReplicatedCacheManager;
+import com.google.gerrit.common.replication.coordinators.ReplicatedEventsCoordinator;
 import com.google.gerrit.reviewdb.client.AccountExternalId;
 import com.google.gerrit.reviewdb.client.AccountSshKey;
 import com.google.gerrit.reviewdb.server.ReviewDb;
@@ -88,16 +88,35 @@ public class SshKeyCacheImpl implements SshKeyCache {
   }
 
   private final LoadingCache<String, Iterable<SshKeyCacheEntry>> cache;
-
+  private final ReplicatedEventsCoordinator replicatedEventsCoordinator;
   @Inject
   SshKeyCacheImpl(
-      @Named(CACHE_NAME) LoadingCache<String, Iterable<SshKeyCacheEntry>> cache) {
+      @Named(CACHE_NAME) LoadingCache<String, Iterable<SshKeyCacheEntry>> cache,
+      ReplicatedEventsCoordinator replicatedEventsCoordinator) {
     this.cache = cache;
+    this.replicatedEventsCoordinator = replicatedEventsCoordinator;
     attachToReplication();
   }
-  
+
+
   final void attachToReplication() {
-    ReplicatedCacheManager.watchCache(CACHE_NAME, this.cache);
+    if( !replicatedEventsCoordinator.isGerritIndexerRunning() ){
+      log.info("Replication is disabled - not hooking in SectionSortCache listeners.");
+      return;
+    }
+    replicatedEventsCoordinator.getReplicatedIncomingCacheEventProcessor().watchCache(CACHE_NAME, this.cache);
+  }
+
+  /**
+   * Asks the replicated coordinator for the instance of the ReplicatedOutgoingCacheEventsFeed and calls
+   * replicateEvictionFromCache on it.
+   * @param name : Name of the cache to evict from.
+   * @param value : Value to evict from the cache.
+   */
+  private void replicateEvictionFromCache(String name, Object value) {
+    if(replicatedEventsCoordinator.isGerritIndexerRunning()) {
+      replicatedEventsCoordinator.getReplicatedOutgoingCacheEventsFeed().replicateEvictionFromCache(name, value);
+    }
   }
 
   Iterable<SshKeyCacheEntry> get(String username) {
@@ -113,7 +132,7 @@ public class SshKeyCacheImpl implements SshKeyCache {
   public void evict(String username) {
     if (username != null) {
       cache.invalidate(username);
-      ReplicatedCacheManager.replicateEvictionFromCache(CACHE_NAME,username);
+      replicateEvictionFromCache(CACHE_NAME,username);
     }
   }
 

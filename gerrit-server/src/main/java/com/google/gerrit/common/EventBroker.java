@@ -49,11 +49,14 @@ import com.google.gwtorm.server.OrmException;
 import com.google.gwtorm.server.SchemaFactory;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import org.eclipse.jgit.lib.Config;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Distributes Events to listeners if they are allowed to see them */
 @Singleton
 public class EventBroker implements EventDispatcher {
+
+  private static final Logger log = LoggerFactory.getLogger(EventBroker.class);
 
   public static class Module extends LifecycleModule {
     @Override
@@ -83,14 +86,17 @@ public class EventBroker implements EventDispatcher {
       DynamicSet<EventListener> unrestrictedListeners,
       ProjectCache projectCache,
       ChangeNotes.Factory notesFactory,
-      @GerritServerConfig Config config,
       SchemaFactory<ReviewDb> schemaFactory) {
     this.listeners = listeners;
     this.unrestrictedListeners = unrestrictedListeners;
     this.projectCache = projectCache;
     this.notesFactory = notesFactory;
     this.schemaFactory = schemaFactory;
-    ReplicatedEventsManager.hookOnListeners(this, schemaFactory, config);
+  }
+
+  public void addUnrestrictedEventListener(EventListener eventListener){
+    log.info("adding unrestricted listener {}", eventListener.getClass().getSimpleName());
+    unrestrictedListeners.add(eventListener);
   }
 
   @Override

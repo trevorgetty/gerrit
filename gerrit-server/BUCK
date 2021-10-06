@@ -59,6 +59,9 @@ java_library(
     '//lib:automaton',
     '//lib:blame-cache',
     '//lib:grappa',
+    '//lib/flogger:flogger',
+    '//lib/flogger:flogger-system-backend',
+    '//lib/flogger:flogger-slf4j-backend',
     '//lib:gson',
     '//lib:guava',
     '//lib:guava-retrying',
@@ -130,6 +133,7 @@ TESTUTIL_DEPS = [
   '//lib/log:api',
   '//lib/log:impl_log4j',
   '//lib/log:log4j',
+  '//lib/wandisco:gerrit-gitms-interface'
 ]
 
 TESTUTIL = glob([
@@ -145,6 +149,7 @@ java_library(
   provided_deps = TESTUTIL_DEPS,
   exported_deps = [
     '//lib/easymock:easymock',
+    '//lib/equalsverifier:equalsverifier',
     '//lib/powermock:powermock-api-easymock',
     '//lib/powermock:powermock-api-support',
     '//lib/powermock:powermock-core',
@@ -235,4 +240,5 @@ java_test(
   ],
   source_under_test = [':server'],
   visibility = ['//tools/eclipse:classpath'],
+#   vm_args = ['-agentlib:jdwp=transport=dt_socket,address=5005,server=y,suspend=y']
 )

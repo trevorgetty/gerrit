@@ -23,6 +23,9 @@ import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Lists;
 import com.google.gerrit.common.Nullable;
+import com.google.gerrit.common.replication.coordinators.ReplicatedEventsCoordinator;
+import com.google.gerrit.common.replication.coordinators.ReplicatedEventsCoordinatorImpl;
+import com.google.gerrit.common.replication.modules.ReplicatedCoordinatorModule;
 import com.google.gerrit.extensions.annotations.RootRelative;
 import com.google.gerrit.extensions.events.LifecycleListener;
 import com.google.gerrit.extensions.registration.DynamicItem;
@@ -509,7 +512,15 @@ public class PluginGuiceEnvironment {
     return src.findBindingsByType(type);
   }
 
-  private Module copy(Injector src) {
+  /* Check if the injector can get an instance of the ReplicatedCoordinatorModule*/
+  private boolean hasReplicationModule(final Injector injector){
+    return injector.getInstance(ReplicatedCoordinatorModule.class) != null;
+  }
+
+  // Filter out types used in DynamicItem when copying bindings to plugins
+  // This avoids Guice creation errors when a plugin tries to bind its own implementation
+  // of a type that gerrit core already implemented.
+  private Module copy(final Injector src) {
     Set<TypeLiteral<?>> dynamicTypes = new HashSet<>();
     Set<TypeLiteral<?>> dynamicItemTypes = new HashSet<>();
     for (Map.Entry<Key<?>, Binding<?>> e : src.getBindings().entrySet()) {
@@ -558,6 +569,24 @@ public class PluginGuiceEnvironment {
         for (Map.Entry<Key<?>, Binding<?>> e : bindings.entrySet()) {
           Key<Object> k = (Key<Object>) e.getKey();
           Binding<Object> b = (Binding<Object>) e.getValue();
+
+          /* The configure method here is essentially filtering out the binding that we need
+          * for our ReplicatedEventsCoordinator. It also converts all the bindings that it finds to
+          * Provided bindings. This block is to prevent the configure method
+          * filtering out this required class binding and also to stop it from converting it to a
+          * Provided binding. This will make this class available to all the plugins.*/
+            if (e.getKey().toString().contains(ReplicatedEventsCoordinator.class.getSimpleName())) {
+              if(hasReplicationModule(src)) {
+                ReplicatedEventsCoordinator replicatedEventsCoordinatorImpl =
+                    src.getInstance(ReplicatedEventsCoordinator.class);
+
+                // create a standard linked binding to the existing instance that Guice already knows
+                // about. This binding will be available to all the plugins.
+                bind(ReplicatedEventsCoordinator.class).toInstance(replicatedEventsCoordinatorImpl);
+                continue;
+              }
+            }
+          //Otherwise setup the binding as a Provider binding.
           bind(k).toProvider(b.getProvider());
         }
 

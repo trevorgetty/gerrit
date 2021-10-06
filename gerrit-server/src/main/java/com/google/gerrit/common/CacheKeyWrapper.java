@@ -55,7 +55,7 @@ public class CacheKeyWrapper extends ReplicatedEvent {
     super.setNodeIdentity(nodeIdentity);
   }
 
-  void rebuildOriginal() throws ClassNotFoundException {
+  public void rebuildOriginal() throws ClassNotFoundException {
     Class<?> originalKeyClass = Class.forName(keyClassName);
     this.key = gson.fromJson(this.keyValue, originalKeyClass);
   }

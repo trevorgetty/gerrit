@@ -45,7 +45,7 @@ import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.gerrit.common.BatchUpdateLockManager;
 import com.google.gerrit.common.Nullable;
-import com.google.gerrit.common.ReplicatedIndexEventManager;
+import com.google.gerrit.common.replication.coordinators.ReplicatedEventsCoordinator;
 import com.google.gerrit.extensions.restapi.ResourceConflictException;
 import com.google.gerrit.extensions.restapi.ResourceNotFoundException;
 import com.google.gerrit.extensions.restapi.RestApiException;
@@ -521,6 +521,7 @@ public class BatchUpdate implements AutoCloseable {
   private Order order;
   private boolean updateChangesInParallel;
   private RequestId requestId;
+  private ReplicatedEventsCoordinator eventsCoordinator;
 
   @AssistedInject
   BatchUpdate(
@@ -540,7 +541,8 @@ public class BatchUpdate implements AutoCloseable {
       @Assisted ReviewDb db,
       @Assisted Project.NameKey project,
       @Assisted CurrentUser user,
-      @Assisted Timestamp when) {
+      @Assisted Timestamp when,
+      ReplicatedEventsCoordinator eventsCoordinator) {
     this.allUsers = allUsers;
     this.changeControlFactory = changeControlFactory;
     this.changeNotesFactory = changeNotesFactory;
@@ -552,6 +554,7 @@ public class BatchUpdate implements AutoCloseable {
     this.repoManager = repoManager;
     this.schemaFactory = schemaFactory;
     this.updateManagerFactory = updateManagerFactory;
+    this.eventsCoordinator = eventsCoordinator;
 
     this.logThresholdNanos = MILLISECONDS.toNanos(
         ConfigUtil.getTimeUnit(
@@ -563,6 +566,13 @@ public class BatchUpdate implements AutoCloseable {
     this.when = when;
     tz = serverIdent.getTimeZone();
     order = Order.REPO_BEFORE_DB;
+  }
+
+  public void queueReplicationIndexDeletionEvent(int changeId, String projectName) throws IOException {
+    if (eventsCoordinator.isGerritIndexerRunning()) {
+      eventsCoordinator.getReplicatedOutgoingIndexEventsFeed()
+          .queueReplicationIndexDeletionEvent(changeId, projectName);
+    }
   }
 
   @Override
@@ -973,7 +983,7 @@ public class BatchUpdate implements AutoCloseable {
             String change = id.toString();
             int changeId = Integer.parseInt(change);
             String projectName = project.toString();
-            ReplicatedIndexEventManager.queueReplicationIndexDeletionEvent(changeId, projectName);
+            queueReplicationIndexDeletionEvent(changeId, projectName);
           }
 
         } finally {

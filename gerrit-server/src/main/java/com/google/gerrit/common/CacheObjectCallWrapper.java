@@ -22,8 +22,8 @@ package com.google.gerrit.common;
 public class CacheObjectCallWrapper extends CacheKeyWrapper {
   public String methodName;
 
-  public CacheObjectCallWrapper(String cacheName, String method, Object key) {
-    super(cacheName,key, Replicator.getInstance().getThisNodeIdentity());
+  public CacheObjectCallWrapper(String cacheName, String method, Object key, String thisNodeIdentity) {
+    super(cacheName,key, thisNodeIdentity);
     this.methodName = method;
   }
 

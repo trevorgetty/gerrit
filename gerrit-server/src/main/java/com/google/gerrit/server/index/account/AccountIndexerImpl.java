@@ -10,7 +10,7 @@
  * Apache License, Version 2.0
  *
  ********************************************************************************/
- 
+
 // Copyright (C) 2016 The Android Open Source Project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,13 +29,14 @@ package com.google.gerrit.server.index.account;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.gerrit.common.Nullable;
-import com.google.gerrit.common.ReplicatedAccountIndexManager;
+import com.google.gerrit.common.replication.coordinators.ReplicatedEventsCoordinator;
 import com.google.gerrit.extensions.events.AccountIndexedListener;
 import com.google.gerrit.extensions.registration.DynamicSet;
 import com.google.gerrit.reviewdb.client.Account;
 import com.google.gerrit.server.account.AccountCache;
 import com.google.gerrit.server.account.AccountState;
 import com.google.gerrit.server.index.Index;
+import com.google.inject.Provider;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 
@@ -46,11 +47,13 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
 
+
 public class AccountIndexerImpl implements AccountIndexer {
   private static final Logger log = LoggerFactory.getLogger(AccountIndexerImpl.class);
 
   public interface Factory {
     AccountIndexerImpl create(AccountIndexCollection indexes);
+
     AccountIndexerImpl create(@Nullable AccountIndex index);
   }
 
@@ -58,51 +61,72 @@ public class AccountIndexerImpl implements AccountIndexer {
   private final DynamicSet<AccountIndexedListener> indexedListener;
   private final AccountIndexCollection indexes;
   private final AccountIndex index;
+  private final Provider<ReplicatedEventsCoordinator> providedEventsCoordinator;
+  private ReplicatedEventsCoordinator replicatedEventsCoordinator;
 
   @AssistedInject
   AccountIndexerImpl(AccountCache byIdCache,
-      DynamicSet<AccountIndexedListener> indexedListener,
-      @Assisted AccountIndexCollection indexes) {
+                     DynamicSet<AccountIndexedListener> indexedListener,
+                     @Assisted AccountIndexCollection indexes,
+                     Provider<ReplicatedEventsCoordinator> providedEventsCoordinator) {
     this.byIdCache = byIdCache;
     this.indexedListener = indexedListener;
     this.indexes = indexes;
     this.index = null;
-    initAccountIndexReplicator();
+    this.providedEventsCoordinator = providedEventsCoordinator;
+
   }
 
   @AssistedInject
   AccountIndexerImpl(AccountCache byIdCache,
-      DynamicSet<AccountIndexedListener> indexedListener,
-      @Assisted AccountIndex index) {
+                     DynamicSet<AccountIndexedListener> indexedListener,
+                     @Assisted AccountIndex index,
+                     Provider<ReplicatedEventsCoordinator> providedEventsCoordinator) {
     this.byIdCache = byIdCache;
     this.indexedListener = indexedListener;
     this.indexes = null;
     this.index = index;
-    initAccountIndexReplicator();
+    this.providedEventsCoordinator = providedEventsCoordinator;
   }
 
-  // Call to WANdisco gerrit event replicator init function
-  private void initAccountIndexReplicator() {
-    ReplicatedAccountIndexManager.initAccountIndexer(this);
+  public ReplicatedEventsCoordinator getProvidedEventsCoordinator(){
+    if(replicatedEventsCoordinator == null){
+      replicatedEventsCoordinator = providedEventsCoordinator.get();
+    }
+    return replicatedEventsCoordinator;
+  }
+
+  /**
+   * Asks the replicated coordinator for an instance of the ReplicatedOutgoingAccountsIndexFeed
+   * and calls replicateAccountReindex on it with the account Id.
+   * @param id
+   * @throws IOException
+   */
+  public void replicateAccountReindex(Account.Id id) throws IOException {
+    if(getProvidedEventsCoordinator().isGerritIndexerRunning()) {
+      getProvidedEventsCoordinator().getReplicatedOutgoingAccountIndexEventsFeed()
+          .replicateAccountReindex(id);
+    }
   }
 
   @Override
   public void index(Account.Id id) throws IOException {
-    log.debug("RC Local Account reindex triggered on id {}",id.get());
+    log.debug("RC Local Account reindex triggered on id {}", id.get());
     for (Index<?, AccountState> i : getWriteIndexes()) {
       i.replace(byIdCache.get(id));
     }
-    ReplicatedAccountIndexManager.replicateAccountReindex(id);
+    replicateAccountReindex(id);
     fireAccountIndexedEvent(id.get());
   }
 
   /**
    * Method for replicated reindex call to avoid loop during normal index
+   *
    * @param id
    * @throws IOException
    */
-  public void indexRepl(Account.Id id) throws IOException{
-    log.debug("RC Received Account reindex event triggered on id {}",id.get());
+  public void indexNoRepl(Account.Id id) throws IOException {
+    log.debug("RC Received Account reindex event triggered on id {}", id.get());
     for (Index<?, AccountState> i : getWriteIndexes()) {
       i.replace(byIdCache.get(id));
     }
@@ -122,6 +146,6 @@ public class AccountIndexerImpl implements AccountIndexer {
 
     return index != null
         ? Collections.singleton(index)
-        : ImmutableSet.<AccountIndex> of();
+        : ImmutableSet.<AccountIndex>of();
   }
 }

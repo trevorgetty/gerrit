@@ -322,6 +322,12 @@ public abstract class AbstractDaemonTest {
 
     baseConfig.setString("gerrit", null, "tempSiteDir",
         tempSiteDir.getRoot().getPath());
+
+    /* For testing we wan't to disable replication. Here we are setting a wandisco section and key/val pair for
+    * stating that replication is disabled */
+    baseConfig.setBoolean("wandisco", null,
+        "gerritmsReplicationDisabled", true);
+
     baseConfig.setInt("receive", null, "changeUpdateThreads", 4);
     if (classDesc.equals(methodDesc) && !classDesc.sandboxed() &&
         !methodDesc.sandboxed()) {

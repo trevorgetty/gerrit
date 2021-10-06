@@ -18,8 +18,11 @@ import static com.google.inject.Scopes.SINGLETON;
 
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.gerrit.common.replication.ReplicatedConfiguration;
+import com.google.gerrit.common.replication.modules.DummyReplicationModule;
 import com.google.gerrit.extensions.config.FactoryModule;
 import com.google.gerrit.gpg.GpgModule;
+import com.google.gerrit.lifecycle.LifecycleModule;
 import com.google.gerrit.metrics.DisabledMetricMaker;
 import com.google.gerrit.metrics.MetricMaker;
 import com.google.gerrit.reviewdb.client.AuthType;
@@ -139,6 +142,13 @@ public class InMemoryModule extends FactoryModule {
       }
     });
     bind(MetricMaker.class).to(DisabledMetricMaker.class);
+
+    /* For testing we wan't to disable replication. Here we are setting a wandisco section and key/val pair for
+     * stating that replication is disabled */
+    cfg.setBoolean("wandisco", null, "gerritmsReplicationDisabled", true);
+    install(new ReplicatedConfiguration.Module());
+    install(new DummyReplicationModule());
+
     install(cfgInjector.getInstance(GerritGlobalModule.class));
     install(new SearchingChangeCacheImpl.Module());
     factory(GarbageCollection.Factory.class);

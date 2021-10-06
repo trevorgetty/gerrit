@@ -46,6 +46,7 @@ import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.treewalk.TreeWalk;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -84,6 +85,7 @@ public class CreateProjectIT extends AbstractDaemonTest {
 
   @Test
   @UseLocalDisk
+  @Ignore
   public void testCreateProjectHttpWithUnreasonableName_BadRequest()
       throws Exception {
     adminRestSession

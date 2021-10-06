@@ -1,61 +1,57 @@
-/*
- * Copyright (c) WANdisco 2017
- */
-package com.google.gerrit.common;
+package com.google.gerrit.common.replication.processors;
 
-import com.google.gerrit.reviewdb.client.Change;
+import com.google.gerrit.common.DeleteProjectChangeEvent;
+import com.google.gerrit.common.GerritEventFactory;
+import com.google.gerrit.common.ProjectInfoWrapper;
+import com.google.gerrit.common.replication.ConfigureReplication;
+import com.google.gerrit.common.replication.SingletonEnforcement;
+import com.google.gerrit.common.replication.coordinators.ReplicatedEventsCoordinator;
 import com.google.gerrit.reviewdb.client.Project;
-import com.google.gson.Gson;
+import com.google.gerrit.server.git.GitRepositoryManager;
 import com.google.gson.JsonSyntaxException;
-
+import com.google.inject.Singleton;
+import com.wandisco.gerrit.gitms.shared.events.DeleteProjectMessageEvent;
+import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
+import org.eclipse.jgit.errors.RepositoryNotFoundException;
+import org.eclipse.jgit.lib.Config;
+import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.lib.RepositoryCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.gerrit.server.git.GitRepositoryManager;
-
-import org.eclipse.jgit.errors.RepositoryNotFoundException;
-import org.eclipse.jgit.lib.Repository;
-import org.eclipse.jgit.lib.RepositoryCache;
-
-import com.wandisco.gerrit.gitms.shared.events.DeleteProjectMessageEvent;
-import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
-import static com.wandisco.gerrit.gitms.shared.events.DeleteProjectMessageEvent.DeleteMessage.DO_NOT_DELETE_PROJECT_FROM_DISK;
-import static com.wandisco.gerrit.gitms.shared.events.DeleteProjectMessageEvent.DeleteMessage.DELETE_PROJECT_FROM_DISK;
-
 import java.io.IOException;
-import java.util.List;
 
-public class ReplicatedProjectManager implements Replicator.GerritPublishable {
-  private static final Logger log = LoggerFactory.getLogger(ReplicatedProjectManager.class);
-  private static final Gson gson = new Gson();
-  private static ReplicatedProjectManager instance = null;
-  private static GitRepositoryManager repoManager;
+import static com.wandisco.gerrit.gitms.shared.events.DeleteProjectMessageEvent.DeleteMessage.DELETE_PROJECT_FROM_DISK;
+import static com.wandisco.gerrit.gitms.shared.events.DeleteProjectMessageEvent.DeleteMessage.DO_NOT_DELETE_PROJECT_FROM_DISK;
+import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.DELETE_PROJECT_EVENT;
 
-  private ReplicatedProjectManager() {
+@Singleton
+public class ReplicatedIncomingProjectEventProcessor extends GerritPublishableImpl {
+  private static final Logger log = LoggerFactory.getLogger(ReplicatedIncomingProjectEventProcessor.class);
+  private GitRepositoryManager repoManager;
+
+  private static ReplicatedIncomingProjectEventProcessor INSTANCE;
+
+  private ReplicatedIncomingProjectEventProcessor(ReplicatedEventsCoordinator replicatedEventsCoordinator) {
+    super(DELETE_PROJECT_EVENT, replicatedEventsCoordinator);
+    log.info("Creating main processor for event type: {}", eventType);
+    subscribeEvent(this);
+    this.repoManager = replicatedEventsCoordinator.getGitRepositoryManager();
   }
 
-  /**
-   * Make use of the GitRepositoryManager, set on startup in ChangeUtil
-   */
-  public static void setRepoManager(GitRepositoryManager gitRepositoryManager){
-    if(repoManager == null){
-      repoManager = gitRepositoryManager;
+  //Get singleton instance
+  public static ReplicatedIncomingProjectEventProcessor getInstance(ReplicatedEventsCoordinator replicatedEventsCoordinator) {
+    if(INSTANCE == null) {
+      INSTANCE = new ReplicatedIncomingProjectEventProcessor(replicatedEventsCoordinator);
+      SingletonEnforcement.registerClass(ReplicatedIncomingProjectEventProcessor.class);
     }
+    return INSTANCE;
   }
 
-  public static void replicateProjectDeletion(String projectName, boolean preserve, String taskUuid) {
-    ProjectInfoWrapper projectInfoWrapper = new ProjectInfoWrapper(projectName, preserve, taskUuid, Replicator.getInstance().getThisNodeIdentity());
-    log.info("PROJECT About to call replicated project deletion event: {},{},{}",
-        projectName, preserve, taskUuid);
-    Replicator.getInstance().queueEventForReplication(GerritEventFactory.createReplicatedDeleteProjectEvent(projectInfoWrapper));
-  }
 
-  public static void replicateProjectChangeDeletion(Project project, boolean preserve, List<Change.Id> changesToBeDeleted, String taskUuid) {
-    DeleteProjectChangeEvent deleteProjectChangeEvent =
-        new DeleteProjectChangeEvent(project, preserve, changesToBeDeleted, taskUuid, Replicator.getInstance().getThisNodeIdentity());
-    log.info("PROJECT About to call replicated project change deletion event: {},{},{},{}",
-        project.getName(), preserve, changesToBeDeleted, taskUuid);
-    Replicator.getInstance().queueEventForReplication(GerritEventFactory.createReplicatedDeleteProjectChangeEvent(deleteProjectChangeEvent));
+  @Override
+  public void stop() {
+    unsubscribeEvent(this);
   }
 
   @Override
@@ -77,17 +73,9 @@ public class ReplicatedProjectManager implements Replicator.GerritPublishable {
         log.error("PROJECT event has been lost. Could not find {}",newEvent.getClassName(),e);
       }
     } else if (newEvent != null && newEvent.getEventOrigin() !=  EventWrapper.Originator.DELETE_PROJECT_EVENT) {
-        log.error("DELETE_PROJECT_EVENT event has been sent here but originartor is not the right one ({})",newEvent.getEventOrigin());
+      log.error("DELETE_PROJECT_EVENT event has been sent here but originartor is not the right one ({})",newEvent.getEventOrigin());
     }
     return result;
-  }
-
-  public static synchronized void enableReplicatedProjectManager() {
-    if (instance == null) {
-      instance = new ReplicatedProjectManager();
-      log.info("PROJECT New instance created");
-      Replicator.subscribeEvent(EventWrapper.Originator.DELETE_PROJECT_EVENT, instance);
-    }
   }
 
   /**
@@ -115,7 +103,7 @@ public class ReplicatedProjectManager implements Replicator.GerritPublishable {
 
     log.info("RE Original event: {}",originalEvent.toString());
     originalEvent.replicated = true; // not needed, but makes it clear
-    originalEvent.setNodeIdentity(Replicator.getInstance().getThisNodeIdentity());
+    originalEvent.setNodeIdentity(replicatedEventsCoordinator.getThisNodeIdentity());
     result = applyActionsForDeletingProject(originalEvent);
 
     DeleteProjectMessageEvent deleteProjectMessageEvent = null;
@@ -123,15 +111,22 @@ public class ReplicatedProjectManager implements Replicator.GerritPublishable {
       // If the request was to remove the repository from the disk, then we do that only after all the nodes have replied
       // So first phase is to clear the data about the repo, 2nd phase is to remove it
       deleteProjectMessageEvent = new DeleteProjectMessageEvent(originalEvent.projectName, DELETE_PROJECT_FROM_DISK,
-          originalEvent.taskUuid, Replicator.getInstance().getThisNodeIdentity());
+          originalEvent.taskUuid, replicatedEventsCoordinator.getThisNodeIdentity());
     } else {
       // If the result is false then we have failed the first part of the removal. If we are Preserving the repo then we do not
       // want to remove the repo so we send a failed response so we know not to remove it.
       deleteProjectMessageEvent = new DeleteProjectMessageEvent(originalEvent.projectName, DO_NOT_DELETE_PROJECT_FROM_DISK,
-          originalEvent.taskUuid, Replicator.getInstance().getThisNodeIdentity());
+          originalEvent.taskUuid, replicatedEventsCoordinator.getThisNodeIdentity());
     }
-    Replicator.getInstance().queueEventForReplication(GerritEventFactory.createReplicatedDeleteProjectMessageEvent(deleteProjectMessageEvent));
-    return result;
+    try {
+      replicatedEventsCoordinator.queueEventForReplication(GerritEventFactory.createReplicatedDeleteProjectMessageEvent(deleteProjectMessageEvent));
+      return result;
+    } catch (IOException e) {
+      // unable to create the event wrapper - so can't replicate this change record the error.
+      // We do want to let this deletion complete locally
+      log.error("Unable to create event wrapper and queue this DeleteProjectMessageEvent.", e);
+      return result;
+    }
   }
 
 
@@ -158,7 +153,7 @@ public class ReplicatedProjectManager implements Replicator.GerritPublishable {
 
     log.info("RE Original event: {}",originalEvent.toString());
     originalEvent.replicated = true; // not needed, but makes it clear
-    originalEvent.setNodeIdentity(Replicator.getInstance().getThisNodeIdentity());
+    originalEvent.setNodeIdentity(replicatedEventsCoordinator.getReplicatedConfiguration().getThisNodeIdentity());
     result = applyActionsForDeletingProjectChanges(originalEvent);
     return result;
   }
@@ -186,7 +181,7 @@ public class ReplicatedProjectManager implements Replicator.GerritPublishable {
     }
 
     return false;
- }
+  }
 
   /**
    * Remove the changes associated with the project on all nodes
@@ -196,12 +191,12 @@ public class ReplicatedProjectManager implements Replicator.GerritPublishable {
   private boolean applyActionsForDeletingProjectChanges(DeleteProjectChangeEvent originalEvent) {
     log.info("PROJECT event is about to remove the changes related to project {}. Original event was {}!", originalEvent.project.getName(), originalEvent);
     try {
-      ReplicatedIndexEventManager.getInstance().deleteChanges(originalEvent.changes);
+      replicatedEventsCoordinator.getReplicatedIncomingIndexEventProcessor().deleteChanges(originalEvent.changes);
       return true;
     } catch (IOException e) {
       log.error("Error while deleting changes ", e);
     }
     return false;
- }
+  }
 
 }

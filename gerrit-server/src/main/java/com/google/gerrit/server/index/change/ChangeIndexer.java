@@ -33,7 +33,7 @@ import com.google.common.util.concurrent.CheckedFuture;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
-import com.google.gerrit.common.ReplicatedIndexEventManager;
+import com.google.gerrit.common.replication.coordinators.ReplicatedEventsCoordinator;
 import com.google.gerrit.extensions.events.ChangeIndexedListener;
 import com.google.gerrit.extensions.registration.DynamicSet;
 import com.google.gerrit.reviewdb.client.Change;
@@ -58,6 +58,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -115,6 +116,7 @@ public class ChangeIndexer {
   private final ThreadLocalRequestContext context;
   private final ListeningExecutorService executor;
   private final DynamicSet<ChangeIndexedListener> indexedListener;
+  private final ReplicatedEventsCoordinator replicatedEventsCoordinator;
 
   @AssistedInject
   ChangeIndexer(SchemaFactory<ReviewDb> schemaFactory,
@@ -124,7 +126,8 @@ public class ChangeIndexer {
       ThreadLocalRequestContext context,
       DynamicSet<ChangeIndexedListener> indexedListener,
       @Assisted ListeningExecutorService executor,
-      @Assisted ChangeIndex index) {
+      @Assisted ChangeIndex index,
+                ReplicatedEventsCoordinator eventsCoordinator) {
     this.executor = executor;
     this.schemaFactory = schemaFactory;
     this.notesMigration = notesMigration;
@@ -134,19 +137,21 @@ public class ChangeIndexer {
     this.index = index;
     this.indexes = null;
     this.indexedListener = indexedListener;
-    // Call to WANdisco gerrit event replicator init function
-    initIndexReplicator(schemaFactory);
+
+    // WD Replication support.
+    this.replicatedEventsCoordinator = eventsCoordinator;
   }
 
   @AssistedInject
   ChangeIndexer(SchemaFactory<ReviewDb> schemaFactory,
-      NotesMigration notesMigration,
-      ChangeNotes.Factory changeNotesFactory,
-      ChangeData.Factory changeDataFactory,
-      ThreadLocalRequestContext context,
-      DynamicSet<ChangeIndexedListener> indexedListener,
-      @Assisted ListeningExecutorService executor,
-      @Assisted ChangeIndexCollection indexes) {
+                NotesMigration notesMigration,
+                ChangeNotes.Factory changeNotesFactory,
+                ChangeData.Factory changeDataFactory,
+                ThreadLocalRequestContext context,
+                DynamicSet<ChangeIndexedListener> indexedListener,
+                @Assisted ListeningExecutorService executor,
+                @Assisted ChangeIndexCollection indexes,
+                ReplicatedEventsCoordinator eventsCoordinator) {
     this.executor = executor;
     this.schemaFactory = schemaFactory;
     this.notesMigration = notesMigration;
@@ -156,13 +161,25 @@ public class ChangeIndexer {
     this.index = null;
     this.indexes = indexes;
     this.indexedListener = indexedListener;
-    // Call to WANdisco gerrit event replicator init function
-    initIndexReplicator(schemaFactory);
+
+    // WD Replication support.
+    this.replicatedEventsCoordinator = eventsCoordinator;
   }
-  
-  // Call to WANdisco gerrit event replicator init function
-  private void initIndexReplicator(SchemaFactory<ReviewDb> schemaFactory) {
-    ReplicatedIndexEventManager.initIndexer(schemaFactory, this);
+
+
+  /**
+   * Queues the index event for replication by adding the index event to the outgoing index events feed.
+   * @param change : Change instance
+   * @throws IOException
+   */
+  public void queueIndexEventForReplication(Change change) throws IOException {
+    if (!replicatedEventsCoordinator.isGerritIndexerRunning()) {
+      log.info("Replication is disabled - not queuing index event for replication");
+      return;
+    }
+
+    replicatedEventsCoordinator.getReplicatedOutgoingIndexEventsFeed()
+        .queueReplicationIndexEvent(change.getId().get(),change.getProject().get(),change.getLastUpdatedOn());
   }
 
   /**
@@ -224,7 +241,8 @@ public class ChangeIndexer {
     try {
       Change change = cd.change();
       log.debug("RC Finished SYNC index {}",change.getId().get());
-      ReplicatedIndexEventManager.queueReplicationIndexEvent(change.getId().get(),change.getProject().get(),change.getLastUpdatedOn());
+      queueIndexEventForReplication(change);
+
     } catch (OrmException e) {
       log.error("RC Could not sync'ly reindex change! EVENT LOST {}",cd,e);
     }
@@ -235,14 +253,13 @@ public class ChangeIndexer {
    *
    * @param cd change to index.
    */
-  public void indexRepl(ChangeData cd) throws IOException {
-    log.debug("RC REPL sync to index {}",cd.getId().get());
+  public void indexNoRepl(ChangeData cd) throws IOException {
+    log.info("indexNoRepl sync to index {}",cd.getId().get());
     for (ChangeIndex i : getWriteIndexes()) {
       i.replace(cd);
     }
   }
 
-  // TODO: grumpy: the fireChangeIndexEVent looks new. Does this interfere
   // with the above call to the ReplicatedIndexEventManager?
   private void fireChangeIndexedEvent(int id) {
     for (ChangeIndexedListener listener : indexedListener) {
@@ -286,9 +303,9 @@ public class ChangeIndexer {
    * @param project the project to which the change belongs.
    * @param changeId ID of the change to index.
    */
-  public void indexRepl(ReviewDb db, Project.NameKey project, Change.Id changeId)
+  public void indexNoRepl(ReviewDb db, Project.NameKey project, Change.Id changeId)
       throws IOException, OrmException {
-    indexRepl(newChangeData(db, project, changeId));
+    indexNoRepl(newChangeData(db, project, changeId));
   }
   
   /**
@@ -375,10 +392,6 @@ public class ChangeIndexer {
               newCtx.getReviewDbProvider().get(), project, id);
           index(cd);
           log.debug("RC Finished ASYNC index (in class task) {}, replicate: {}",new Object[] {id.get(),replicate});
-          if (replicate) {
-            Change change = cd.change();
-            ReplicatedIndexEventManager.queueReplicationIndexEvent(change.getId().get(),change.getProject().get(),change.getLastUpdatedOn());
-          }
           return null;
         } finally  {
           context.setContext(oldCtx);

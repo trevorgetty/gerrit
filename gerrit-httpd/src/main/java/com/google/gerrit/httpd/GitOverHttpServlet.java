@@ -30,8 +30,8 @@ package com.google.gerrit.httpd;
 import com.google.common.cache.Cache;
 import com.google.common.collect.Lists;
 import com.google.gerrit.common.Nullable;
-import com.google.gerrit.common.ReplicatedCacheManager;
 import com.google.gerrit.common.data.Capable;
+import com.google.gerrit.common.replication.coordinators.ReplicatedEventsCoordinator;
 import com.google.gerrit.extensions.registration.DynamicSet;
 import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.reviewdb.server.ReviewDb;
@@ -75,6 +75,8 @@ import org.eclipse.jgit.transport.resolver.RepositoryResolver;
 import org.eclipse.jgit.transport.resolver.ServiceNotAuthorizedException;
 import org.eclipse.jgit.transport.resolver.ServiceNotEnabledException;
 import org.eclipse.jgit.transport.resolver.UploadPackFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -95,6 +97,9 @@ import javax.servlet.http.HttpServletResponse;
 @Singleton
 public class GitOverHttpServlet extends GitServlet {
   private static final long serialVersionUID = 1L;
+
+  private static final Logger log = LoggerFactory
+      .getLogger(GitOverHttpServlet.class);
 
   private static final String ATT_CONTROL = ProjectControl.class.getName();
   private static final String ATT_RC = ReceiveCommits.class.getName();
@@ -330,16 +335,35 @@ public class GitOverHttpServlet extends GitServlet {
 
   static class ReceiveFilter implements Filter {
     private final Cache<AdvertisedObjectsCacheKey, Set<ObjectId>> cache;
+    private final ReplicatedEventsCoordinator replicatedEventsCoordinator;
 
     @Inject
     ReceiveFilter(
-        @Named(ID_CACHE) Cache<AdvertisedObjectsCacheKey, Set<ObjectId>> cache) {
+        @Named(ID_CACHE) Cache<AdvertisedObjectsCacheKey, Set<ObjectId>> cache,
+        ReplicatedEventsCoordinator replicatedEventsCoordinator ) {
       this.cache = cache;
+      this.replicatedEventsCoordinator = replicatedEventsCoordinator;
       attachToReplication();
     }
 
     final void attachToReplication() {
-      ReplicatedCacheManager.watchCache(ID_CACHE, this.cache);
+      if (!replicatedEventsCoordinator.isGerritIndexerRunning()) {
+        log.info("Replication is disabled - not hooking in adv_bases cache listener.");
+        return;
+      }
+      replicatedEventsCoordinator.getReplicatedIncomingCacheEventProcessor().watchCache(ID_CACHE, this.cache);
+    }
+
+    /**
+     * Asks the replicated coordinator for the instance of the ReplicatedOutgoingCacheEventsFeed and calls
+     * replicateEvictionFromCache on it.
+     * @param name : Name of the cache to evict from.
+     * @param value : Value to evict from the cache.
+     */
+    private void replicateEvictionFromCache(String name, Object value) {
+      if(replicatedEventsCoordinator.isGerritIndexerRunning()) {
+        replicatedEventsCoordinator.getReplicatedOutgoingCacheEventsFeed().replicateEvictionFromCache(name, value);
+      }
     }
 
     @Override
@@ -384,13 +408,13 @@ public class GitOverHttpServlet extends GitServlet {
 
       if (isGet) {
         cache.invalidate(cacheKey);
-        ReplicatedCacheManager.replicateEvictionFromCache(ID_CACHE,cacheKey);
+        replicateEvictionFromCache(ID_CACHE,cacheKey);
       } else {
         Set<ObjectId> ids = cache.getIfPresent(cacheKey);
         if (ids != null) {
           rp.getAdvertisedObjects().addAll(ids);
           cache.invalidate(cacheKey);
-          ReplicatedCacheManager.replicateEvictionFromCache(ID_CACHE,cacheKey);
+          replicateEvictionFromCache(ID_CACHE,cacheKey);
         }
       }
 
