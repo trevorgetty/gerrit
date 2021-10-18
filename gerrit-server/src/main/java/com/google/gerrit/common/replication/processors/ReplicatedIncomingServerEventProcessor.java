@@ -6,6 +6,7 @@ import com.google.gerrit.common.replication.ReplicatedChangeEventInfo;
 import com.google.gerrit.common.replication.ReplicatedConfiguration;
 import com.google.gerrit.common.replication.SingletonEnforcement;
 import com.google.gerrit.common.replication.coordinators.ReplicatedEventsCoordinator;
+import com.google.gerrit.common.replication.exceptions.ReplicatedEventsMissingChangeInformationException;
 import com.google.gerrit.reviewdb.client.Change;
 import com.google.gerrit.reviewdb.server.ReviewDb;
 import com.google.gerrit.server.events.*;
@@ -129,12 +130,16 @@ public class ReplicatedIncomingServerEventProcessor extends GerritPublishableImp
           log.debug("RE using changeAttr: {}...", replicatedChangeEventInfo.getChangeAttr());
           Change change = db.changes().get(Change.Id.parse(replicatedChangeEventInfo.getChangeAttr().number));
 
-//          //If Percona DB is behind then the change will be null. Need to retry in this instance.
-          // TODO: Jira : going to rework as part of GER-1767
-//          if(change == null){
-//            log.warn("Change {} was not present in the DB", replicatedChangeEventInfo.getChangeAttr().number);
-//            return false;
-//          }
+          // reworked as part of GER-1767
+          // If change will be null its probably either a JSon changed Test case by QE, or somehow we
+          // have a stream event coming in after a deletion - either way we can't compare timestamps so lets just
+          // indicate missing change, and it will delete all working events before this one and backoff.
+          if(change == null){
+            log.warn("Change {} was not present in the DB", replicatedChangeEventInfo.getChangeAttr().number);
+            throw new ReplicatedEventsMissingChangeInformationException(
+                String.format("Change %s was not present in the DB. It was either deleted or will be added " +
+                    "by a future event", replicatedChangeEventInfo.getChangeAttr().number));
+          }
 
           log.debug("RE got change from DB: {}", change);
           getEventBroker().postEvent(change, (ChangeEvent) newEvent);
@@ -149,8 +154,15 @@ public class ReplicatedIncomingServerEventProcessor extends GerritPublishableImp
         }
       } catch (OrmException e) {
         log.error("RE While trying to publish a replicated event", e);
+
+        // Something happened requesting this event information - lets treat at a missing case, and it will retry later.
+        throw new ReplicatedEventsMissingChangeInformationException(
+            String.format("Change %s was not returned from the DB due to ORMException (maybe it will be later).", replicatedChangeEventInfo.getChangeAttr().number));
+
       }
     }
+    // we skip over unsupported events, so at the end if we have a failed item it will move to failed and we can work
+    // out what it was.
     return replicatedChangeEventInfo.isSupported();
   }
 }

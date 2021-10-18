@@ -21,13 +21,16 @@ import java.nio.file.Files;
 import java.security.InvalidParameterException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
 import static com.google.gerrit.common.replication.ReplicationConstants.GERRIT_REPLICATED_EVENT_WORKER_POOL_SIZE;
+import static com.google.gerrit.common.replication.processors.ReplicatedIncomingIndexEventProcessor.buildListOfMissingIds;
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.ACCOUNT_INDEX_EVENT;
 
 public class ReplicatedSchedulingTest extends AbstractReplicationTesting {
@@ -49,7 +52,7 @@ public class ReplicatedSchedulingTest extends AbstractReplicationTesting {
     scheduling = ReplicatedScheduling.getInstance(dummyTestCoordinator);
     HashMap<String, ReplicatedEventTask> eventFilesInProgress = scheduling.getCopyEventsFilesInProgress();
 
-    for(Map.Entry eventTask : eventFilesInProgress.entrySet()){
+    for (Map.Entry eventTask : eventFilesInProgress.entrySet()) {
       scheduling.clearEventsFileInProgress((ReplicatedEventTask) eventTask.getValue(), false);
     }
 
@@ -63,9 +66,9 @@ public class ReplicatedSchedulingTest extends AbstractReplicationTesting {
   public void tearDown() {
 
     File incomingPath = dummyTestCoordinator.getReplicatedConfiguration().getIncomingReplEventsDirectory();
-    String[]entries = incomingPath.list();
-    for(String s: entries){
-      File currentFile = new File(incomingPath.getPath(),s);
+    String[] entries = incomingPath.list();
+    for (String s : entries) {
+      File currentFile = new File(incomingPath.getPath(), s);
       currentFile.delete();
     }
   }
@@ -219,6 +222,20 @@ public class ReplicatedSchedulingTest extends AbstractReplicationTesting {
       EventWrapper dummyWrapper = createIndexEventWrapper("ProjectZ");
       replicatedEventTask = scheduling.tryScheduleReplicatedEventsTask(dummyWrapper, createDummyEventFile());
       Assert.assertNull(replicatedEventTask);
+    }
+  }
+
+  @Test
+  public void testSimpleBuildMissingIdsList(){
+
+    Collection<Integer> deletedIdsList = Arrays.asList(1, 3); // make sure we skip say no2 so make sure there is no ordering assumptions.
+    Collection<Integer> requestedIdsList = Arrays.asList(1, 2, 3, 5, 6); // using a set so we have each id only once.
+
+    // build the list of missing items or items yet to be processed
+    Collection<Integer> listOfMissingIds = buildListOfMissingIds(requestedIdsList, deletedIdsList);
+
+    for ( int thisId : requestedIdsList){
+      Assert.assertTrue( deletedIdsList.contains(thisId) ? !listOfMissingIds.contains(thisId) : listOfMissingIds.contains(thisId));
     }
   }
 
@@ -377,7 +394,7 @@ public class ReplicatedSchedulingTest extends AbstractReplicationTesting {
     Assert.assertEquals(2, dirtyWIP.size());
 
     // remove Filea - like remote worker has finished.
-    scheduling.clearEventsFileInProgress( replicatedEventTask, false);
+    scheduling.clearEventsFileInProgress(replicatedEventTask, false);
     Assert.assertEquals(2, dirtyWIP.size());
     Assert.assertEquals(1, scheduling.getNumEventFilesInProgress());
   }

@@ -8,6 +8,7 @@ import com.google.gerrit.common.replication.ReplicatedScheduling;
 import com.google.gerrit.common.replication.SingletonEnforcement;
 import com.google.gerrit.common.replication.coordinators.ReplicatedEventsCoordinator;
 import com.google.gerrit.common.replication.exceptions.ReplicatedEventsDBNotUpToDateException;
+import com.google.gerrit.common.replication.exceptions.ReplicatedEventsMissingChangeInformationException;
 import com.google.gerrit.common.replication.exceptions.ReplicatedEventsMoveToFailedDirectory;
 import com.google.gerrit.common.replication.processors.GerritPublishable;
 import com.google.gerrit.common.replication.ReplicatedConfiguration;
@@ -35,8 +36,10 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
 
@@ -64,7 +67,7 @@ public class ReplicatedIncomingEventWorker implements Runnable {
 
   //Get singleton instance
   public static ReplicatedIncomingEventWorker getInstance(ReplicatedEventsCoordinator replicatedEventsCoordinator) {
-    if(INSTANCE == null) {
+    if (INSTANCE == null) {
       INSTANCE = new ReplicatedIncomingEventWorker(replicatedEventsCoordinator);
       SingletonEnforcement.registerClass(ReplicatedIncomingEventWorker.class);
     }
@@ -298,12 +301,13 @@ public class ReplicatedIncomingEventWorker implements Runnable {
   }
 
   /**
-   * Build a temp copy of the WIP as a collection of files, not replicatedeventtasks.
+   * Build a temp copy of the WIP as a collection of files, not ReplicatedEventTask(s).
+   *
    * @param dirtyCopyOfWIP
    * @return
    */
   private Collection<File> buildDirtyWIPFiles(HashMap<String, ReplicatedEventTask> dirtyCopyOfWIP) {
-    Collection<File> dirtyCopyOfWIPFiles = new ArrayList<>();
+    Collection<File> dirtyCopyOfWIPFiles = new ArrayList<>(dirtyCopyOfWIP.size());
     for (ReplicatedEventTask tmpTask : dirtyCopyOfWIP.values()) {
       dirtyCopyOfWIPFiles.add(tmpTask.getEventsFileToProcess());
     }
@@ -311,36 +315,29 @@ public class ReplicatedIncomingEventWorker implements Runnable {
   }
 
   /**
-   * From the bytes we read from disk, which the replicator provided, we
-   * recreate the event using the name of the class embedded in the json text.
-   * We then add the replicated flag to the object to avoid loops in sending
-   * this event over and over again
+   * From the bytes we read from disk, we get passed the created EventWrapper list in a sorted order.
+   * We then process this list, and send them off to the appropriate processessors, to handle index/account/project
+   * type events differently.
    *
-   * @param eventsBytes
+   * @param replicatedEventTask
+   * @param sortedEvents
    */
-  private int publishEvents(final byte[] eventsBytes, ReplicatedEventTask replicatedEventTask) throws ReplicatedEventsMoveToFailedDirectory {
+  private int publishEvents(final List<EventWrapper> sortedEvents, ReplicatedEventTask replicatedEventTask) throws ReplicatedEventsMoveToFailedDirectory {
     logger.atFinest().log("RE Trying to publish original events...");
-    ReplicatorMetrics.totalPublishedForeignEventsBytes.addAndGet(eventsBytes.length);
-    ReplicatorMetrics.totalPublishedForeignEventsProsals.incrementAndGet();
+
     int failedEvents = 0;
     boolean failEntireFileGroup = false;
+    // handy quick accessors.
+    final File eventsFileBeingProcessed = replicatedEventTask.getEventsFileToProcess();
+    final ReplicatedScheduling replicatedScheduling = replicatedEventsCoordinator.getReplicatedScheduling();
 
-    List<EventWrapper> sortedEvents = null;
+    List<EventWrapper> processedEvents = new LinkedList<>();
+
     try {
-      sortedEvents = checkAndSortEvents(eventsBytes);
-    } catch (InvalidEventJsonException e) {
-      throw new ReplicatedEventsMoveToFailedDirectory("Exception processing file - move to the failed directory as we can't deserialize it", e);
-    }
-
-    // indicate number of events in this event file.
-    replicatedEventTask.setNumEventsToProcess(sortedEvents.size());
-
-    if (sortedEvents != null) {
       for (EventWrapper originalEvent : sortedEvents) {
         ReplicatorMetrics.totalPublishedForeignEvents.incrementAndGet();
 
         try {
-          ReplicatorMetrics.totalPublishedForeignGoodEventsBytes.addAndGet(eventsBytes.length);
           ReplicatorMetrics.totalPublishedForeignGoodEvents.incrementAndGet();
           ReplicatorMetrics.totalPublishedForeignEventsByType
               .add(originalEvent.getEventOrigin());
@@ -358,6 +355,9 @@ public class ReplicatedIncomingEventWorker implements Runnable {
                 if (!result) {
                   failedEvents++;
                 }
+                else {
+                  processedEvents.add(originalEvent);
+                }
               } catch (Exception e) {
                 logger.atSevere().withCause(e).log("RE While publishing events");
                 failedEvents++;
@@ -371,9 +371,70 @@ public class ReplicatedIncomingEventWorker implements Runnable {
           failEntireFileGroup = true;
         }
       }
-    }
-    if (failEntireFileGroup) {
-      throw new ReplicatedEventsMoveToFailedDirectory("JSonSyntaxException experienced, record the entire failed events group.");
+
+      if (failEntireFileGroup) {
+        throw new ReplicatedEventsMoveToFailedDirectory("JSonSyntaxException experienced, record the entire failed events group.");
+      }
+
+      // Decide on what to do when failures happen.
+      // See GER-1483 for info on how to handle errors in the index events.
+      // Basically failures falls into these categories, although use of the Boolean to return failure is really just
+      // when skipping an item as we can't really know the cause, so use exceptions where possible.
+      // All success, just clear out as normal.
+      // DBStale for some reason - backoff but never finally FAIL and delete/move the file until DB is up to date.
+      // JsonProcessing exception - record entire file into failed directory as its invalid JSON.
+      // Other failures - backoff with increasing time periods until eventually it hits max and it can be moved to failed.
+      if (failedEvents > 0) {
+        logger.atWarning().log(
+            "RE There was %s failed event(s) in this file %s for project %s, checking failure behaviour now.",
+            failedEvents, eventsFileBeingProcessed.getAbsolutePath(), replicatedEventTask.getProjectname());
+
+        checkForFailureBackoff(replicatedEventTask, replicatedScheduling, false, sortedEvents, processedEvents);
+        return failedEvents;
+      }
+
+      // All worked just as it should, lets delete the file here.
+      logger.atInfo().log("RE Completed processing event file [ %s ] for project [ %s ] successfully.",
+          eventsFileBeingProcessed, replicatedEventTask.getProjectname());
+      // lets lock and delete the file along with update the in progress map as a joint operation.
+      synchronized (replicatedScheduling.getEventsFileInProgressLock()) {
+        attemptDeleteEventFile(eventsFileBeingProcessed);
+        replicatedScheduling.clearEventsFileInProgress(replicatedEventTask, false);
+      }
+
+      // return no failures.
+      return 0;
+
+    } catch (ReplicatedEventsMoveToFailedDirectory e) {
+      logger.atSevere().withCause(e).log(
+          "RE There was an unrecoverable failure in the events in this file %s, " +
+              "this entire file is being moved to the failed directory so it can be manually investigated later.", eventsFileBeingProcessed);
+      synchronized (replicatedScheduling.getEventsFileInProgressLock()) {
+        FailedEventUtil.moveFileToFailed(replicatedConfiguration, eventsFileBeingProcessed);
+        replicatedScheduling.clearEventsFileInProgress(replicatedEventTask, false);
+      }
+    } catch (ReplicatedEventsMissingChangeInformationException e) {
+      // ok we didn't find some change information - for this case we want to remove the items we have up until this point.
+      logger.atWarning().withCause(e).log(
+          "RE Unable to process events file: %s completely, there was a temporary failure " +
+              "indicated by missing changes.", eventsFileBeingProcessed);
+
+      // indicate failure on this event file group to back it off, increment the failure counter,
+      // update the event file to remove any passed/processed successfully events.
+      // it may end up with the remainder moving to the failed directory unlike DbStale below which HAS to keep
+      // the file until the DB is finally up to date!
+      checkForFailureBackoff(replicatedEventTask, replicatedScheduling, false, sortedEvents, processedEvents);
+      // let the file stay where it is to pick it up again later - so just call clear on its own.
+      replicatedScheduling.clearEventsFileInProgress(replicatedEventTask, false);
+    } catch (ReplicatedEventsDBNotUpToDateException e) {
+      logger.atWarning().withCause(e).log(
+          "RE Unable to process events file: %s, there was temporary failure indicated by the DB not being up to date.", eventsFileBeingProcessed);
+
+      // indicate failure on this event file group to back it off, increment the failure counter, but dont finally delete/move
+      // to failed.
+      checkForFailureBackoff(replicatedEventTask, replicatedScheduling, true, sortedEvents, processedEvents);
+      // let the file stay where it is to pick it up again later - so just call clear on its own.
+      replicatedScheduling.clearEventsFileInProgress(replicatedEventTask, false);
     }
 
     return failedEvents;
@@ -511,32 +572,29 @@ public class ReplicatedIncomingEventWorker implements Runnable {
     // I am keeping here for now for simplicity of understanding, and only a mop up belts and braces clear of WIP is in
     // after execute.  Although I do use it for timing of our event tasks for metrics, which keeps this code cleaner!
     try {
-      final int failedEvents = publishEvents(eventsBytes, replicatedEventTask);
+      ReplicatorMetrics.totalPublishedForeignEventsBytes.addAndGet(eventsBytes.length);
+      ReplicatorMetrics.totalPublishedForeignGoodEventsBytes.addAndGet(eventsBytes.length);
+      ReplicatorMetrics.totalPublishedForeignEventsProsals.incrementAndGet();
 
-      // Decide on what to do when failures happen.
-      // See GER-1483 for info on how to handle errors in the index events.
-      // Basically failures falls into these categories.
-      // All success, just clear out as normal.
-      // DBStale for some reason - backoff but never finally FAIL and delete/move the file until DB is up to date.
-      // JsonProcessing exception - record entire file into failed directory as its invalid JSON.
-      // Other failures - backoff with increasing time periods until eventually it hits max and it can be moved to failed.
-      if (failedEvents > 0) {
-        logger.atWarning().log(
-            "RE There was %s failed events in this file %s for project %s, checking failure behaviour now.",
-            failedEvents, eventsFileBeingProcessed.getAbsolutePath(), projectName);
-
-        checkForFailureBackoff(replicatedEventTask, replicatedScheduling,  false);
-        return;
+      List<EventWrapper> sortedEvents;
+      try {
+        sortedEvents = checkAndSortEvents(eventsBytes);
+      } catch (InvalidEventJsonException e) {
+        throw new ReplicatedEventsMoveToFailedDirectory("Exception processing file - move to the failed directory as we can't deserialize it", e);
       }
 
-      // All worked just as it should, lets delete the file here.
-      logger.atInfo().log("RE Completed processing event file [ %s ] for project [ %s ] successfully.",
-          eventsFileBeingProcessed, projectName);
-      // lets lock and delete the file along with update the in progress map as a joint operation.
-      synchronized (replicatedScheduling.getEventsFileInProgressLock()) {
-        attemptDeleteEventFile(eventsFileBeingProcessed);
-        replicatedScheduling.clearEventsFileInProgress(replicatedEventTask, false);
+      if (sortedEvents == null) {
+        // something went wrong??? No events to process - empty created file?
+        throw new ReplicatedEventsMoveToFailedDirectory("Exception processing file - move to the failed directory as we can't read contents correctly.");
       }
+
+      // indicate number of events in this event file.
+      replicatedEventTask.setNumEventsToProcess(sortedEvents.size());
+
+      // All processing of failures now should happen closer to the each event being processed inside publishEvents.
+      // Just incase we need to filter out completed events.  So the only exception we ever handle here is a corruption
+      // case which supports direct move to the failed directory below.
+      publishEvents(sortedEvents, replicatedEventTask);
 
     } catch (ReplicatedEventsMoveToFailedDirectory e) {
       logger.atSevere().withCause(e).log(
@@ -546,21 +604,14 @@ public class ReplicatedIncomingEventWorker implements Runnable {
         FailedEventUtil.moveFileToFailed(replicatedConfiguration, eventsFileBeingProcessed);
         replicatedScheduling.clearEventsFileInProgress(replicatedEventTask, false);
       }
-    } catch (ReplicatedEventsDBNotUpToDateException e) {
-      logger.atWarning().withCause(e).log(
-          "RE Unable to process events file: %s, there was temporary failure indicated by the DB not being up to date.", eventsFileBeingProcessed);
-
-      // indicate failure on this event file group to back it off, increment the failure counter, but dont finally delete/move
-      // to failed.
-      checkForFailureBackoff(replicatedEventTask, replicatedScheduling, true);
-      // let the file where it is to pick it up again later - so just call clear on its own.
-      replicatedScheduling.clearEventsFileInProgress(replicatedEventTask, false);
     }
   }
 
-  public void checkForFailureBackoff(ReplicatedEventTask replicatedEventTask,
-                                      ReplicatedScheduling replicatedScheduling,
-                                      boolean isDBStale) {
+  public void checkForFailureBackoff(final ReplicatedEventTask replicatedEventTask,
+                                     final ReplicatedScheduling replicatedScheduling,
+                                     boolean isDBStale,
+                                     final List<EventWrapper> allEventsBeingProcessed, // only here for performance/rewrite prevention.
+                                     final List<EventWrapper> remainingEventsToBeProcessed) {
     final String projectName = replicatedEventTask.getProjectname();
     final File eventsFileBeingProcessed = replicatedEventTask.getEventsFileToProcess();
 
@@ -575,6 +626,7 @@ public class ReplicatedIncomingEventWorker implements Runnable {
       // now make sure we add this event into the skipped list - so we know its being skipped over, and we dont
       // schedule another file later on ahead of this one when the backoff period has expired.
       replicatedScheduling.addSkippedProjectEventFile(replicatedEventTask);
+      checkPersistRemainingEntries(allEventsBeingProcessed, remainingEventsToBeProcessed);
       return;
     }
 
@@ -592,6 +644,7 @@ public class ReplicatedIncomingEventWorker implements Runnable {
 
       logger.atWarning().log("RE Failed Event file %s, has finally hit " +
           "max number of retries allowed - moving to failed.", eventsFileBeingProcessed);
+      checkPersistRemainingEntries(allEventsBeingProcessed, remainingEventsToBeProcessed);
       FailedEventUtil.moveFileToFailed(replicatedConfiguration, eventsFileBeingProcessed);
       // we have failed this event file - lets free up future event files by removing this backoff lock.
       replicatedScheduling.clearSkipThisProjectsEventsForNow(projectName);
@@ -601,6 +654,24 @@ public class ReplicatedIncomingEventWorker implements Runnable {
     // ok we can attempt to fail this again.
     logger.atWarning().log("RE Failed Event file %s, is incrementing its backoff period to try again.", eventsFileBeingProcessed);
     backoffPeriod.updateFailureInformation();
+  }
+
+  /**
+   * As a result of a failure, we want to reduce the amount of retry work to only include the failed items, or items not
+   * tried as appropriate.  We are handed a collection of items to be written to the existing file atomically.
+   * @param allEventsBeingProcessed
+   * @param remainingEventsToBeProcessed
+   */
+  private void checkPersistRemainingEntries(List<EventWrapper> allEventsBeingProcessed, List<EventWrapper> remainingEventsToBeProcessed) {
+    // if we have remaining events to be processed, and they DO NOT match the original events to be processed
+    // size ( i.e. some events have not been successful so the file needs to be shrunk ) lets do that now.
+    if ( remainingEventsToBeProcessed == null || remainingEventsToBeProcessed.size() == 0 ||
+    allEventsBeingProcessed.size() == remainingEventsToBeProcessed.size() ){
+      // we have nothing to do in persisting new information - just exit.
+      return;
+    }
+
+    // TODO: call to persist out remaining events, this needs to call Ronans new work added as part of this jira.
   }
 
   private void attemptDeleteEventFile(File eventsFileBeingProcessed) {
@@ -632,11 +703,11 @@ public class ReplicatedIncomingEventWorker implements Runnable {
 
     // ByteArrayOutputStream is an implementation of OutputStream that can write data into a byte array.
     // The buffer keeps growing as ByteArrayOutputStream writes data to it.
-    try(ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        FileInputStream plainFileReader = new FileInputStream(file);
-        // If the incoming events are Gzipped, then the reader will be a GZipInputStream otherwise
-        // it will be a FileInputStream.
-        InputStream reader = incomingEventsAreGZipped ? new GZIPInputStream(plainFileReader) : plainFileReader) {
+    try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
+         FileInputStream plainFileReader = new FileInputStream(file);
+         // If the incoming events are Gzipped, then the reader will be a GZipInputStream otherwise
+         // it will be a FileInputStream.
+         InputStream reader = incomingEventsAreGZipped ? new GZIPInputStream(plainFileReader) : plainFileReader) {
 
       copyFile(reader, bos);
       return bos;
@@ -647,8 +718,9 @@ public class ReplicatedIncomingEventWorker implements Runnable {
 
   /**
    * Reads from an InputStream into an OutputStream.
+   *
    * @param source A InputStream which will either be a FileInputStream or a GZIPInputStream
-   * @param dest An OutputStream
+   * @param dest   An OutputStream
    * @throws IOException if unable to read from either stream for any reason.
    */
   private static void copyFile(InputStream source, OutputStream dest)

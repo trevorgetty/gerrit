@@ -53,6 +53,14 @@ public class ReplicatedChangeTimeChecker {
     return normalisedIndexToReplicate;
   }
 
+  public boolean isTimeStampBefore() {
+    return normalisedChangeTimestamp.before(normalisedIndexToReplicate);
+  }
+
+  public boolean isTimeStampEqual() {
+    return normalisedChangeTimestamp.equals(normalisedIndexToReplicate);
+  }
+
   public ReplicatedChangeTimeChecker invoke() {
     int landedIndexTimeZoneOffset = indexToReplicate.timeZoneRawOffset;
     log.debug("landedIndexTimeZoneOffset={}",landedIndexTimeZoneOffset);

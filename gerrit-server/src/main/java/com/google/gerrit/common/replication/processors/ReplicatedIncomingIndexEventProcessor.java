@@ -1,12 +1,12 @@
 package com.google.gerrit.common.replication.processors;
 
 import com.google.gerrit.common.ReplicatedChangeTimeChecker;
-import com.google.gerrit.common.replication.ConfigureReplication;
 import com.google.gerrit.common.replication.IndexToReplicate;
 import com.google.gerrit.common.replication.IndexToReplicateComparable;
 import com.google.gerrit.common.replication.SingletonEnforcement;
 import com.google.gerrit.common.replication.coordinators.ReplicatedEventsCoordinator;
 import com.google.gerrit.common.replication.exceptions.ReplicatedEventsDBNotUpToDateException;
+import com.google.gerrit.common.replication.exceptions.ReplicatedEventsMissingChangeInformationException;
 import com.google.gerrit.reviewdb.client.Change;
 import com.google.gerrit.reviewdb.server.ReviewDb;
 import com.google.gerrit.server.query.change.ChangeData;
@@ -17,12 +17,13 @@ import com.google.inject.Provider;
 import com.google.inject.Singleton;
 import com.google.inject.util.Providers;
 import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
-import org.eclipse.jgit.lib.Config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.sql.Timestamp;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.NavigableMap;
 import java.util.TreeMap;
@@ -44,7 +45,7 @@ public class ReplicatedIncomingIndexEventProcessor extends GerritPublishableImpl
 
   //Get singleton instance
   public static ReplicatedIncomingIndexEventProcessor getInstance(ReplicatedEventsCoordinator eventsCoordinator) {
-    if(INSTANCE == null) {
+    if (INSTANCE == null) {
       INSTANCE = new ReplicatedIncomingIndexEventProcessor(eventsCoordinator);
       SingletonEnforcement.registerClass(ReplicatedIncomingIndexEventProcessor.class);
     }
@@ -84,7 +85,7 @@ public class ReplicatedIncomingIndexEventProcessor extends GerritPublishableImpl
   }
 
   private boolean unwrapAndQueueAlreadyReplicatedIndexEvent(EventWrapper newEvent) throws JsonSyntaxException {
-    boolean success = false;
+
     try {
       Class<?> eventClass = Class.forName(newEvent.getClassName());
       IndexToReplicateComparable originalEvent = null;
@@ -94,13 +95,13 @@ public class ReplicatedIncomingIndexEventProcessor extends GerritPublishableImpl
 
         if (index == null) {
           log.error("fromJson method returned null for {}", newEvent.toString());
-          return success;
+          return false;
         }
 
         originalEvent = new IndexToReplicateComparable(index, replicatedEventsCoordinator.getReplicatedConfiguration().getThisNodeIdentity());
       } catch (JsonSyntaxException je) {
         log.error("PR Could not decode json event {}", newEvent.toString(), je);
-        return success;
+        return false;
       }
 
       log.debug("RC Received this event from replication: {}", originalEvent);
@@ -109,8 +110,9 @@ public class ReplicatedIncomingIndexEventProcessor extends GerritPublishableImpl
       return processIndexChangeCollection(originalEvent);
     } catch (ClassNotFoundException e) {
       log.error("RC INDEX_EVENT has been lost. Could not find {}", newEvent.getClassName(), e);
+      return false;
     }
-    return false;
+
   }
 
 
@@ -118,9 +120,10 @@ public class ReplicatedIncomingIndexEventProcessor extends GerritPublishableImpl
    * Process a file full of events to be processed.
    * Returning true from this method means all events are processed without a failure.
    * Returning false means we have experienced a failure, and queue for retry if possible.
-   *
+   * <p>
    * finally failures that need to stop immediately without further processing of events in a file
    * with have thrown specific event exceptions such as ReviewDBNotUpToDat
+   *
    * @param indexEventToBeProcessed
    * @return
    */
@@ -128,6 +131,8 @@ public class ReplicatedIncomingIndexEventProcessor extends GerritPublishableImpl
     NavigableMap<Change.Id, IndexToReplicateComparable> mapOfChanges = new TreeMap<>();
 
     // make the list of changes a set of unique changes based only on the change number
+    // Note this is a replace last item matching this ID, so if 2 index change (id=3) come in only
+    // the last one will be in this list matching key=value. e.g.(id=3=<last>)
     mapOfChanges.put(new Change.Id(indexEventToBeProcessed.indexNumber), indexEventToBeProcessed);
 
     if (mapOfChanges.isEmpty()) {
@@ -151,6 +156,7 @@ public class ReplicatedIncomingIndexEventProcessor extends GerritPublishableImpl
     try {
       Provider<ReviewDb> dbProvider = Providers.of(replicatedEventsCoordinator.getSchemaFactory().open());
       boolean failureExperienced = false;
+      Collection<Integer> deletedIdsList = new HashSet<>(); // using a set so we have each id only once.
 
       try (final ReviewDb db = dbProvider.get()) {
 
@@ -158,6 +164,7 @@ public class ReplicatedIncomingIndexEventProcessor extends GerritPublishableImpl
           if (i.delete) {
             try {
               deleteChange(i.indexNumber);
+              deletedIdsList.add(i.indexNumber);
             } catch (IOException e) {
               // we don't record deletions as failures, as we could of deleted on a first attempt and a later retry
               // might throw as its already been deleted?
@@ -171,25 +178,39 @@ public class ReplicatedIncomingIndexEventProcessor extends GerritPublishableImpl
         // fetch changes from db
         long startTime = System.currentTimeMillis();
 
-
         // N.B : There is a subtle behaviour of the changes().get() method.
         // It only returns a collection of all *matching* entities;
         // this may be a smaller result than the keys supplied if one or more of the keys does not match an
         // existing entity. For example if we supply a keySet with a single entry that is NOT a matching entity then
         // changesOnDb will be 0. This could happen If for example Percona has not caught up yet on this site.
-        //TODO Jira: This will need reworked as part of GER-1767
-//        int numMatchingDbChanges = db.changes().get(mapOfChanges.keySet()).toList().size();
-//        if(numMatchingDbChanges < mapOfChanges.size()){
-//          log.debug("Number of matching changes found on the DB : {}", numMatchingDbChanges);
-//          log.debug("Number of changes unaccounted for on the DB (That were not found in the matching changes) : {} "
-//              , mapOfChanges.keySet().size());
-//          throw new ReplicatedEventsDBNotUpToDateException(String.format("There were no matching changes found on the DB " +
-//              "for the current change index ids being processed : %s", mapOfChanges.descendingKeySet()));
-//        }
+        // Or if the item has been deleted already by a deletion event.
+        // reworked as part of GER-1767
+        List<Change> changesList;
 
-        // If the numMatchingDbChanges is not less than the number of change indexes in the map of changes
-        // we're looking for (i.e all our changes have been found to exist on the DB) then set the changesOnDb variable
-        ResultSet<Change> changesOnDb = db.changes().get(mapOfChanges.keySet());
+        {
+          final ResultSet<Change> changesOnDb = db.changes().get(mapOfChanges.keySet());
+          changesList = changesOnDb.toList();
+        }
+
+        final int numMatchingDbChanges = changesList.size();
+        if (numMatchingDbChanges < mapOfChanges.size()) {
+          log.warn("Number of matching changes found on the DB : {} doesn't match requested num changes: {}", numMatchingDbChanges, mapOfChanges.size());
+
+          // Lets work out the missing ids, and report them in the exception only.
+          Collection<Integer> listOfFoundIds = buildListFromChange(changesList);
+          Collection<Integer> listOfRequestedIds = buildListFromChangeId(mapOfChanges);
+
+          // populate a simple Ids list for quick manipulation.
+          // add all requested ids, then remove the founds ones.
+          Collection<Integer> listOfMissingIds = buildListOfMissingIds(listOfRequestedIds, listOfFoundIds);
+
+          // now we have the full picture - of requested, found, and missing lets raise exception
+          // with the values of missing changes...
+          throw new ReplicatedEventsMissingChangeInformationException(String.format(
+              "There were no matching changes found on the DB for the following changeIds: %s.  " +
+                  "Requested numChanges: %s but found: %s. and  current change index ids being processed : %s",
+              listOfMissingIds, listOfRequestedIds.size(), listOfFoundIds.size(), mapOfChanges.descendingKeySet()));
+        }
 
         long endTime = System.currentTimeMillis();
         long duration = (endTime - startTime);
@@ -200,41 +221,20 @@ public class ReplicatedIncomingIndexEventProcessor extends GerritPublishableImpl
         log.debug("thisNodeTimeZoneOffset={}", thisNodeTimeZoneOffset);
         // compare changes from db with the changes landed from the index change replication
 
-        for (Change changeOnDb : changesOnDb) {
+        //  N.B future enhancement. indexCollectionOfChanges will only ever receive a mapOfChanges of size
+        //  1. Therefore we wouldn't need the iteration on changesOnDb here or elsewhere throughout this method.
+        //  a future enhancement would be to create a map of index events per eventFile and figure out how to
+        //  pass multiple failures back to the caller. For now we only process one event at a time.
+        for (Change changeOnDb : changesList) {
           try {
             // If the change on the db is old (last update has been done much before the one recorded in the change,
             // the put it back in the queue
             IndexToReplicateComparable indexToReplicate = mapOfChanges.get(changeOnDb.getId());
             ReplicatedChangeTimeChecker changeTimeChecker =
                 new ReplicatedChangeTimeChecker(thisNodeTimeZoneOffset, changeOnDb, indexToReplicate, replicatedEventsCoordinator).invoke();
-            boolean changeIndexedMoreThanXMinutesAgo = changeTimeChecker.isChangeIndexedMoreThanXMinutesAgo();
-            Timestamp normalisedChangeTimestamp = changeTimeChecker.getNormalisedChangeTimestamp();
-            Timestamp normalisedIndexToReplicate = changeTimeChecker.getNormalisedIndexToReplicate();
 
-            log.debug("Comparing {} to {}. MoreThan is {}", normalisedChangeTimestamp, normalisedIndexToReplicate, changeIndexedMoreThanXMinutesAgo);
-
-            // Note psuedo code of what is happening here.
-
-            // db not up to date - throw now to requeue the entire block of events
-            //                             ( entire file of events simply does not get deleted).
-            // db is up to date....
-            //    changeIndexedMoreThanXMinutesAgo < go ahead and process as normal
-            //        if failure is jGitMissingObject ( persist just this event as a playable event file, in future +30secs
-            //        if failure is generic, persist this event into failed directory (allow it to be replayed by simple move )
-            //    changeIndexedMoreThanXMinutesAgo > even time
-            //        process ONCE now.
-            //        if failed -> keep in indicator of any failure regardless of why and
-            //                if indicator=true throw exception at end of the full changes list so entire file
-            //                is moved into failed directory ( same name for later reprocessing? )
-
-            // dont reindex any events in this file - if DB is not up to date.
-            if (normalisedChangeTimestamp.before(normalisedIndexToReplicate)) {
-              log.info("Change {}, could not be processed yet, as the DB is not yet up to date.\n." +
-                      "Push this entire group of changes back into the queue [db={}, index={}]",
-                  indexToReplicate.indexNumber, changeOnDb.getLastUpdatedOn(), indexToReplicate.lastUpdatedOn);
-              // Fail the entire group of events in this entire file
-              throw new ReplicatedEventsDBNotUpToDateException("DB not up to date to deal with index: " + indexToReplicate.indexNumber);
-            }
+            // check the DB row is not behind this event info.
+            checkDBChangeRowTimestamp(changeOnDb, indexToReplicate, changeTimeChecker);
 
             // changeIndexedMoreThanXMinutesAgo: now keep in mind that this change may be stale - when it gets to the stale period, we still
             // allow it to be processed one more time - this allows for a server outage to allow all files to be processed
@@ -245,6 +245,15 @@ public class ReplicatedIncomingIndexEventProcessor extends GerritPublishableImpl
               mapOfChanges.remove(changeOnDb.getId());
             } catch (Exception e) { // could be org.eclipse.jgit.errors.MissingObjectException
               log.warn(String.format("Got exception '%s' while trying to reindex change, will backoff this event file to retry later.", e.getMessage()), e);
+
+              // just before we indicate a failure - if we have a deletion on the same change earlier on, lets
+              // ignore this!!
+              if (deletedIdsList.contains(changeOnDb.getChangeId())) {
+                // we have a failure but we already deleted this id before now... ignore it
+                log.warn("Ignoring change failure: {} - as we have already deleted this change before now.", changeOnDb.getChangeId());
+                continue;
+              }
+
               failureExperienced = true;
 
               if (e.getCause() instanceof org.eclipse.jgit.errors.MissingObjectException) {
@@ -254,36 +263,28 @@ public class ReplicatedIncomingIndexEventProcessor extends GerritPublishableImpl
 
               // protect against edge case - low DB resolution where we could have A B C in same second,
               // but only A B is on Db yet. C has yet to come.
-              else if (normalisedChangeTimestamp.equals(normalisedIndexToReplicate)) {
-                // Special case if the DB is equal in seconds to this event time - please hold off the entire group and
-                // try again just like DB not up to date exception.  Fail not dont process other events for this file as
-                // it looks like DB is stale.
-                log.warn("Specific Change error noticed {} pushed back in the queue", indexToReplicate.indexNumber);
+              else if (changeTimeChecker.isTimeStampEqual()) {
+                // Special case if the DB is equal in seconds the change is there and it should have been a no-op.
+                // This should have passed, is there somehow a way that an event change row can be updated without
+                // updating the lastUpdatedOn time held for that row by the DB?? Lets treat as if we didn't get the row
+                // at all, so lets delete all working events before this one, and let it replay later.
+                log.warn("Specific Change error noticed {} with matching lastUpdatedOn time - pushed back in the queue", indexToReplicate.indexNumber);
 
-                throw new ReplicatedEventsDBNotUpToDateException("DB equals same timestamp retry failure process events group.");
+                throw new ReplicatedEventsMissingChangeInformationException("DB equals same timestamp retry failure process events group.");
               }
             }
-          }
-          catch(ReplicatedEventsDBNotUpToDateException e){
+          } catch (ReplicatedEventsDBNotUpToDateException | ReplicatedEventsMissingChangeInformationException e) {
             // this is a specific exception that we do not wish to catch and hide - we want to bubble this up
             // and ensure it is caught at higher level.. its stop the processing now, but also makes the retry not
             // move this event file into failed. It will increase the failure backoff period, but wont finally go over the max
             // retries forcing a move to delete until the DB is up to date and its tried once more.
             throw e;
-          }
-          catch (Exception e) {
+          } catch (Exception e) {
             failureExperienced = true;
             log.error("RC Error while trying to reindex change {}, failed events will be retried later.", changeOnDb.getChangeId(), e);
           }
         }
 
-        // Check for files that have remained too long and are no longer valid
-        // because they are no longer found in the database
-        // TREV Decide on when to delete the group of changes, it should really be back when the task is removed
-        // from the pool that we then remove the events file - if too old!  If we fail we should throw a move to failed
-        // and delete entire file?
-        // TODO: trevorg
-//      removeStaleIndexes(mapOfChanges);
         log.debug(String.format("RC Finished indexing %d changes... (%d) any failuresExperience=%s.",
             mapOfChanges.size(), totalDone, failureExperienced));
       }
@@ -292,6 +293,71 @@ public class ReplicatedIncomingIndexEventProcessor extends GerritPublishableImpl
     } catch (OrmException e) {
       log.error("RC Error while trying to reindex change, unable to open the ReviewDB instance.", e);
       throw new ReplicatedEventsDBNotUpToDateException("RC Unable to open ReviewDB instance.");
+    }
+  }
+
+  public static Collection<Integer> buildListOfMissingIds(final Collection<Integer> listOfRequestedIds, final Collection<Integer> listOfFoundIds) {
+    Collection<Integer> listOfMissingIds = new HashSet<>(listOfRequestedIds);
+    listOfMissingIds.removeAll(listOfFoundIds);
+    return listOfMissingIds;
+  }
+
+  private Collection<Integer> buildListFromChangeId(NavigableMap<Change.Id, IndexToReplicateComparable> mapOfChanges) {
+    Collection<Integer> listOfIds = new HashSet<>();
+
+    for (Change.Id requestedChangeId : mapOfChanges.keySet()) {
+      // just check do we have a match in our changesOnDb list?
+      // Would be nicer to have a stream - but in j7 here just nested FOR it, the lists are very small
+      // usually 1-10 items, no real benefit of rework int
+      listOfIds.add(requestedChangeId.id);
+    }
+    return listOfIds;
+  }
+
+  private Collection<Integer> buildListFromChange(final List<Change> changesOnDb) {
+    Collection<Integer> listOfIds = new HashSet<>();
+
+    for (Change foundChange : changesOnDb) {
+      listOfIds.add(foundChange.getChangeId());
+    }
+    return listOfIds;
+  }
+
+  /**
+   * We want to check that the row in the DB is the same as the event timestamp we replicated or newer.
+   * We also need to account for DB timezone information.
+   *
+   * @param changeOnDb
+   * @param indexToReplicate
+   * @param changeTimeChecker
+   */
+  private void checkDBChangeRowTimestamp(Change changeOnDb, IndexToReplicateComparable indexToReplicate, ReplicatedChangeTimeChecker changeTimeChecker) {
+    boolean changeIndexedMoreThanXMinutesAgo = changeTimeChecker.isChangeIndexedMoreThanXMinutesAgo();
+    Timestamp normalisedChangeTimestamp = changeTimeChecker.getNormalisedChangeTimestamp();
+    Timestamp normalisedIndexToReplicate = changeTimeChecker.getNormalisedIndexToReplicate();
+
+    log.debug("Comparing changeTimestamp={} to indexToReplicate={}. ChangedIndexedMoreThanXMinuteAgo is {}",
+        normalisedChangeTimestamp, normalisedIndexToReplicate, changeIndexedMoreThanXMinutesAgo);
+
+    // db not up to date - throw now to requeue the entire block of events
+    //                             ( entire file of events simply does not get deleted).
+    // db is up to date....
+    //    changeIndexedMoreThanXMinutesAgo < go ahead and process as normal
+    //        if failure is jGitMissingObject ( persist just this event as a playable event file, in future +30secs
+    //        if failure is generic, persist this event into failed directory (allow it to be replayed by simple move )
+    //    changeIndexedMoreThanXMinutesAgo > event time
+    //        process ONCE now.
+    //        if failed -> keep in indicator of any failure regardless of why and
+    //                if indicator=true throw exception at end of the full changes list so entire file
+    //                is moved into failed directory ( same name for later reprocessing? )
+
+    // dont reindex any events in this file - if DB is not up to date.
+    if (changeTimeChecker.isTimeStampBefore()) {
+      log.info("Change {}, could not be processed yet, as the DB is not yet up to date." +
+              "Push this entire group of changes back into the queue [db={}, index={}]",
+          indexToReplicate.indexNumber, changeOnDb.getLastUpdatedOn(), indexToReplicate.lastUpdatedOn);
+      // Fail the entire group of events in this entire file
+      throw new ReplicatedEventsDBNotUpToDateException("DB not up to date to deal with index: " + indexToReplicate.indexNumber);
     }
   }
 

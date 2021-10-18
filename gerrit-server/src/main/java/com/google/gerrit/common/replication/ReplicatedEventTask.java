@@ -90,7 +90,8 @@ public class ReplicatedEventTask implements Runnable {
       //before moving to the failed folder.
       logger.error("Problem when dealing with events byte stream. {}", e.getMessage());
       replicatedEventsCoordinator.getReplicatedIncomingEventWorker().checkForFailureBackoff(this,
-          replicatedEventsCoordinator.getReplicatedScheduling(), false);
+          replicatedEventsCoordinator.getReplicatedScheduling(), false,
+          null, null);
     }
   }
 
