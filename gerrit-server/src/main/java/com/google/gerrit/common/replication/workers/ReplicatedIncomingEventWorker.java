@@ -354,8 +354,7 @@ public class ReplicatedIncomingEventWorker implements Runnable {
 
                 if (!result) {
                   failedEvents++;
-                }
-                else {
+                } else {
                   processedEvents.add(originalEvent);
                 }
               } catch (Exception e) {
@@ -611,7 +610,7 @@ public class ReplicatedIncomingEventWorker implements Runnable {
                                      final ReplicatedScheduling replicatedScheduling,
                                      boolean isDBStale,
                                      final List<EventWrapper> allEventsBeingProcessed, // only here for performance/rewrite prevention.
-                                     final List<EventWrapper> remainingEventsToBeProcessed) {
+                                     final List<EventWrapper> correctlyProcessedEvents) {
     final String projectName = replicatedEventTask.getProjectname();
     final File eventsFileBeingProcessed = replicatedEventTask.getEventsFileToProcess();
 
@@ -626,7 +625,7 @@ public class ReplicatedIncomingEventWorker implements Runnable {
       // now make sure we add this event into the skipped list - so we know its being skipped over, and we dont
       // schedule another file later on ahead of this one when the backoff period has expired.
       replicatedScheduling.addSkippedProjectEventFile(replicatedEventTask);
-      checkPersistRemainingEntries(allEventsBeingProcessed, remainingEventsToBeProcessed);
+      checkPersistRemainingEntries(allEventsBeingProcessed, correctlyProcessedEvents);
       return;
     }
 
@@ -644,7 +643,7 @@ public class ReplicatedIncomingEventWorker implements Runnable {
 
       logger.atWarning().log("RE Failed Event file %s, has finally hit " +
           "max number of retries allowed - moving to failed.", eventsFileBeingProcessed);
-      checkPersistRemainingEntries(allEventsBeingProcessed, remainingEventsToBeProcessed);
+      checkPersistRemainingEntries(allEventsBeingProcessed, correctlyProcessedEvents);
       FailedEventUtil.moveFileToFailed(replicatedConfiguration, eventsFileBeingProcessed);
       // we have failed this event file - lets free up future event files by removing this backoff lock.
       replicatedScheduling.clearSkipThisProjectsEventsForNow(projectName);
@@ -659,17 +658,24 @@ public class ReplicatedIncomingEventWorker implements Runnable {
   /**
    * As a result of a failure, we want to reduce the amount of retry work to only include the failed items, or items not
    * tried as appropriate.  We are handed a collection of items to be written to the existing file atomically.
+   *
    * @param allEventsBeingProcessed
-   * @param remainingEventsToBeProcessed
+   * @param currentlyProcessedEvents
    */
-  private void checkPersistRemainingEntries(List<EventWrapper> allEventsBeingProcessed, List<EventWrapper> remainingEventsToBeProcessed) {
-    // if we have remaining events to be processed, and they DO NOT match the original events to be processed
-    // size ( i.e. some events have not been successful so the file needs to be shrunk ) lets do that now.
-    if ( remainingEventsToBeProcessed == null || remainingEventsToBeProcessed.size() == 0 ||
-    allEventsBeingProcessed.size() == remainingEventsToBeProcessed.size() ){
-      // we have nothing to do in persisting new information - just exit.
+  private void checkPersistRemainingEntries(List<EventWrapper> allEventsBeingProcessed, List<EventWrapper> currentlyProcessedEvents) {
+    if (allEventsBeingProcessed.size() == 0 || currentlyProcessedEvents.size() == 0 || (allEventsBeingProcessed.size() == currentlyProcessedEvents.size())) {
+      // if we have processed all events in the list, or we have processed none in the list we have nothing
+      // to change within the events file.. only if we have done a subset are we to update the events file with
+      // the remaining entries.  This case is here to skip over rewritting the file with the same contents
+      // or no contents.
       return;
     }
+
+    // Lets work out the remaining items to pass to the persiter.
+    List<EventWrapper> remainingEvents = new LinkedList<>();
+
+    remainingEvents.addAll(allEventsBeingProcessed);
+    remainingEvents.removeAll(currentlyProcessedEvents);
 
     // TODO: call to persist out remaining events, this needs to call Ronans new work added as part of this jira.
   }
