@@ -2,6 +2,8 @@ package com.google.gerrit.common.replication;
 
 import com.google.common.base.Strings;
 import com.google.common.flogger.FluentLogger;
+import com.google.gerrit.common.replication.coordinators.ReplicatedEventsCoordinator;
+import com.google.gson.Gson;
 import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
 import com.wandisco.gerrit.gitms.shared.events.GerritEventData;
 import com.wandisco.gerrit.gitms.shared.util.ObjectUtils;
@@ -13,10 +15,11 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.google.gerrit.common.replication.ReplicationConstants.DEFAULT_NANO;
+import static com.google.gerrit.common.replication.ReplicationConstants.ENC;
 import static com.google.gerrit.common.replication.ReplicationConstants.NEXT_EVENTS_FILE;
 import static com.wandisco.gerrit.gitms.shared.util.StringUtils.getProjectNameSha1;
 
-public class OutgoingEventInformation {
+public class PersistedEventInformation {
 
   private static final FluentLogger logger = FluentLogger.forEnclosingClass();
 
@@ -28,18 +31,38 @@ public class OutgoingEventInformation {
   private AtomicInteger numEventsWritten = new AtomicInteger(0);
   private ReplicatedConfiguration replicatedConfiguration;
   private final String projectName;
+  private final File outputDirectory;
+  private final Gson gson;
 
 
-  public OutgoingEventInformation(ReplicatedConfiguration replicatedConfiguration, EventWrapper originalEvent) throws IOException {
+  public PersistedEventInformation(final ReplicatedEventsCoordinator replicatedEventsCoordinator, EventWrapper originalEvent) throws IOException {
     this.firstEventTime = System.currentTimeMillis();
     //Project key doesn't exist in the map so create a new file
     //Create a file with a filename composed of the contents of the event file itself.
-    this.replicatedConfiguration = replicatedConfiguration;
+    this.replicatedConfiguration = replicatedEventsCoordinator.getReplicatedConfiguration();
+    this.gson = replicatedEventsCoordinator.getGson();
+    this.outputDirectory = replicatedConfiguration.getOutgoingReplEventsDirectory();
     this.eventFile = getTempEventFile();
     this.finalEventFileName = createThisEventsFilename(originalEvent);
     this.fileOutputStream = new FileOutputStream(eventFile);
     this.projectName = originalEvent.getProjectName();
   }
+
+  //This is for updating an existing event file with new information
+  public PersistedEventInformation(final ReplicatedEventsCoordinator replicatedEventsCoordinator,
+                                   String originalEventFileName, String projectName) throws IOException {
+    this.firstEventTime = System.currentTimeMillis();
+    //Project key doesn't exist in the map so create a new file
+    //Create a file with a filename composed of the contents of the event file itself.
+    this.replicatedConfiguration = replicatedEventsCoordinator.getReplicatedConfiguration();
+    this.gson = replicatedEventsCoordinator.getGson();
+    this.outputDirectory = replicatedConfiguration.getIncomingReplEventsDirectory();
+    this.eventFile = getTempEventFile();
+    this.finalEventFileName = originalEventFileName;
+    this.fileOutputStream = new FileOutputStream(eventFile);
+    this.projectName = projectName;
+  }
+
 
   public String getProjectName() {
     return projectName;
@@ -86,7 +109,7 @@ public class OutgoingEventInformation {
    * @throws IOException
    */
   private File getTempEventFile() throws IOException {
-    return File.createTempFile("events-", ".tmp", replicatedConfiguration.getOutgoingReplEventsDirectory());
+    return File.createTempFile("events-", ".tmp", outputDirectory);
   }
 
   /**
@@ -149,9 +172,39 @@ public class OutgoingEventInformation {
 
 
   /**
+   * This will create append to the current file the last event received. If the
+   * project name of the this event is different from the the last one, then we
+   * need to create a new file anyway, because we want to pack events in one
+   * file only if the are for the same project
+   *
+   * @param originalEvent : The EventWrapper instance that was polled from the queue.
+   * @return true if the event was successfully appended to the file
+   * @throws IOException
+   */
+  public boolean appendToFile(final EventWrapper originalEvent, boolean updateMetrics)
+      throws IOException {
+
+    // If the project is the same, write the file
+    final String wrappedEvent = gson.toJson(originalEvent) + '\n';
+    byte[] bytes = wrappedEvent.getBytes(ENC);
+
+    logger.atFine().log("RE Last json to be sent: %s", wrappedEvent);
+    if(updateMetrics) {
+      ReplicatorMetrics.totalPublishedLocalEvents.incrementAndGet();
+      ReplicatorMetrics.totalPublishedLocalEventsBytes.addAndGet(bytes.length);
+      ReplicatorMetrics.totalPublishedLocalGoodEventsBytes.addAndGet(bytes.length);
+      ReplicatorMetrics.totalPublishedLocalGoodEvents.incrementAndGet();
+      ReplicatorMetrics.totalPublishedLocalEventsByType.add(originalEvent.getEventOrigin());
+    }
+
+    return writeEventsToFile(originalEvent.getProjectName(), bytes);
+  }
+
+
+  /**
    * Rename the outgoing events-<randomnum>.tmp file to the unique filename that was created upon
-   * construction of the OutgoingEventInformation instance.
-   * See {@link OutgoingEventInformation#createThisEventsFilename(EventWrapper)} ()} ()} for how
+   * construction of the PersistedEventInformation instance.
+   * See {@link PersistedEventInformation#createThisEventsFilename(EventWrapper)} ()} ()} for how
    * this filename is composed.
    */
   public void atomicRenameTmpFilename() {
@@ -168,7 +221,7 @@ public class OutgoingEventInformation {
     logger.atFinest().log(".tmp event [ %s ] file for projectName [ %s ] will be renamed to [ %s ]",
         getProjectName(), projectTmpEventFile, getFinalEventFileName());
 
-    File newFile = new File(replicatedConfiguration.getOutgoingReplEventsDirectory(), getFinalEventFileName());
+    File newFile = new File(outputDirectory, getFinalEventFileName());
 
     // Documentation states the following for 'renameTo'
     // * Many aspects of the behavior of this method are inherently
@@ -289,37 +342,42 @@ public class OutgoingEventInformation {
         getProjectNameSha1(originalEvent.getProjectName()), objectHash);
   }
 
+
   @Override
   public boolean equals(Object o) {
     if (this == o) return true;
-    if (!(o instanceof OutgoingEventInformation)) return false;
-    OutgoingEventInformation that = (OutgoingEventInformation) o;
-    return firstEventTime == that.firstEventTime &&
-        isFileOutputStreamClosed == that.isFileOutputStreamClosed &&
-        Objects.equals(eventFile, that.eventFile) &&
-        Objects.equals(finalEventFileName, that.finalEventFileName) &&
-        Objects.equals(fileOutputStream, that.fileOutputStream) &&
-        Objects.equals(numEventsWritten, that.numEventsWritten) &&
-        Objects.equals(replicatedConfiguration, that.replicatedConfiguration) &&
-        Objects.equals(projectName, that.projectName);
+    if (o == null || getClass() != o.getClass()) return false;
+    PersistedEventInformation that = (PersistedEventInformation) o;
+    return getFirstEventTime() == that.getFirstEventTime() &&
+        isFileOutputStreamClosed() == that.isFileOutputStreamClosed() &&
+        getEventFile().equals(that.getEventFile()) &&
+        getFinalEventFileName().equals(that.getFinalEventFileName()) &&
+        getFileOutputStream().equals(that.getFileOutputStream()) &&
+        getNumEventsWritten().equals(that.getNumEventsWritten()) &&
+        replicatedConfiguration.equals(that.replicatedConfiguration) &&
+        getProjectName().equals(that.getProjectName()) &&
+        outputDirectory.equals(that.outputDirectory) &&
+        gson.equals(that.gson);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(firstEventTime, eventFile, finalEventFileName, fileOutputStream, isFileOutputStreamClosed, numEventsWritten, replicatedConfiguration, projectName);
+    return Objects.hash(getFirstEventTime(), getEventFile(), getFinalEventFileName(), getFileOutputStream(),
+        isFileOutputStreamClosed(), getNumEventsWritten(), replicatedConfiguration, getProjectName(), outputDirectory, gson);
   }
+
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("OutgoingEventInformation{");
+    final StringBuilder sb = new StringBuilder("PersistedEventInformation{");
     sb.append("firstEventTime=").append(firstEventTime);
     sb.append(", eventFile=").append(eventFile);
     sb.append(", finalEventFileName='").append(finalEventFileName).append('\'');
-    sb.append(", fileOutputStream=").append(fileOutputStream);
     sb.append(", isFileOutputStreamClosed=").append(isFileOutputStreamClosed);
     sb.append(", numEventsWritten=").append(numEventsWritten);
     sb.append(", replicatedConfiguration=").append(replicatedConfiguration);
     sb.append(", projectName='").append(projectName).append('\'');
+    sb.append(", outputDirectory=").append(outputDirectory).append('\'');
     sb.append('}');
     return sb.toString();
   }

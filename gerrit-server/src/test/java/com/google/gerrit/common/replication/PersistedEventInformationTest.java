@@ -33,7 +33,7 @@ import static com.google.gerrit.common.replication.ReplicationConstants.NEXT_EVE
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.ACCOUNT_INDEX_EVENT;
 import static com.wandisco.gerrit.gitms.shared.util.StringUtils.getProjectNameSha1;
 
-public class OutgoingEventInformationTest extends AbstractReplicationTesting {
+public class PersistedEventInformationTest extends AbstractReplicationTesting {
 
   @Rule
   public ExpectedException expectedException = ExpectedException.none();
@@ -69,21 +69,21 @@ public class OutgoingEventInformationTest extends AbstractReplicationTesting {
   public void testOutgoingEventInformationConstructor() throws IOException {
 
     EventWrapper dummyWrapper = createIndexEventWrapper("ProjectA");
-    OutgoingEventInformation outgoingEventInformation =
-        new OutgoingEventInformation(dummyTestCoordinator.getReplicatedConfiguration(), dummyWrapper);
+    PersistedEventInformation persistedEventInformation =
+        new PersistedEventInformation(dummyTestCoordinator, dummyWrapper);
 
-    Assert.assertNotNull(outgoingEventInformation.getFinalEventFileName());
-    Assert.assertNotNull(outgoingEventInformation.getEventFile());
-    Assert.assertNotNull(outgoingEventInformation.getFileOutputStream());
+    Assert.assertNotNull(persistedEventInformation.getFinalEventFileName());
+    Assert.assertNotNull(persistedEventInformation.getEventFile());
+    Assert.assertNotNull(persistedEventInformation.getFileOutputStream());
 
-    Assert.assertTrue(outgoingEventInformation.getEventFile().getName().contains("events")
-        && outgoingEventInformation.getEventFile().getName().contains(".tmp"));
+    Assert.assertTrue(persistedEventInformation.getEventFile().getName().contains("events")
+        && persistedEventInformation.getEventFile().getName().contains(".tmp"));
 
-    Assert.assertTrue(outgoingEventInformation.getFinalEventFileName().contains("events")
-        && outgoingEventInformation.getFinalEventFileName().contains(".json"));
+    Assert.assertTrue(persistedEventInformation.getFinalEventFileName().contains("events")
+        && persistedEventInformation.getFinalEventFileName().contains(".json"));
 
-    Assert.assertEquals(outgoingEventInformation.getNumEventsWritten().get(), 0);
-    Assert.assertEquals(outgoingEventInformation.getProjectName(), "ProjectA");
+    Assert.assertEquals(persistedEventInformation.getNumEventsWritten().get(), 0);
+    Assert.assertEquals(persistedEventInformation.getProjectName(), "ProjectA");
   }
 
 
@@ -91,8 +91,8 @@ public class OutgoingEventInformationTest extends AbstractReplicationTesting {
   @Test
   public void testGetFinalEventFileName() throws IOException {
     EventWrapper dummyWrapper = createIndexEventWrapper("ProjectA");
-    OutgoingEventInformation outgoingEventInformation =
-        new OutgoingEventInformation(dummyTestCoordinator.getReplicatedConfiguration(), dummyWrapper);
+    PersistedEventInformation persistedEventInformation =
+        new PersistedEventInformation(dummyTestCoordinator, dummyWrapper);
 
     String eventTimestamp = dummyWrapper.getEventData().getEventTimestamp();
     String eventNanoTime = ObjectUtils.getHexStringOfLongObjectHash(
@@ -103,7 +103,7 @@ public class OutgoingEventInformationTest extends AbstractReplicationTesting {
 
     String eventTimeStr = String.format("%sx%s", eventTimestamp, eventNanoTime);
 
-    Assert.assertEquals(outgoingEventInformation.getFinalEventFileName(),
+    Assert.assertEquals(persistedEventInformation.getFinalEventFileName(),
         String.format(NEXT_EVENTS_FILE, eventTimeStr,
         dummyWrapper.getEventData().getNodeIdentity(),
             getProjectNameSha1(dummyWrapper.getProjectName()), objectHash));
@@ -114,44 +114,44 @@ public class OutgoingEventInformationTest extends AbstractReplicationTesting {
   @Test
   public void test_atomicRenameAndResetNullFinalName() throws IOException {
     EventWrapper dummyWrapper = createIndexEventWrapper("ProjectA");
-    OutgoingEventInformation outgoingEventInformation =
-        new OutgoingEventInformation(dummyTestCoordinator.getReplicatedConfiguration(), dummyWrapper);
+    PersistedEventInformation persistedEventInformation =
+        new PersistedEventInformation(dummyTestCoordinator, dummyWrapper);
 
-    outgoingEventInformation.setFinalEventFileName(null);
-    outgoingEventInformation.atomicRenameTmpFilename();
+    persistedEventInformation.setFinalEventFileName(null);
+    persistedEventInformation.atomicRenameTmpFilename();
 
     Assert.assertTrue(outgoingDir.exists());
-    Assert.assertTrue(outgoingEventInformation.getEventFile().exists());
-    Assert.assertNull(outgoingEventInformation.getFinalEventFileName());
+    Assert.assertTrue(persistedEventInformation.getEventFile().exists());
+    Assert.assertNull(persistedEventInformation.getFinalEventFileName());
   }
 
 
   @Test
   public void test_atomicRenameAndReset() throws IOException {
     EventWrapper dummyWrapper = createIndexEventWrapper("ProjectA");
-    OutgoingEventInformation outgoingEventInformation =
-        new OutgoingEventInformation(dummyTestCoordinator.getReplicatedConfiguration(), dummyWrapper);
+    PersistedEventInformation persistedEventInformation =
+        new PersistedEventInformation(dummyTestCoordinator, dummyWrapper);
 
-    outgoingEventInformation.atomicRenameTmpFilename();
+    persistedEventInformation.atomicRenameTmpFilename();
 
     Assert.assertTrue(outgoingDir.exists());
-    Assert.assertFalse(outgoingEventInformation.getEventFile().exists());
-    Assert.assertTrue(new File(outgoingDir, outgoingEventInformation.getFinalEventFileName()).exists());
+    Assert.assertFalse(persistedEventInformation.getEventFile().exists());
+    Assert.assertTrue(new File(outgoingDir, persistedEventInformation.getFinalEventFileName()).exists());
   }
 
 
   @Test
   public void testTimeToWaitBeforeProposingExpired() throws IOException, InterruptedException {
     EventWrapper dummyWrapper = createIndexEventWrapper("ProjectA");
-    OutgoingEventInformation outgoingEventInformation =
-        new OutgoingEventInformation(dummyTestCoordinator.getReplicatedConfiguration(), dummyWrapper);
+    PersistedEventInformation persistedEventInformation =
+        new PersistedEventInformation(dummyTestCoordinator, dummyWrapper);
 
     Assert.assertEquals(dummyTestCoordinator.getReplicatedConfiguration()
         .getMaxSecsToWaitBeforeProposingEvents(), 5000);
 
     Thread.sleep(5000);
 
-    Assert.assertTrue(outgoingEventInformation.timeToWaitBeforeProposingExpired());
+    Assert.assertTrue(persistedEventInformation.timeToWaitBeforeProposingExpired());
   }
 
 
@@ -165,13 +165,13 @@ public class OutgoingEventInformationTest extends AbstractReplicationTesting {
     dummyTestCoordinator = new TestingReplicatedEventsCoordinator(testingProperties);
 
     EventWrapper dummyWrapper = createIndexEventWrapper("ProjectA");
-    OutgoingEventInformation outgoingEventInformation =
-        new OutgoingEventInformation(dummyTestCoordinator.getReplicatedConfiguration(), dummyWrapper);
+    PersistedEventInformation persistedEventInformation =
+        new PersistedEventInformation(dummyTestCoordinator, dummyWrapper);
 
     Assert.assertEquals(dummyTestCoordinator.getReplicatedConfiguration()
         .getMaxSecsToWaitBeforeProposingEvents(), 20000);
 
-    Assert.assertFalse(outgoingEventInformation.timeToWaitBeforeProposingExpired());
+    Assert.assertFalse(persistedEventInformation.timeToWaitBeforeProposingExpired());
   }
 
 
@@ -186,12 +186,12 @@ public class OutgoingEventInformationTest extends AbstractReplicationTesting {
 
 
     EventWrapper dummyWrapper = createIndexEventWrapper("ProjectA");
-    OutgoingEventInformation outgoingEventInformation =
-        new OutgoingEventInformation(dummyTestCoordinator.getReplicatedConfiguration(), dummyWrapper);
+    PersistedEventInformation persistedEventInformation =
+        new PersistedEventInformation(dummyTestCoordinator, dummyWrapper);
 
     Assert.assertEquals(dummyTestCoordinator.getReplicatedConfiguration()
         .getMaxSecsToWaitBeforeProposingEvents(), -1000);
-    Assert.assertTrue(outgoingEventInformation.timeToWaitBeforeProposingExpired());
+    Assert.assertTrue(persistedEventInformation.timeToWaitBeforeProposingExpired());
   }
 
 
@@ -214,16 +214,16 @@ public class OutgoingEventInformationTest extends AbstractReplicationTesting {
     byte[] bytes2 = getEventBytes(dummyWrapper2);
     byte[] bytes3 = getEventBytes(dummyWrapper3);
 
-    OutgoingEventInformation outgoingEventInformation =
-        new OutgoingEventInformation(dummyTestCoordinator.getReplicatedConfiguration(), dummyWrapper1);
+    PersistedEventInformation persistedEventInformation =
+        new PersistedEventInformation(dummyTestCoordinator, dummyWrapper1);
 
-    outgoingEventInformation.writeEventsToFile(dummyWrapper1.getProjectName(), bytes1);
-    outgoingEventInformation.writeEventsToFile(dummyWrapper2.getProjectName(), bytes2);
-    outgoingEventInformation.writeEventsToFile(dummyWrapper3.getProjectName(), bytes3);
+    persistedEventInformation.writeEventsToFile(dummyWrapper1.getProjectName(), bytes1);
+    persistedEventInformation.writeEventsToFile(dummyWrapper2.getProjectName(), bytes2);
+    persistedEventInformation.writeEventsToFile(dummyWrapper3.getProjectName(), bytes3);
 
-    Assert.assertEquals(outgoingEventInformation.getNumEventsWritten().get(), 3);
+    Assert.assertEquals(persistedEventInformation.getNumEventsWritten().get(), 3);
 
-    Assert.assertTrue(outgoingEventInformation.exceedsMaxEventsBeforeProposing());
+    Assert.assertTrue(persistedEventInformation.exceedsMaxEventsBeforeProposing());
   }
 
 
@@ -232,30 +232,30 @@ public class OutgoingEventInformationTest extends AbstractReplicationTesting {
   @Test
   public void testSetFileReady_noEventsWritten() throws Exception {
     EventWrapper dummyWrapper = createIndexEventWrapper("ProjectA");
-    OutgoingEventInformation outgoingEventInformation =
-        new OutgoingEventInformation(dummyTestCoordinator.getReplicatedConfiguration(), dummyWrapper);
+    PersistedEventInformation persistedEventInformation =
+        new PersistedEventInformation(dummyTestCoordinator, dummyWrapper);
 
-    Assert.assertEquals(outgoingEventInformation.getNumEventsWritten().get(), 0);
+    Assert.assertEquals(persistedEventInformation.getNumEventsWritten().get(), 0);
 
-    outgoingEventInformation.setFileReady();
-    Assert.assertFalse(outgoingEventInformation.isFileOutputStreamClosed());
+    persistedEventInformation.setFileReady();
+    Assert.assertFalse(persistedEventInformation.isFileOutputStreamClosed());
   }
 
 
   @Test
   public void testSetFileReady() throws Exception {
     EventWrapper dummyWrapper = createIndexEventWrapper("ProjectA");
-    OutgoingEventInformation outgoingEventInformation =
-        new OutgoingEventInformation(dummyTestCoordinator.getReplicatedConfiguration(), dummyWrapper);
+    PersistedEventInformation persistedEventInformation =
+        new PersistedEventInformation(dummyTestCoordinator, dummyWrapper);
 
 
     byte[] bytes = getEventBytes(dummyWrapper);
-    outgoingEventInformation.writeEventsToFile(dummyWrapper.getProjectName(), bytes);
+    persistedEventInformation.writeEventsToFile(dummyWrapper.getProjectName(), bytes);
 
-    Assert.assertEquals(outgoingEventInformation.getNumEventsWritten().get(), 1);
+    Assert.assertEquals(persistedEventInformation.getNumEventsWritten().get(), 1);
 
-    outgoingEventInformation.setFileReady();
-    Assert.assertTrue(outgoingEventInformation.isFileOutputStreamClosed());
+    persistedEventInformation.setFileReady();
+    Assert.assertTrue(persistedEventInformation.isFileOutputStreamClosed());
   }
 
 

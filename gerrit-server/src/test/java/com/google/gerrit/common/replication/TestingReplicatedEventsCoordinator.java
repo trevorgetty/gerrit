@@ -5,6 +5,7 @@ import com.google.gerrit.common.replication.feeds.ReplicatedOutgoingAccountIndex
 import com.google.gerrit.common.replication.feeds.ReplicatedOutgoingCacheEventsFeed;
 import com.google.gerrit.common.replication.feeds.ReplicatedOutgoingIndexEventsFeed;
 import com.google.gerrit.common.replication.feeds.ReplicatedOutgoingProjectEventsFeed;
+import com.google.gerrit.common.replication.modules.ReplicationModule;
 import com.google.gerrit.common.replication.processors.GerritPublishable;
 import com.google.gerrit.common.replication.processors.ReplicatedIncomingAccountIndexEventProcessor;
 import com.google.gerrit.common.replication.processors.ReplicatedIncomingCacheEventProcessor;
@@ -70,7 +71,7 @@ public class TestingReplicatedEventsCoordinator implements ReplicatedEventsCoord
 
   @Override
   public Gson getGson() {
-    return null;
+    return new ReplicationModule().provideGson();
   }
 
   @Override

@@ -2,6 +2,7 @@ package com.google.gerrit.common.replication.workers;
 
 import com.google.gerrit.common.FailedEventUtil;
 import com.google.gerrit.common.ReplicatedEventsFileFilter;
+import com.google.gerrit.common.replication.PersistedEventInformation;
 import com.google.gerrit.common.replication.ProjectBackoffPeriod;
 import com.google.gerrit.common.replication.ReplicatedEventTask;
 import com.google.gerrit.common.replication.ReplicatedScheduling;
@@ -22,6 +23,7 @@ import com.wandisco.gerrit.gitms.shared.events.EventTimestampComparator;
 import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
 import com.wandisco.gerrit.gitms.shared.events.exceptions.InvalidEventJsonException;
 import com.google.common.flogger.FluentLogger;
+import com.wandisco.gerrit.gitms.shared.util.StringUtils;
 
 
 import java.io.ByteArrayOutputStream;
@@ -625,7 +627,8 @@ public class ReplicatedIncomingEventWorker implements Runnable {
       // now make sure we add this event into the skipped list - so we know its being skipped over, and we dont
       // schedule another file later on ahead of this one when the backoff period has expired.
       replicatedScheduling.addSkippedProjectEventFile(replicatedEventTask);
-      checkPersistRemainingEntries(allEventsBeingProcessed, correctlyProcessedEvents);
+
+      checkPersistRemainingEntries(replicatedEventTask, allEventsBeingProcessed, correctlyProcessedEvents);
       return;
     }
 
@@ -643,7 +646,9 @@ public class ReplicatedIncomingEventWorker implements Runnable {
 
       logger.atWarning().log("RE Failed Event file %s, has finally hit " +
           "max number of retries allowed - moving to failed.", eventsFileBeingProcessed);
-      checkPersistRemainingEntries(allEventsBeingProcessed, correctlyProcessedEvents);
+
+      checkPersistRemainingEntries(replicatedEventTask, allEventsBeingProcessed, correctlyProcessedEvents);
+
       FailedEventUtil.moveFileToFailed(replicatedConfiguration, eventsFileBeingProcessed);
       // we have failed this event file - lets free up future event files by removing this backoff lock.
       replicatedScheduling.clearSkipThisProjectsEventsForNow(projectName);
@@ -659,25 +664,34 @@ public class ReplicatedIncomingEventWorker implements Runnable {
    * As a result of a failure, we want to reduce the amount of retry work to only include the failed items, or items not
    * tried as appropriate.  We are handed a collection of items to be written to the existing file atomically.
    *
-   * @param allEventsBeingProcessed
-   * @param currentlyProcessedEvents
+   * @param allEventsBeingProcessed : All events for a given event file currently being processed.
+   * @param correctlyProcessedEvents : Events that have succeeded already and don't need to be persisted.
    */
-  private void checkPersistRemainingEntries(List<EventWrapper> allEventsBeingProcessed, List<EventWrapper> currentlyProcessedEvents) {
-    if (allEventsBeingProcessed.size() == 0 || currentlyProcessedEvents.size() == 0 || (allEventsBeingProcessed.size() == currentlyProcessedEvents.size())) {
+  private void checkPersistRemainingEntries(final ReplicatedEventTask replicatedEventTask,
+                                            final List<EventWrapper> allEventsBeingProcessed,
+                                            final List<EventWrapper> correctlyProcessedEvents) {
+
+    if (allEventsBeingProcessed.size() == 0 || correctlyProcessedEvents.size() == 0
+        || (allEventsBeingProcessed.size() == correctlyProcessedEvents.size())) {
+
       // if we have processed all events in the list, or we have processed none in the list we have nothing
       // to change within the events file.. only if we have done a subset are we to update the events file with
-      // the remaining entries.  This case is here to skip over rewritting the file with the same contents
+      // the remaining entries.  This case is here to skip over rewriting the file with the same contents
       // or no contents.
       return;
     }
 
-    // Lets work out the remaining items to pass to the persiter.
-    List<EventWrapper> remainingEvents = new LinkedList<>();
+    // Lets work out the remaining items to pass to the persister. We remove the events that have been correctly
+    // processed from the list of all events being processed leaving only the events that have not been
+    // correctly processed (which may include failed events).
+    List<EventWrapper> remainingEvents = new LinkedList<>(allEventsBeingProcessed);
+    remainingEvents.removeAll(correctlyProcessedEvents);
 
-    remainingEvents.addAll(allEventsBeingProcessed);
-    remainingEvents.removeAll(currentlyProcessedEvents);
-
-    // TODO: call to persist out remaining events, this needs to call Ronans new work added as part of this jira.
+    try {
+      FailedEventUtil.persistRemainingEvents(replicatedEventsCoordinator, replicatedEventTask, remainingEvents);
+    } catch (IOException e) {
+      logger.atSevere().log("Could not persist remaining events ", e.getMessage());
+    }
   }
 
   private void attemptDeleteEventFile(File eventsFileBeingProcessed) {

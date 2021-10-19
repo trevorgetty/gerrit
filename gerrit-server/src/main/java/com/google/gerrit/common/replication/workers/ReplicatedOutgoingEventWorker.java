@@ -1,15 +1,12 @@
 package com.google.gerrit.common.replication.workers;
 
 import com.google.common.flogger.FluentLogger;
-import com.google.gerrit.common.replication.ConfigureReplication;
-import com.google.gerrit.common.replication.OutgoingEventInformation;
+import com.google.gerrit.common.replication.PersistedEventInformation;
 import com.google.gerrit.common.replication.ReplicatedConfiguration;
-import com.google.gerrit.common.replication.ReplicatorMetrics;
 import com.google.gerrit.common.replication.SingletonEnforcement;
 import com.google.gerrit.common.replication.coordinators.ReplicatedEventsCoordinator;
 import com.google.gson.Gson;
 import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
-import org.eclipse.jgit.lib.Config;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -17,8 +14,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
-
-import static com.google.gerrit.common.replication.ReplicationConstants.ENC;
 
 public class ReplicatedOutgoingEventWorker implements Runnable{
   private static final FluentLogger logger = FluentLogger.forEnclosingClass();
@@ -28,9 +23,10 @@ public class ReplicatedOutgoingEventWorker implements Runnable{
   public final ConcurrentLinkedQueue<EventWrapper> queue =
       new ConcurrentLinkedQueue<>();
 
-  private Map<String, OutgoingEventInformation> outgoingEventInformationMap = new LinkedHashMap<>();
+  private Map<String, PersistedEventInformation> persistedEventInformationMap = new LinkedHashMap<>();
 
 
+  private ReplicatedEventsCoordinator replicatedEventsCoordinator;
   private ReplicatedConfiguration replicatedConfiguration;
   private final Gson gson;
 
@@ -38,6 +34,7 @@ public class ReplicatedOutgoingEventWorker implements Runnable{
 
   private ReplicatedOutgoingEventWorker(ReplicatedEventsCoordinator replicatedEventsCoordinator) {
         // for ease of use cache this class handle - its singleton anyway.
+    this.replicatedEventsCoordinator = replicatedEventsCoordinator;
     this.replicatedConfiguration = replicatedEventsCoordinator.getReplicatedConfiguration();
     this.gson = replicatedEventsCoordinator.getGson();
   }
@@ -68,9 +65,9 @@ public class ReplicatedOutgoingEventWorker implements Runnable{
    * We process the events on the queue on a per project basis now i.e events are written
    * to event files on a per project basis.
    * We now keep a map (outgoingEventInformationMap) which records the following outgoing event information
-   * - Map<project name, OutgoingEventInformation>
-   *   {@link com.google.gerrit.common.replication.OutgoingEventInformation}
-   *   The OutgoingEventInformation records the following about an outgoing event:
+   * - Map<project name, PersistedEventInformation>
+   *   {@link PersistedEventInformation}
+   *   The PersistedEventInformation records the following about an outgoing event:
    *   <ul>
    *     <li>the project .tmp event file being written to</li>
    *     <li>The FileOutputStream which will write the .tmp event file.</li>
@@ -144,13 +141,13 @@ public class ReplicatedOutgoingEventWorker implements Runnable{
         final String projectName = newEvent.getProjectName();
 
         // If the project is new, i.e it is not in the map then create a new
-        // event file for it which will be stored off in OutgoingEventInformation.
-        if ( ! outgoingEventInformationMap.containsKey(projectName) ) {
+        // event file for it which will be stored off in PersistedEventInformation.
+        if ( ! persistedEventInformationMap.containsKey(projectName) ) {
           setNewCurrentEventsFile(projectName, newEvent);
         }
 
         //The project exists in the map already so append the event bytes to the file
-        if(! appendToFile(newEvent, outgoingEventInformationMap.get(projectName))){
+        if(! persistedEventInformationMap.get(projectName).appendToFile(newEvent, true)){
           logger.atSevere().log("Could not append event  [ %s ] to existing file", newEvent.getEvent());
         }
 
@@ -166,46 +163,46 @@ public class ReplicatedOutgoingEventWorker implements Runnable{
    * event files. Entries are on a per project basis
    * If we have a map of the following:
    * <ul>
-   *   <li>{ProjectA, OutgoingEventInformation}</li>
-   *   <li>{ProjectB, OutgoingEventInformation}</li>
-   *   <li>{ProjectC, OutgoingEventInformation}</li>
+   *   <li>{ProjectA, PersistedEventInformation}</li>
+   *   <li>{ProjectB, PersistedEventInformation}</li>
+   *   <li>{ProjectC, PersistedEventInformation}</li>
    * </ul>
-   * We will iterate over each of these entries. The OutgoingEventInformation keeps track of the .tmp
+   * We will iterate over each of these entries. The PersistedEventInformation keeps track of the .tmp
    * file where the events per project were written to as well as the final event file name which the .tmp
    * file is atomically renamed to.
-   * {@link com.google.gerrit.common.replication.OutgoingEventInformation}
+   * {@link PersistedEventInformation}
    *
    * If NumEvents >= maxNumberOfEventsBeforeProposing
    * OR
    * If TimeSinceFirstEvent >= maxSecsToWaitBeforeProposingEvents
    *
-   * then we call {@link OutgoingEventInformation#setFileReady()} if we have events that were written
+   * then we call {@link PersistedEventInformation#setFileReady()} if we have events that were written
    * to the per project event file. The .tmp file for the events is then atomically renamed
-   * {@link OutgoingEventInformation#atomicRenameTmpFilename()} ()}
+   * {@link PersistedEventInformation#atomicRenameTmpFilename()} ()}
    *
    * finally we call iter.remove() to remove the instance from the map. This is done in both cases where
    * we have no events in the event file and where we have written events and then atomically renamed the file.
    */
   private void checkSendEventFiles() {
 
-    Iterator<Map.Entry<String, OutgoingEventInformation>> iter = outgoingEventInformationMap.entrySet().iterator();
+    Iterator<Map.Entry<String, PersistedEventInformation>> iter = persistedEventInformationMap.entrySet().iterator();
     while (iter.hasNext()) {
 
-      Map.Entry<String, OutgoingEventInformation> entry = iter.next();
-      OutgoingEventInformation outgoingEventInformation = entry.getValue();
+      Map.Entry<String, PersistedEventInformation> entry = iter.next();
+      PersistedEventInformation persistedEventInformation = entry.getValue();
 
       logger.atFinest().log("Entry is for projectName [ %s ], .tmp file [ %s ]", entry.getValue().getProjectName(),
           entry.getValue().getEventFile());
 
       // If NumEvents >= maxNumberOfEventsBeforeProposing - send it and remove from map. OR
       // If TimeSinceFirstEvent >= maxSecsToWaitBeforeProposingEvents  - send it and remove from map.
-      if (outgoingEventInformation.exceedsMaxEventsBeforeProposing()
-          || outgoingEventInformation.timeToWaitBeforeProposingExpired()) {
+      if (persistedEventInformation.exceedsMaxEventsBeforeProposing()
+          || persistedEventInformation.timeToWaitBeforeProposingExpired()) {
 
         //Check we have something to write to disk, then do atomic rename now, otherwise just remove from the map.
-        if(outgoingEventInformation.setFileReady()){
+        if(persistedEventInformation.setFileReady()){
           // Then do atomic rename of the .tmp file to its final event file name.
-          outgoingEventInformation.atomicRenameTmpFilename();
+          persistedEventInformation.atomicRenameTmpFilename();
         }
         //then remove entry from the map
         iter.remove();
@@ -228,34 +225,6 @@ public class ReplicatedOutgoingEventWorker implements Runnable{
   }
 
 
-  /**
-   * This will create append to the current file the last event received. If the
-   * project name of the this event is different from the the last one, then we
-   * need to create a new file anyway, because we want to pack events in one
-   * file only if the are for the same project
-   *
-   * @param originalEvent : The EventWrapper instance that was polled from the queue.
-   * @return true if the event was successfully appended to the file
-   * @throws IOException
-   */
-  private boolean appendToFile(final EventWrapper originalEvent, final OutgoingEventInformation outgoingEventInformation)
-      throws IOException {
-
-    ReplicatorMetrics.totalPublishedLocalEvents.incrementAndGet();
-
-    // If the project is the same, write the file
-    final String wrappedEvent = gson.toJson(originalEvent) + '\n';
-    byte[] bytes = wrappedEvent.getBytes(ENC);
-
-    logger.atFine().log("RE Last json to be sent: %s", wrappedEvent);
-    ReplicatorMetrics.totalPublishedLocalEventsBytes.addAndGet(bytes.length);
-    ReplicatorMetrics.totalPublishedLocalGoodEventsBytes.addAndGet(bytes.length);
-    ReplicatorMetrics.totalPublishedLocalGoodEvents.incrementAndGet();
-    ReplicatorMetrics.totalPublishedLocalEventsByType.add(originalEvent.getEventOrigin());
-
-    return outgoingEventInformation.writeEventsToFile(originalEvent.getProjectName(), bytes);
-  }
-
 
   /**
    * Write out to event file based on the project name...
@@ -266,11 +235,11 @@ public class ReplicatedOutgoingEventWorker implements Runnable{
    * Note eventually based on time or num events we will send this file.
    */
   private void setNewCurrentEventsFile(String projectName, final EventWrapper originalEvent) {
-    // Put an entry in the map for this projectName and associate it with a OutgoingEventInformation instance
+    // Put an entry in the map for this projectName and associate it with a PersistedEventInformation instance
     // That holds the .tmp file and the writer for it. It also knows about the final event file name.
     try {
-      outgoingEventInformationMap.put(projectName,
-          new OutgoingEventInformation(replicatedConfiguration, originalEvent));
+      persistedEventInformationMap.put(projectName,
+          new PersistedEventInformation(replicatedEventsCoordinator, originalEvent));
     } catch (IOException e) {
       logger.atSevere().log("Could not add event for %s to the map to track, %s",
           projectName, e.getMessage());

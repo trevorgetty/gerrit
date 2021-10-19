@@ -29,7 +29,6 @@ public class ReplicationModule extends LifecycleModule {
     /* GerritEventFactory is a utility class full of static methods. It needs static injection for the
        provided Gson instance*/
     install(new GerritEventFactory.Module());
-
   }
 
   @Provides
