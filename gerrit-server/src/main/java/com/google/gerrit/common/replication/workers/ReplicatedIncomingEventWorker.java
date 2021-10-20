@@ -649,7 +649,10 @@ public class ReplicatedIncomingEventWorker implements Runnable {
 
       checkPersistRemainingEntries(replicatedEventTask, allEventsBeingProcessed, correctlyProcessedEvents);
 
-      FailedEventUtil.moveFileToFailed(replicatedConfiguration, eventsFileBeingProcessed);
+      synchronized (replicatedScheduling.getEventsFileInProgressLock()) {
+        FailedEventUtil.moveFileToFailed(replicatedConfiguration, eventsFileBeingProcessed);
+        replicatedScheduling.clearEventsFileInProgress(replicatedEventTask, false);
+      }
       // we have failed this event file - lets free up future event files by removing this backoff lock.
       replicatedScheduling.clearSkipThisProjectsEventsForNow(projectName);
       return;
