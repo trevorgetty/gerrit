@@ -240,5 +240,4 @@ java_test(
   ],
   source_under_test = [':server'],
   visibility = ['//tools/eclipse:classpath'],
-#   vm_args = ['-agentlib:jdwp=transport=dt_socket,address=5005,server=y,suspend=y']
 )
