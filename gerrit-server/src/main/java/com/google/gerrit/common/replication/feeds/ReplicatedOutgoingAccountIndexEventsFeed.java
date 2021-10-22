@@ -19,20 +19,18 @@ import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.AC
 public class ReplicatedOutgoingAccountIndexEventsFeed extends ReplicatedOutgoingEventsFeedCommon {
   private static final Logger log = LoggerFactory.getLogger(ReplicatedOutgoingAccountIndexEventsFeed.class);
 
-  private static ReplicatedOutgoingAccountIndexEventsFeed INSTANCE;
-
-  private ReplicatedOutgoingAccountIndexEventsFeed(ReplicatedEventsCoordinator eventsCoordinator) {
+  /**
+   * We only create this class from the replicatedEventscoordinator.
+   * This is a singleton and its enforced by our SingletonEnforcement below that if anyone else tries to create
+   * this class it will fail.
+   * Sorry by adding a getInstance, make this class look much more public than it is,
+   * and people expect they can just call getInstance - when in fact they should always request it via the
+   * ReplicatedEventsCordinator.getReplicatedXWorker() methods.
+   * @param eventsCoordinator
+   */
+  public ReplicatedOutgoingAccountIndexEventsFeed(ReplicatedEventsCoordinator eventsCoordinator) {
     super(eventsCoordinator);
-  }
-
-  //Get singleton instance
-  public static ReplicatedOutgoingAccountIndexEventsFeed getInstance(ReplicatedEventsCoordinator eventsCoordinator) {
-    if(INSTANCE == null) {
-      INSTANCE = new ReplicatedOutgoingAccountIndexEventsFeed(eventsCoordinator);
-      SingletonEnforcement.registerClass(ReplicatedOutgoingAccountIndexEventsFeed.class);
-    }
-
-    return INSTANCE;
+    SingletonEnforcement.registerClass(ReplicatedOutgoingAccountIndexEventsFeed.class);
   }
 
   public void replicateAccountReindex(Account.Id id) throws IOException {

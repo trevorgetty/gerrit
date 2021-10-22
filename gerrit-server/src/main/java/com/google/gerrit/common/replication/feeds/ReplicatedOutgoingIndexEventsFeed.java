@@ -17,20 +17,18 @@ import java.sql.Timestamp;
 public class ReplicatedOutgoingIndexEventsFeed extends ReplicatedOutgoingEventsFeedCommon {
   private static final Logger log = LoggerFactory.getLogger(ReplicatedOutgoingIndexEventsFeed.class);
 
-  private static ReplicatedOutgoingIndexEventsFeed INSTANCE;
-
-  private ReplicatedOutgoingIndexEventsFeed(ReplicatedEventsCoordinator eventsCoordinator) {
+  /**
+   * We only create this class from the replicatedEventscoordinator.
+   * This is a singleton and its enforced by our SingletonEnforcement below that if anyone else tries to create
+   * this class it will fail.
+   * Sorry by adding a getInstance, make this class look much more public than it is,
+   * and people expect they can just call getInstance - when in fact they should always request it via the
+   * ReplicatedEventsCordinator.getReplicatedXWorker() methods.
+   * @param eventsCoordinator
+   */
+  public ReplicatedOutgoingIndexEventsFeed(ReplicatedEventsCoordinator eventsCoordinator) {
     super(eventsCoordinator);
-  }
-
-  //Get singleton instance
-  public static ReplicatedOutgoingIndexEventsFeed getInstance(ReplicatedEventsCoordinator eventsCoordinator) {
-    if(INSTANCE == null) {
-      INSTANCE = new ReplicatedOutgoingIndexEventsFeed(eventsCoordinator);
-      SingletonEnforcement.registerClass(ReplicatedOutgoingIndexEventsFeed.class);
-    }
-
-    return INSTANCE;
+    SingletonEnforcement.registerClass(ReplicatedOutgoingIndexEventsFeed.class);
   }
 
   /**

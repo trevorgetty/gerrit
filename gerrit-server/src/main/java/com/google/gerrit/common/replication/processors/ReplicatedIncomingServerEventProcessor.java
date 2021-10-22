@@ -28,22 +28,20 @@ public class ReplicatedIncomingServerEventProcessor extends GerritPublishableImp
 
   private EventBroker eventBroker;
 
-  private static ReplicatedIncomingServerEventProcessor INSTANCE;
-
-  private ReplicatedIncomingServerEventProcessor(ReplicatedEventsCoordinator replicatedEventsCoordinator) {
+  /**
+   * We only create this class from the replicatedEventscoordinator.
+   * This is a singleton and its enforced by our SingletonEnforcement below that if anyone else tries to create
+   * this class it will fail.
+   * Sorry by adding a getInstance, make this class look much more public than it is,
+   * and people expect they can just call getInstance - when in fact they should always request it via the
+   * ReplicatedEventsCordinator.getReplicatedXWorker() methods.
+   * @param replicatedEventsCoordinator
+   */
+  public ReplicatedIncomingServerEventProcessor(ReplicatedEventsCoordinator replicatedEventsCoordinator) {
     super(GERRIT_EVENT, replicatedEventsCoordinator);
     log.info("Creating main processor for event type: {}", eventType);
     subscribeEvent(this);
-  }
-
-  //Get singleton instance
-  public static ReplicatedIncomingServerEventProcessor getInstance(ReplicatedEventsCoordinator replicatedEventsCoordinator) {
-    if(INSTANCE == null) {
-      INSTANCE = new ReplicatedIncomingServerEventProcessor(replicatedEventsCoordinator);
-      SingletonEnforcement.registerClass(ReplicatedIncomingServerEventProcessor.class);
-    }
-
-    return INSTANCE;
+    SingletonEnforcement.registerClass(ReplicatedIncomingServerEventProcessor.class);
   }
 
   /**

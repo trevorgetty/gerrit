@@ -2,7 +2,6 @@ package com.google.gerrit.common.replication.workers;
 
 import com.google.gerrit.common.FailedEventUtil;
 import com.google.gerrit.common.ReplicatedEventsFileFilter;
-import com.google.gerrit.common.replication.PersistedEventInformation;
 import com.google.gerrit.common.replication.ProjectBackoffPeriod;
 import com.google.gerrit.common.replication.ReplicatedEventTask;
 import com.google.gerrit.common.replication.ReplicatedScheduling;
@@ -23,7 +22,6 @@ import com.wandisco.gerrit.gitms.shared.events.EventTimestampComparator;
 import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
 import com.wandisco.gerrit.gitms.shared.events.exceptions.InvalidEventJsonException;
 import com.google.common.flogger.FluentLogger;
-import com.wandisco.gerrit.gitms.shared.util.StringUtils;
 
 
 import java.io.ByteArrayOutputStream;
@@ -41,7 +39,6 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
 
@@ -59,21 +56,20 @@ public class ReplicatedIncomingEventWorker implements Runnable {
   private final ReplicatedEventsCoordinator replicatedEventsCoordinator;
   private final Gson gson;
 
-  private static ReplicatedIncomingEventWorker INSTANCE;
-
-  private ReplicatedIncomingEventWorker(ReplicatedEventsCoordinator replicatedEventsCoordinator) {
+  /**
+   * We only create this class from the replicatedEventscoordinator.
+   * This is a singleton and its enforced by our SingletonEnforcement below that if anyone else tries to create
+   * this class it will fail.
+   * Sorry by adding a getInstance, make this class look much more public than it is,
+   * and people expect they can just call getInstance - when in fact they should always request it via the
+   * ReplicatedEventsCordinator.getReplicatedXWorker() methods.
+   * @param replicatedEventsCoordinator
+   */
+  public ReplicatedIncomingEventWorker(ReplicatedEventsCoordinator replicatedEventsCoordinator) {
     this.replicatedEventsCoordinator = replicatedEventsCoordinator;
     this.replicatedConfiguration = replicatedEventsCoordinator.getReplicatedConfiguration();
     this.gson = replicatedEventsCoordinator.getGson();
-  }
-
-  //Get singleton instance
-  public static ReplicatedIncomingEventWorker getInstance(ReplicatedEventsCoordinator replicatedEventsCoordinator) {
-    if (INSTANCE == null) {
-      INSTANCE = new ReplicatedIncomingEventWorker(replicatedEventsCoordinator);
-      SingletonEnforcement.registerClass(ReplicatedIncomingEventWorker.class);
-    }
-    return INSTANCE;
+    SingletonEnforcement.registerClass(ReplicatedIncomingEventWorker.class);
   }
 
   /**

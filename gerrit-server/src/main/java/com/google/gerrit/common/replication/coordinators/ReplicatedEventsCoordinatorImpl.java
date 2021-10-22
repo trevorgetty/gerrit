@@ -98,33 +98,32 @@ public class ReplicatedEventsCoordinatorImpl implements ReplicatedEventsCoordina
 
 
     /* Workers */
-    replicatedIncomingEventWorker = ReplicatedIncomingEventWorker.getInstance(this);
-    replicatedOutgoingEventWorker = ReplicatedOutgoingEventWorker.getInstance(this);
+    replicatedIncomingEventWorker = new ReplicatedIncomingEventWorker(this);
+    replicatedOutgoingEventWorker = new ReplicatedOutgoingEventWorker(this);
 
     /* Processors
     *  Responsible for processing incoming events and actioning them*/
-    replicatedIncomingIndexEventProcessor = ReplicatedIncomingIndexEventProcessor.getInstance(this);
-    replicatedIncomingAccountIndexEventProcessor = ReplicatedIncomingAccountIndexEventProcessor.getInstance(this);
-    replicatedIncomingServerEventProcessor = ReplicatedIncomingServerEventProcessor.getInstance(this);
-    replicatedIncomingCacheEventProcessor = ReplicatedIncomingCacheEventProcessor.getInstance(this);
-    replicatedIncomingProjectEventProcessor = ReplicatedIncomingProjectEventProcessor.getInstance(this);
+    replicatedIncomingIndexEventProcessor = new ReplicatedIncomingIndexEventProcessor(this);
+    replicatedIncomingAccountIndexEventProcessor = new ReplicatedIncomingAccountIndexEventProcessor(this);
+    replicatedIncomingServerEventProcessor = new ReplicatedIncomingServerEventProcessor(this);
+    replicatedIncomingCacheEventProcessor = new ReplicatedIncomingCacheEventProcessor(this);
+    replicatedIncomingProjectEventProcessor = new ReplicatedIncomingProjectEventProcessor(this);
 
     /*
      * Feeds to the queue.
      * Does not include ReplicatedOutgoingServerEventsFeed. It is a standalone feed
      * that does not require a member variable here as it is not accessed by any other class.
      */
-    replicatedOutgoingIndexEventsFeed = ReplicatedOutgoingIndexEventsFeed.getInstance(this);
-    replicatedOutgoingCacheEventsFeed = ReplicatedOutgoingCacheEventsFeed.getInstance(this);
-    replicatedOutgoingProjectEventsFeed = ReplicatedOutgoingProjectEventsFeed.getInstance(this);
-    replicatedOutgoingAccountIndexEventsFeed = ReplicatedOutgoingAccountIndexEventsFeed.getInstance(this);
+    replicatedOutgoingIndexEventsFeed = new ReplicatedOutgoingIndexEventsFeed(this);
+    replicatedOutgoingCacheEventsFeed = new ReplicatedOutgoingCacheEventsFeed(this);
+    replicatedOutgoingProjectEventsFeed = new ReplicatedOutgoingProjectEventsFeed(this);
+    replicatedOutgoingAccountIndexEventsFeed = new ReplicatedOutgoingAccountIndexEventsFeed(this);
 
 
     /** Creation of the new Scheduler which manages the Thread Pool of Incoming Processor,
      * as well as how and when to schedule work items to this pool.
      */
-    replicatedScheduling = ReplicatedScheduling.getInstance(this);
-
+    replicatedScheduling = new ReplicatedScheduling(this);
   }
 
   @Override

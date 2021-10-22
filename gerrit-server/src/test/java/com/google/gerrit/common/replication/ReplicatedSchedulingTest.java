@@ -49,7 +49,7 @@ public class ReplicatedSchedulingTest extends AbstractReplicationTesting {
     // SET our pool to 2 items, plus the 2 core projects.
     testingProperties.put(GERRIT_REPLICATED_EVENT_WORKER_POOL_SIZE, "2");
     dummyTestCoordinator = new TestingReplicatedEventsCoordinator(testingProperties);
-    scheduling = ReplicatedScheduling.getInstance(dummyTestCoordinator);
+    scheduling = new ReplicatedScheduling(dummyTestCoordinator);
     HashMap<String, ReplicatedEventTask> eventFilesInProgress = scheduling.getCopyEventsFilesInProgress();
 
     for (Map.Entry eventTask : eventFilesInProgress.entrySet()) {

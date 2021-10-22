@@ -30,24 +30,22 @@ public class ReplicatedOutgoingEventWorker implements Runnable{
   private ReplicatedConfiguration replicatedConfiguration;
   private final Gson gson;
 
-  private static ReplicatedOutgoingEventWorker INSTANCE;
-
-  private ReplicatedOutgoingEventWorker(ReplicatedEventsCoordinator replicatedEventsCoordinator) {
+  /**
+   * We only create this class from the replicatedEventscoordinator.
+   * This is a singleton and its enforced by our SingletonEnforcement below that if anyone else tries to create
+   * this class it will fail.
+   * Sorry by adding a getInstance, make this class look much more public than it is,
+   * and people expect they can just call getInstance - when in fact they should always request it via the
+   * ReplicatedEventsCordinator.getReplicatedXWorker() methods.
+   * @param replicatedEventsCoordinator
+   */
+  public ReplicatedOutgoingEventWorker(ReplicatedEventsCoordinator replicatedEventsCoordinator) {
         // for ease of use cache this class handle - its singleton anyway.
     this.replicatedEventsCoordinator = replicatedEventsCoordinator;
     this.replicatedConfiguration = replicatedEventsCoordinator.getReplicatedConfiguration();
     this.gson = replicatedEventsCoordinator.getGson();
+    SingletonEnforcement.registerClass(ReplicatedOutgoingEventWorker.class);
   }
-
-  //Get singleton instance
-  public static ReplicatedOutgoingEventWorker getInstance(ReplicatedEventsCoordinator replicatedEventsCoordinator) {
-    if(INSTANCE == null) {
-      INSTANCE = new ReplicatedOutgoingEventWorker(replicatedEventsCoordinator);
-      SingletonEnforcement.registerClass(ReplicatedOutgoingEventWorker.class);
-    }
-    return INSTANCE;
-  }
-
 
   public void queueEventWithOutgoingWorker(EventWrapper event) {
     if (!queue.offer(event)) {

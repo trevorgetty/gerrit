@@ -51,21 +51,16 @@ public class ReplicatedScheduling {
   private boolean allEventsFilesHaveBeenProcessedSuccessfully = false;
   private long eventDirLastModifiedTime = 0;
 
-
-  private static ReplicatedScheduling INSTANCE;
-
-  //Get singleton instance
-  public static ReplicatedScheduling getInstance(ReplicatedEventsCoordinator eventsCoordinator) {
-    if(INSTANCE == null) {
-      INSTANCE = new ReplicatedScheduling(eventsCoordinator);
-      // this gets unregistered as we shutdown in stop()
-      SingletonEnforcement.registerClass(ReplicatedScheduling.class);
-    }
-
-    return INSTANCE;
-  }
-
-  private ReplicatedScheduling(ReplicatedEventsCoordinator replicatedEventsCoordinator) {
+  /**
+   * We only create this class from the replicatedEventscoordinator.
+   * This is a singleton and its enforced by our SingletonEnforcement below that if anyone else tries to create
+   * this class it will fail.
+   * Sorry by adding a getInstance, make this class look much more public than it is,
+   * and people expect they can just call getInstance - when in fact they should always request it via the
+   * ReplicatedEventsCordinator.getReplicatedXWorker() methods.
+   * @param replicatedEventsCoordinator
+   */
+  public ReplicatedScheduling(ReplicatedEventsCoordinator replicatedEventsCoordinator) {
 
     this.replicatedEventsCoordinator = replicatedEventsCoordinator;
     this.replicatedConfiguration = replicatedEventsCoordinator.getReplicatedConfiguration();
@@ -104,6 +99,7 @@ public class ReplicatedScheduling {
     // The idea being that we always keep All-Projects and others processing ahead of other projects, as they have
     // important change schema in them that would prevent other projects working correctly.
     replicatedWorkThreadPoolExecutor = new ReplicatedThreadPoolExecutor(replicatedEventsCoordinator);
+    SingletonEnforcement.registerClass(ReplicatedScheduling.class);
   }
 
   /**

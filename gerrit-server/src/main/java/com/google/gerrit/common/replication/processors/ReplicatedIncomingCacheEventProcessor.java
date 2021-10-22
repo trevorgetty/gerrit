@@ -29,21 +29,21 @@ public class ReplicatedIncomingCacheEventProcessor extends GerritPublishableImpl
   private final Map<String,Object> cacheObjects = new ConcurrentHashMap<>();
   public static String projectCache = "ProjectCacheImpl";
 
-  private static ReplicatedIncomingCacheEventProcessor INSTANCE;
 
-  private ReplicatedIncomingCacheEventProcessor(ReplicatedEventsCoordinator replicatedEventsCoordinator) {
+  /**
+   * We only create this class from the replicatedEventscoordinator.
+   * This is a singleton and its enforced by our SingletonEnforcement below that if anyone else tries to create
+   * this class it will fail.
+   * Sorry by adding a getInstance, make this class look much more public than it is,
+   * and people expect they can just call getInstance - when in fact they should always request it via the
+   * ReplicatedEventsCordinator.getReplicatedXWorker() methods.
+   * @param eventsCoordinator
+   */
+  public ReplicatedIncomingCacheEventProcessor(ReplicatedEventsCoordinator replicatedEventsCoordinator) {
     super(CACHE_EVENT, replicatedEventsCoordinator);
     log.info("Creating main processor for event type: {}", eventType);
     subscribeEvent(this);
-  }
-
-  //Get singleton instance
-  public static ReplicatedIncomingCacheEventProcessor getInstance(ReplicatedEventsCoordinator replicatedEventsCoordinator) {
-    if(INSTANCE == null) {
-      INSTANCE = new ReplicatedIncomingCacheEventProcessor(replicatedEventsCoordinator);
-      SingletonEnforcement.registerClass(ReplicatedIncomingCacheEventProcessor.class);
-    }
-    return INSTANCE;
+    SingletonEnforcement.registerClass(ReplicatedIncomingCacheEventProcessor.class);
   }
 
   @Override

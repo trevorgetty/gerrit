@@ -30,24 +30,22 @@ public class ReplicatedIncomingProjectEventProcessor extends GerritPublishableIm
   private static final Logger log = LoggerFactory.getLogger(ReplicatedIncomingProjectEventProcessor.class);
   private GitRepositoryManager repoManager;
 
-  private static ReplicatedIncomingProjectEventProcessor INSTANCE;
-
-  private ReplicatedIncomingProjectEventProcessor(ReplicatedEventsCoordinator replicatedEventsCoordinator) {
+  /**
+   * We only create this class from the replicatedEventscoordinator.
+   * This is a singleton and its enforced by our SingletonEnforcement below that if anyone else tries to create
+   * this class it will fail.
+   * Sorry by adding a getInstance, make this class look much more public than it is,
+   * and people expect they can just call getInstance - when in fact they should always request it via the
+   * ReplicatedEventsCordinator.getReplicatedXWorker() methods.
+   * @param replicatedEventsCoordinator
+   */
+  public ReplicatedIncomingProjectEventProcessor(ReplicatedEventsCoordinator replicatedEventsCoordinator) {
     super(DELETE_PROJECT_EVENT, replicatedEventsCoordinator);
     log.info("Creating main processor for event type: {}", eventType);
     subscribeEvent(this);
     this.repoManager = replicatedEventsCoordinator.getGitRepositoryManager();
+    SingletonEnforcement.registerClass(ReplicatedIncomingProjectEventProcessor.class);
   }
-
-  //Get singleton instance
-  public static ReplicatedIncomingProjectEventProcessor getInstance(ReplicatedEventsCoordinator replicatedEventsCoordinator) {
-    if(INSTANCE == null) {
-      INSTANCE = new ReplicatedIncomingProjectEventProcessor(replicatedEventsCoordinator);
-      SingletonEnforcement.registerClass(ReplicatedIncomingProjectEventProcessor.class);
-    }
-    return INSTANCE;
-  }
-
 
   @Override
   public void stop() {

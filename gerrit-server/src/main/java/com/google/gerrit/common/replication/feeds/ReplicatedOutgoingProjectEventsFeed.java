@@ -20,22 +20,19 @@ import java.util.List;
 public class ReplicatedOutgoingProjectEventsFeed extends ReplicatedOutgoingEventsFeedCommon {
   private static final Logger log = LoggerFactory.getLogger(ReplicatedOutgoingProjectEventsFeed.class);
 
-  private static ReplicatedOutgoingProjectEventsFeed INSTANCE;
-
-  private ReplicatedOutgoingProjectEventsFeed(ReplicatedEventsCoordinator eventsCoordinator) {
+  /**
+   * We only create this class from the replicatedEventscoordinator.
+   * This is a singleton and its enforced by our SingletonEnforcement below that if anyone else tries to create
+   * this class it will fail.
+   * Sorry by adding a getInstance, make this class look much more public than it is,
+   * and people expect they can just call getInstance - when in fact they should always request it via the
+   * ReplicatedEventsCordinator.getReplicatedXWorker() methods.
+   * @param eventsCoordinator
+   */
+  public ReplicatedOutgoingProjectEventsFeed(ReplicatedEventsCoordinator eventsCoordinator) {
     super(eventsCoordinator);
+    SingletonEnforcement.registerClass(ReplicatedOutgoingProjectEventsFeed.class);
   }
-
-  //Get singleton instance
-  public static ReplicatedOutgoingProjectEventsFeed getInstance(ReplicatedEventsCoordinator eventsCoordinator) {
-    if(INSTANCE == null) {
-      INSTANCE = new ReplicatedOutgoingProjectEventsFeed(eventsCoordinator);
-      SingletonEnforcement.registerClass(ReplicatedOutgoingProjectEventsFeed.class);
-    }
-
-    return INSTANCE;
-  }
-
 
   public void replicateProjectDeletion(String projectName, boolean preserve, String taskUuid) throws IOException {
     ProjectInfoWrapper projectInfoWrapper = new ProjectInfoWrapper(projectName, preserve, taskUuid, replicatedEventsCoordinator.getThisNodeIdentity());

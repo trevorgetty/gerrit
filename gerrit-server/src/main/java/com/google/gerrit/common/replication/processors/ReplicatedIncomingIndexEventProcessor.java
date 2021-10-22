@@ -35,22 +35,20 @@ public class ReplicatedIncomingIndexEventProcessor extends GerritPublishableImpl
 
   private static final Logger log = LoggerFactory.getLogger(ReplicatedIncomingIndexEventProcessor.class);
 
-  private static ReplicatedIncomingIndexEventProcessor INSTANCE;
-
-  private ReplicatedIncomingIndexEventProcessor(ReplicatedEventsCoordinator eventsCoordinator) {
+  /**
+   * We only create this class from the replicatedEventscoordinator.
+   * This is a singleton and its enforced by our SingletonEnforcement below that if anyone else tries to create
+   * this class it will fail.
+   * Sorry by adding a getInstance, make this class look much more public than it is,
+   * and people expect they can just call getInstance - when in fact they should always request it via the
+   * ReplicatedEventsCordinator.getReplicatedXWorker() methods.
+   * @param eventsCoordinator
+   */
+  public ReplicatedIncomingIndexEventProcessor(ReplicatedEventsCoordinator eventsCoordinator) {
     super(INDEX_EVENT, eventsCoordinator);
     log.info("Creating main processor for event type: {}", eventType);
     subscribeEvent(this);
-  }
-
-  //Get singleton instance
-  public static ReplicatedIncomingIndexEventProcessor getInstance(ReplicatedEventsCoordinator eventsCoordinator) {
-    if (INSTANCE == null) {
-      INSTANCE = new ReplicatedIncomingIndexEventProcessor(eventsCoordinator);
-      SingletonEnforcement.registerClass(ReplicatedIncomingIndexEventProcessor.class);
-    }
-
-    return INSTANCE;
+    SingletonEnforcement.registerClass(ReplicatedIncomingIndexEventProcessor.class);
   }
 
   @Override

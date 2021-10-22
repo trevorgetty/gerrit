@@ -77,23 +77,23 @@ public class ReplicatedOutgoingCacheEventsFeed extends ReplicatedOutgoingEventsF
   private static final Logger log = LoggerFactory.getLogger(ReplicatedOutgoingCacheEventsFeed.class);
   private static List<String> cacheEvictList = null;
 
-  private static ReplicatedOutgoingCacheEventsFeed INSTANCE;
-
-  private ReplicatedOutgoingCacheEventsFeed(ReplicatedEventsCoordinator eventsCoordinator) {
+  /**
+   * We only create this class from the replicatedEventscoordinator.
+   * This is a singleton and its enforced by our SingletonEnforcement below that if anyone else tries to create
+   * this class it will fail.
+   * Sorry by adding a getInstance, make this class look much more public than it is,
+   * and people expect they can just call getInstance - when in fact they should always request it via the
+   * ReplicatedEventsCordinator.getReplicatedXWorker() methods.
+   *
+   * @param eventsCoordinator
+   */
+  public ReplicatedOutgoingCacheEventsFeed(ReplicatedEventsCoordinator eventsCoordinator) {
     super(eventsCoordinator);
+    SingletonEnforcement.registerClass(ReplicatedOutgoingCacheEventsFeed.class);
   }
 
-  //Get singleton instance
-  public static ReplicatedOutgoingCacheEventsFeed getInstance(ReplicatedEventsCoordinator eventsCoordinator) {
-    if(INSTANCE == null) {
-      INSTANCE = new ReplicatedOutgoingCacheEventsFeed(eventsCoordinator);
-      SingletonEnforcement.registerClass(ReplicatedOutgoingCacheEventsFeed.class);
-    }
-    return INSTANCE;
-  }
-
-  public static List<String> getAllUsersCacheEvictList(){
-    if(cacheEvictList != null) {
+  public static List<String> getAllUsersCacheEvictList() {
+    if (cacheEvictList != null) {
       return cacheEvictList;
     }
     cacheEvictList = new ArrayList<>(Arrays.asList("sshkeys", "accounts", "accounts_byname", "accounts_byemail",
@@ -117,7 +117,7 @@ public class ReplicatedOutgoingCacheEventsFeed extends ReplicatedOutgoingEventsF
 
       // eventWrapper will be set to the All-Users cache event instead if its cache name exists in the All-Users
       // cache eviction list.
-      if(getAllUsersCacheEvictList().contains(cacheName)){
+      if (getAllUsersCacheEvictList().contains(cacheName)) {
         //Block to force cache update to the All-Users repo so it is triggered in sequence after event that caused the eviction.
         log.debug("CACHE User replicated cache eviction All-Users Project CacheName: [ {} ], Key: [ {} ]", cacheName, key);
         eventWrapper = GerritEventFactory.createReplicatedCacheEvent(allUsers, cacheKeyWrapper);
