@@ -12,8 +12,10 @@ import java.security.InvalidParameterException;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.PriorityQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
+import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -28,8 +30,11 @@ public class ReplicatedScheduling {
 
   private static final Logger log = LoggerFactory.getLogger(ReplicatedScheduling.class);
 
-  private final ConcurrentHashMap<String, ReplicatedEventTask> eventsFilesInProgress; // map of project to event file of work in progress.
-  private final HashMap<String, LinkedHashSet<File>> skippedProjectsEventFiles; // map of project to event file of work in progress.
+  // map of project to event file of work in progress.
+  private final ConcurrentHashMap<String, ReplicatedEventTask> eventsFilesInProgress;
+  // map of project to a list of event files skipped over for each project.
+  private final ConcurrentHashMap<String, PriorityBlockingQueue<File>> skippedProjectsEventFiles;
+
   /**
    * list of projects that we are to stop processing for a period of time.
    * We do this -> backoff period of time by recording when we added the project(failed the project event)
@@ -79,10 +84,12 @@ public class ReplicatedScheduling {
     // project A - event 2
     // project B - event 1
     // We need to preserve the ordering of projectA lookups being event1, then event2.
-    // we do not order the list internally it is simply the order it was added to the map as its a linked map,
-    // ensuring order when we swap out events later.  Although we can take events from anywhere in the list we will treat
-    // as a fifo.
-    skippedProjectsEventFiles = new LinkedHashMap<>();
+    // we enforce the list internally to be timebased ( alpha numeric ), to ensure the list is always ordered
+    // correctly even if we hit a race condition or incorrect coding. It ensures the events are always ordered
+    // in the same ordering as our listed files.
+    // This prevent us needing to support prepend / append and more complicated caller code.
+    // As incoming worker always appends skipped files, but the worker always prepends a failed event file.
+    skippedProjectsEventFiles = new ConcurrentHashMap<>();
 
     // Allow us to skip processing of any project when we hit particular error cases - like DB stale, we back off processing
     // all further events for this project for now, until we finish this iteration.
@@ -210,7 +217,7 @@ public class ReplicatedScheduling {
       }
 
       // Another quick decision - should we be skipping this project entirely at the moment (for this iteration.)
-      if ( shouldStillSkipThisProjectForNow (projectName)) {
+      if ( shouldStillSkipThisProjectForNow (eventsFileToProcess, projectName)) {
         // we have to skip all processing I could add this to the skipped list, and I will just for metrics of how many
         // skipped at the end.
         addSkippedProjectEventFile(eventsFileToProcess, projectName);
@@ -289,20 +296,26 @@ public class ReplicatedScheduling {
    */
   public void addSkippedProjectEventFile(File eventsFileToProcess, String projectName) {
     if (!getSkippedProjectsEventFiles().containsKey(projectName)) {
-      getSkippedProjectsEventFiles().put(projectName, new LinkedHashSet<File>());
-      log.debug("Creating new pointing key for project: {}", projectName);
+      getSkippedProjectsEventFiles().put(projectName,
+          new PriorityBlockingQueue<File>());
+      log.debug("Creating new PriorityQueue for project: {}", projectName);
     }
+    // Add this event file to the list.  Note we will always correct the ordering to be correct.
     getSkippedProjectsEventFiles().get(projectName).add(eventsFileToProcess);
   }
 
-
-  public HashMap<String, LinkedHashSet<File>> getSkippedProjectsEventFiles() {
+  /**
+   * For use when taking a look at all the information, allows concurrent operations to be maintained without
+   * affecting the caller, so consider this a dirty copy - as inserts can be performed in background.
+   * @return
+   */
+  public ConcurrentHashMap<String, PriorityBlockingQueue<File>> getSkippedProjectsEventFiles() {
     return skippedProjectsEventFiles;
   }
 
 
   public void removeSkippedProjectEventFile(File eventsFileToProcess, String projectName) {
-    if (!getSkippedProjectsEventFiles().containsKey(projectName)) {
+    if (!containsSkippedEventsForProject(projectName)) {
       log.warn("Unable to delete skipped event file for project {} as its already gone", projectName);
       return;
     }
@@ -315,6 +328,12 @@ public class ReplicatedScheduling {
     }
   }
 
+  private boolean containsSkippedEventsForProject(String projectName) {
+    return skippedProjectsEventFiles.containsKey(projectName);
+    // TODO: trevorg add in isEmpty() check also!
+    //&& skippedProjectsEventFiles.get(projectName)
+  }
+
   public File getFirstSkippedProjectEventFile(String projectName) {
     if (!getSkippedProjectsEventFiles().containsKey(projectName)) {
       log.warn("Unable to delete skipped event file for project {} as its already gone", projectName);
@@ -325,7 +344,7 @@ public class ReplicatedScheduling {
     return getSkippedProjectsEventFiles().get(projectName).iterator().next();
   }
 
-  public LinkedHashSet<File> getSkippedProjectEventFilesList(String projectName) {
+  public PriorityBlockingQueue<File> getSkippedProjectEventFilesList(String projectName) {
     if (!getSkippedProjectsEventFiles().containsKey(projectName)) {
       log.warn("Unable to delete skipped event file for project {} as its already gone", projectName);
       return null;
@@ -591,7 +610,7 @@ public class ReplicatedScheduling {
    * @param projectName
    * @return
    */
-  public synchronized boolean shouldStillSkipThisProjectForNow(final String projectName) {
+  public synchronized boolean shouldStillSkipThisProjectForNow(final File eventsFileToProcess, final String projectName) {
     if (!skipProcessingAndBackoffThisProjectForNow.containsKey(projectName)) {
       return false;
     }
@@ -603,7 +622,8 @@ public class ReplicatedScheduling {
 
     if ((currentTime - startTime) > maxBackOffPeriod) {
       // Decided to retry this project eventually.
-      log.info("Decided we can reschedule work for skipped project: {}.", skipInfo.toString());
+      log.debug("Decided we might be able to reschedule work for skipped project: {} for eventFile: {}",
+          skipInfo.toString(), eventsFileToProcess);
       return false;
     }
 

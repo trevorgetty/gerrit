@@ -28,6 +28,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.PriorityBlockingQueue;
 
 import static com.google.gerrit.common.replication.ReplicationConstants.GERRIT_REPLICATED_EVENT_WORKER_POOL_SIZE;
 import static com.google.gerrit.common.replication.processors.ReplicatedIncomingIndexEventProcessor.buildListOfMissingIds;
@@ -84,22 +85,32 @@ public class ReplicatedSchedulingTest extends AbstractReplicationTesting {
     Assert.assertEquals(0, scheduling.getNumberOfCoreProjectsInProgress());
 
     EventWrapper dummyWrapper = createIndexEventWrapper("SkipMe1");
-    File eventInfoIndex0 = createDummyEventFile();
+
+    // Note we use random UUIDs, so we need to ensure correct ordering for below to work its not just a FIFO now,
+    // its a prioritised queue to ensure we always keep the correct first event at HEAD of the queue.
+    // So take 5 randomly named event files, and order correctly as if by timestamp
+    File[] events = (File[]) Arrays.asList(createDummyEventFile(), createDummyEventFile(), createDummyEventFile(), createDummyEventFile(), createDummyEventFile()).toArray();
+    Arrays.sort(events);
+
+    // Now they are sorted, lets take them and assign correctly to our named items, so we can play arround with
+    // ordering correctly
+    final File eventInfoIndex0 = events[0];
+    final File eventInfoIndex1 = events[1];
+    final File eventInfoIndex2 = events[2];
+    final File eventInfoIndex3 = events[3];
+    final File eventInfoIndex4 = events[4];
+
     scheduling.addSkippedProjectEventFile(eventInfoIndex0, dummyWrapper.getProjectName());
     scheduling.addSkipThisProjectsEventsForNow(dummyWrapper.getProjectName());
 
     Assert.assertTrue(scheduling.containsSkippedProjectEventFiles(dummyWrapper.getProjectName()));
-    LinkedHashSet<File> skippedInfo1 = scheduling.getSkippedProjectEventFilesList(dummyWrapper.getProjectName());
+    PriorityBlockingQueue<File> skippedInfo1 = scheduling.getSkippedProjectEventFilesList(dummyWrapper.getProjectName());
     Assert.assertEquals(1, skippedInfo1.size());
     Assert.assertEquals(eventInfoIndex0, skippedInfo1.iterator().next());
     Assert.assertTrue(scheduling.containsSkipThisProjectForNow(dummyWrapper.getProjectName()));
 
     // Lets make another event file and skip it also.
     EventWrapper dummyWrapper2 = createIndexEventWrapper("SkipMe2");
-    File eventInfoIndex1 = createDummyEventFile();
-    File eventInfoIndex2 = createDummyEventFile();
-    File eventInfoIndex3 = createDummyEventFile();
-    File eventInfoIndex4 = createDummyEventFile();
 
     scheduling.addSkippedProjectEventFile(eventInfoIndex1, dummyWrapper2.getProjectName());
     scheduling.addSkippedProjectEventFile(eventInfoIndex2, dummyWrapper.getProjectName());
@@ -107,7 +118,7 @@ public class ReplicatedSchedulingTest extends AbstractReplicationTesting {
     scheduling.addSkippedProjectEventFile(eventInfoIndex4, dummyWrapper.getProjectName());
 
     scheduling.addSkipThisProjectsEventsForNow(dummyWrapper2.getProjectName());
-    LinkedHashSet<File> skippedInfo2 = scheduling.getSkippedProjectEventFilesList(dummyWrapper2.getProjectName());
+    PriorityBlockingQueue<File> skippedInfo2 = scheduling.getSkippedProjectEventFilesList(dummyWrapper2.getProjectName());
 
 
     Assert.assertTrue(scheduling.containsSkipThisProjectForNow(dummyWrapper.getProjectName()));
@@ -226,7 +237,7 @@ public class ReplicatedSchedulingTest extends AbstractReplicationTesting {
   }
 
   @Test
-  public void testSimpleBuildMissingIdsList(){
+  public void testSimpleBuildMissingIdsList() {
 
     Collection<Integer> deletedIdsList = Arrays.asList(1, 3); // make sure we skip say no2 so make sure there is no ordering assumptions.
     Collection<Integer> requestedIdsList = Arrays.asList(1, 2, 3, 5, 6); // using a set so we have each id only once.
@@ -234,8 +245,8 @@ public class ReplicatedSchedulingTest extends AbstractReplicationTesting {
     // build the list of missing items or items yet to be processed
     Collection<Integer> listOfMissingIds = buildListOfMissingIds(requestedIdsList, deletedIdsList);
 
-    for ( int thisId : requestedIdsList){
-      Assert.assertTrue( deletedIdsList.contains(thisId) ? !listOfMissingIds.contains(thisId) : listOfMissingIds.contains(thisId));
+    for (int thisId : requestedIdsList) {
+      Assert.assertTrue(deletedIdsList.contains(thisId) ? !listOfMissingIds.contains(thisId) : listOfMissingIds.contains(thisId));
     }
   }
 
@@ -262,7 +273,7 @@ public class ReplicatedSchedulingTest extends AbstractReplicationTesting {
     Assert.assertEquals("ProjectA", dummyWrapper.getProjectName());
     Assert.assertTrue(scheduling.containsSkipThisProjectForNow(dummyWrapper.getProjectName()));
     Assert.assertTrue("Failed should skip found this backoffInfo: " + scheduling.getSkipThisProjectForNowBackoffInfo(dummyWrapper.getProjectName()),
-        scheduling.shouldStillSkipThisProjectForNow(dummyWrapper.getProjectName()));
+        scheduling.shouldStillSkipThisProjectForNow(dummyEventFile, dummyWrapper.getProjectName()));
 
     ReplicatedEventTask nonScheduledTask = scheduling.tryScheduleReplicatedEventsTask(dummyWrapper, createDummyEventFile());
     // shouldn't of scheduled - check null.
@@ -300,36 +311,47 @@ public class ReplicatedSchedulingTest extends AbstractReplicationTesting {
    */
   @Test
   public void testSchedulingOfProjectWhenWorkSkippedAlreadySwapsOutNextEventToProcess() throws IOException {
-    EventWrapper dummyWrapper = createIndexEventWrapper("All-Users");
-    ReplicatedEventTask replicatedEventTask = scheduling.tryScheduleReplicatedEventsTask(dummyWrapper, createDummyEventFile());
 
-    Assert.assertNotNull(replicatedEventTask);
-    Assert.assertEquals(dummyWrapper.getProjectName(), replicatedEventTask.getProjectname());
+    // numbering the file for ordering correctness.
+    File eventFile0 = createDummyEventFile("eventtest-0");
+    File eventFile1 = createDummyEventFile("eventtest-1");
+    File eventFile2 = createDummyEventFile("eventtest-2");
 
-    // Mark to skip project A for all future work - make sure it cant be scheduled.
-    File firstSkippedEventFile = createDummyEventFile();
-    File nextSkippedEventFile = createDummyEventFile();
-    File nextEventFile = createDummyEventFile();
+    // Note we use random UUIDs, so we need to ensure correct ordering for below to work its not just a FIFO now,
+    // its a prioritised queue to ensure we always keep the correct first event at HEAD of the queue.
+    // So take x randomly named event files, and order correctly as if by timestamp  I am putting them in the list
+    // in incorrect order, just to make sure the sort is correctly sorting to 0, 1, 2.
+    File[] events = (File[]) Arrays.asList( eventFile1, eventFile0, eventFile2).toArray();
+    Arrays.sort(events);
 
-    dummyWrapper = createIndexEventWrapper("ProjectA");
-    scheduling.addSkippedProjectEventFile(firstSkippedEventFile, dummyWrapper.getProjectName());
+    // check sort is correct
+    Assert.assertEquals(eventFile0, events[0]);
+    Assert.assertEquals(eventFile1, events[1]);
+    Assert.assertEquals(eventFile2, events[2]);
 
-    dummyWrapper = createIndexEventWrapper("ProjectA");
-    scheduling.addSkippedProjectEventFile(nextSkippedEventFile, dummyWrapper.getProjectName());
+    // Check that the files being ordered have appeared correctly as file0, then file1.
+    // Note later we will ask for file 2, and it should swap out for file0
+    final String projectName = "ProjectA";
+
+    // Now add the first 2 event files to the skipped list, so when we try to schedule file2 it will
+    // be able to schedule but should swap out for an already skipped over event with a higher ordering.
+    scheduling.addSkippedProjectEventFile(eventFile0, projectName);
+    scheduling.addSkippedProjectEventFile(eventFile1, projectName);
 
     // This should not be scheduled - it should go on end of list!
-    replicatedEventTask = scheduling.tryScheduleReplicatedEventsTask(dummyWrapper, nextEventFile);
-    Assert.assertNotNull(replicatedEventTask);
+    EventWrapper dummyWrapper = createIndexEventWrapper(projectName);
+    final ReplicatedEventTask scheduledReplicatedEventTask = scheduling.tryScheduleReplicatedEventsTask(dummyWrapper, eventFile2);
+    Assert.assertNotNull(scheduledReplicatedEventTask);
 
     // now make sure that we didn't just schedule the next event file but instead we swapped it out
-    // for the skipped one.
-    Assert.assertEquals(firstSkippedEventFile.getName(), replicatedEventTask.getEventsFileToProcess().getName());
+    // for the first skipped one as its at the HEAD of the FIFO.
+    Assert.assertEquals(eventFile0.getName(), scheduledReplicatedEventTask.getEventsFileToProcess().getName());
 
-    // get the list and check last one also.
-    LinkedHashSet skippedList = scheduling.getSkippedProjectEventFilesList(dummyWrapper.getProjectName());
+    // get the list and check that we have 2 items in the list, which should be file 1, and file 2.  (file0 got swapped out ).
+    PriorityBlockingQueue skippedList = scheduling.getSkippedProjectEventFilesList(dummyWrapper.getProjectName());
     Assert.assertEquals(2, skippedList.size());
-    Assert.assertEquals(nextSkippedEventFile, skippedList.toArray()[0]);
-    Assert.assertEquals(nextEventFile, skippedList.toArray()[1]);
+    Assert.assertEquals(eventFile1, skippedList.toArray()[0]);
+    Assert.assertEquals(eventFile2, skippedList.toArray()[1]);
   }
 
   @Test
@@ -338,8 +360,13 @@ public class ReplicatedSchedulingTest extends AbstractReplicationTesting {
     // then check they are the order we added them.
     List<File> simpleList = new ArrayList<>();
     final String projectName = "TestMe";
+
+    // keep this file outside of the add list, so we can add later but it should bubble to the top of the priority
+    // queue as its ordering is earlier.
+    File firstEventsFile = createDummyEventFile("testDummyOrdering-0" + 0);
+
     for (int index = 0; index < 10; index++) {
-      File newFile = createDummyEventFile("testDummyOrdering" + index);
+      File newFile = createDummyEventFile("testDummyOrdering-1" + index);
       simpleList.add(newFile);
       // make sure the list isn't reordering as we add.
       Assert.assertEquals(newFile, simpleList.get(index));
@@ -347,7 +374,7 @@ public class ReplicatedSchedulingTest extends AbstractReplicationTesting {
     }
 
     // Now lets see that our add to skipped list maintained the same order as out local array.
-    LinkedHashSet<File> skippedEvents = scheduling.getSkippedProjectEventFilesList(projectName);
+    PriorityBlockingQueue<File> skippedEvents = scheduling.getSkippedProjectEventFilesList(projectName);
     Assert.assertArrayEquals(simpleList.toArray(), skippedEvents.toArray());
 
     // try plucking off first item must match
@@ -360,6 +387,12 @@ public class ReplicatedSchedulingTest extends AbstractReplicationTesting {
       Assert.assertEquals(sourceFile, skippedFile);
       index++;
     }
+
+    // Now lets add the first one we created, and check we have one more but its not at the end, its at the start!
+    scheduling.addSkippedProjectEventFile(firstEventsFile, projectName);
+
+    File nextSkippedToBeProcessed = scheduling.getFirstSkippedProjectEventFile(projectName);
+    Assert.assertEquals(firstEventsFile, nextSkippedToBeProcessed);
   }
 
 

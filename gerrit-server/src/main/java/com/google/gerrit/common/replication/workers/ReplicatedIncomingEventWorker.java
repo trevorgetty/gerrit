@@ -620,9 +620,11 @@ public class ReplicatedIncomingEventWorker implements Runnable {
 
       // we didn't contain this skipped project info - as such lets just mark it to start the backoff.
       replicatedScheduling.addSkipThisProjectsEventsForNow(projectName);
-      // now make sure we add this event into the skipped list - so we know its being skipped over, and we dont
-      // schedule another file later on ahead of this one when the backoff period has expired.
-      replicatedScheduling.addSkippedProjectEventFile(replicatedEventTask);
+      // now make sure we add this event into the skipped list - so we know its being skipped over,
+      // and we dont schedule another file later on ahead of this one when the backoff period has expired.
+      // Note this should be a prepend for a simple list, but we use an ordered queue to regardless if will
+      // jump to the HEAD of the FIFO.
+      replicatedScheduling.addSkippedProjectEventFile(eventsFileBeingProcessed, projectName);
 
       checkPersistRemainingEntries(replicatedEventTask, allEventsBeingProcessed, correctlyProcessedEvents);
       return;
@@ -648,9 +650,10 @@ public class ReplicatedIncomingEventWorker implements Runnable {
       synchronized (replicatedScheduling.getEventsFileInProgressLock()) {
         FailedEventUtil.moveFileToFailed(replicatedConfiguration, eventsFileBeingProcessed);
         replicatedScheduling.clearEventsFileInProgress(replicatedEventTask, false);
+        // we have failed this event file - lets free up future event files by removing this backoff lock.
+        replicatedScheduling.clearSkipThisProjectsEventsForNow(projectName);
       }
-      // we have failed this event file - lets free up future event files by removing this backoff lock.
-      replicatedScheduling.clearSkipThisProjectsEventsForNow(projectName);
+
       return;
     }
 
