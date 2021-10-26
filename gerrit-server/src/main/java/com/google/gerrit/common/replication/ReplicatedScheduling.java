@@ -295,13 +295,13 @@ public class ReplicatedScheduling {
    * @param projectName
    */
   public void addSkippedProjectEventFile(File eventsFileToProcess, String projectName) {
-    if (!getSkippedProjectsEventFiles().containsKey(projectName)) {
+    if (!containsSkippedEventsForProject(projectName)) {
       getSkippedProjectsEventFiles().put(projectName,
           new PriorityBlockingQueue<File>());
       log.debug("Creating new PriorityQueue for project: {}", projectName);
     }
     // Add this event file to the list.  Note we will always correct the ordering to be correct.
-    getSkippedProjectsEventFiles().get(projectName).add(eventsFileToProcess);
+    getSkippedProjectEventFilesList(projectName).add(eventsFileToProcess);
   }
 
   /**
@@ -314,38 +314,49 @@ public class ReplicatedScheduling {
   }
 
 
+  /**
+   * Remove a particular event file which from the skipped list for a specific project.
+   * @param eventsFileToProcess
+   * @param projectName
+   */
   public void removeSkippedProjectEventFile(File eventsFileToProcess, String projectName) {
     if (!containsSkippedEventsForProject(projectName)) {
       log.warn("Unable to delete skipped event file for project {} as its already gone", projectName);
       return;
     }
 
-    getSkippedProjectsEventFiles().get(projectName).remove(eventsFileToProcess);
-    if (getSkippedProjectsEventFiles().get(projectName).isEmpty()) {
+    final PriorityBlockingQueue<File> projectSkippedEvents = getSkippedProjectEventFilesList(projectName);
+    projectSkippedEvents.remove(eventsFileToProcess);
+
+    // if we happen to have removed the final entry lets remove the entire key pointing to this queue.
+    if (projectSkippedEvents.isEmpty()) {
       // lets remove this project set now - so its null and no key exists pointing to it
       getSkippedProjectsEventFiles().remove(projectName);
       log.debug("Deleting pointing key as no items remain in the set for project: {}", projectName);
     }
   }
 
-  private boolean containsSkippedEventsForProject(String projectName) {
+  public boolean containsSkippedEventsForProject(String projectName) {
     return skippedProjectsEventFiles.containsKey(projectName);
-    // TODO: trevorg add in isEmpty() check also!
-    //&& skippedProjectsEventFiles.get(projectName)
   }
 
   public File getFirstSkippedProjectEventFile(String projectName) {
-    if (!getSkippedProjectsEventFiles().containsKey(projectName)) {
-      log.warn("Unable to delete skipped event file for project {} as its already gone", projectName);
+    if (!containsSkippedEventsForProject(projectName)) {
+      log.warn("Unable to delete skipped event file for project {} as its already gone, self healing.", projectName);
       return null;
     }
 
-    // get first item in our linked set.
-    return getSkippedProjectsEventFiles().get(projectName).iterator().next();
+    // get all skipped events for this project, and return the HEAD of the queue.
+    return getSkippedProjectEventFilesList(projectName).iterator().next();
   }
 
+  /**
+   * return the queue of skipped over event files for this given project.
+   * @param projectName
+   * @return
+   */
   public PriorityBlockingQueue<File> getSkippedProjectEventFilesList(String projectName) {
-    if (!getSkippedProjectsEventFiles().containsKey(projectName)) {
+    if (!containsSkippedEventsForProject(projectName)) {
       log.warn("Unable to delete skipped event file for project {} as its already gone", projectName);
       return null;
     }
@@ -354,6 +365,12 @@ public class ReplicatedScheduling {
     return getSkippedProjectsEventFiles().get(projectName);
   }
 
+  /**
+   * Does the skipped events contain a Queue of events for this specific project
+   * TRUE = yes its got skipped events
+   * @param projectName
+   * @return
+   */
   public boolean containsSkippedProjectEventFiles(String projectName) {
     return getSkippedProjectsEventFiles().containsKey(projectName);
   }
