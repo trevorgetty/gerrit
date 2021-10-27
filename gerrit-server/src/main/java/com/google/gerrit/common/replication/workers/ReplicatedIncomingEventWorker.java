@@ -624,7 +624,7 @@ public class ReplicatedIncomingEventWorker implements Runnable {
       // and we dont schedule another file later on ahead of this one when the backoff period has expired.
       // Note this should be a prepend for a simple list, but we use an ordered queue to regardless if will
       // jump to the HEAD of the FIFO.
-      replicatedScheduling.addSkippedProjectEventFile(eventsFileBeingProcessed, projectName);
+      replicatedScheduling.prependSkippedProjectEventFile(eventsFileBeingProcessed, projectName);
 
       checkPersistRemainingEntries(replicatedEventTask, allEventsBeingProcessed, correctlyProcessedEvents);
       return;

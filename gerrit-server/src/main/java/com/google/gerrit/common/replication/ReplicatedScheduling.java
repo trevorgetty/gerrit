@@ -9,13 +9,13 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.security.InvalidParameterException;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
-import java.util.PriorityQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
-import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -30,11 +30,8 @@ public class ReplicatedScheduling {
 
   private static final Logger log = LoggerFactory.getLogger(ReplicatedScheduling.class);
 
-  // map of project to event file of work in progress.
-  private final ConcurrentHashMap<String, ReplicatedEventTask> eventsFilesInProgress;
-  // map of project to a list of event files skipped over for each project.
-  private final ConcurrentHashMap<String, PriorityBlockingQueue<File>> skippedProjectsEventFiles;
-
+  private final ConcurrentHashMap<String, ReplicatedEventTask> eventsFilesInProgress; // map of project to event file of work in progress.
+  private final HashMap<String, Deque<File>> skippedProjectsEventFiles; // map of project to event file of work in progress.
   /**
    * list of projects that we are to stop processing for a period of time.
    * We do this -> backoff period of time by recording when we added the project(failed the project event)
@@ -84,12 +81,9 @@ public class ReplicatedScheduling {
     // project A - event 2
     // project B - event 1
     // We need to preserve the ordering of projectA lookups being event1, then event2.
-    // we enforce the list internally to be timebased ( alpha numeric ), to ensure the list is always ordered
-    // correctly even if we hit a race condition or incorrect coding. It ensures the events are always ordered
-    // in the same ordering as our listed files.
-    // This prevent us needing to support prepend / append and more complicated caller code.
-    // As incoming worker always appends skipped files, but the worker always prepends a failed event file.
-    skippedProjectsEventFiles = new ConcurrentHashMap<>();
+    // we do not order the MAP by project in any way so we can use a standard hashmap for fast lookup of the
+    // list/queue used per project stored internally.
+    skippedProjectsEventFiles = new HashMap<>();
 
     // Allow us to skip processing of any project when we hit particular error cases - like DB stale, we back off processing
     // all further events for this project for now, until we finish this iteration.
@@ -295,68 +289,63 @@ public class ReplicatedScheduling {
    * @param projectName
    */
   public void addSkippedProjectEventFile(File eventsFileToProcess, String projectName) {
-    if (!containsSkippedEventsForProject(projectName)) {
-      getSkippedProjectsEventFiles().put(projectName,
-          new PriorityBlockingQueue<File>());
-      log.debug("Creating new PriorityQueue for project: {}", projectName);
+    if (!getSkippedProjectsEventFiles().containsKey(projectName)) {
+      getSkippedProjectsEventFiles().put(projectName, new ArrayDeque<File>());
+      log.debug("Creating new pointing key for project: {}", projectName);
     }
-    // Add this event file to the list.  Note we will always correct the ordering to be correct.
-    getSkippedProjectEventFilesList(projectName).add(eventsFileToProcess);
+    getSkippedProjectsEventFiles().get(projectName).addLast(eventsFileToProcess);
+  }
+  /**
+   * Add a file for a given project to the skipped event files map per project but to the start of the list.
+   * This allows us to maintain correct ordering for failed events which need to go back onto the start of
+   * the skipped over list, and not to the end
+   *
+   * @param eventsFileToProcess
+   * @param projectName
+   */
+  public void prependSkippedProjectEventFile(File eventsFileToProcess, String projectName) {
+    if (!getSkippedProjectsEventFiles().containsKey(projectName)) {
+      getSkippedProjectsEventFiles().put(projectName, new ArrayDeque<File>());
+      log.debug("Creating new pointing key for project: {}", projectName);
+    }
+    getSkippedProjectsEventFiles().get(projectName).addFirst(eventsFileToProcess);
   }
 
   /**
-   * For use when taking a look at all the information, allows concurrent operations to be maintained without
-   * affecting the caller, so consider this a dirty copy - as inserts can be performed in background.
+   * Return the actual hashmap of all events being skipped for all projects.
    * @return
    */
-  public ConcurrentHashMap<String, PriorityBlockingQueue<File>> getSkippedProjectsEventFiles() {
+  public HashMap<String, Deque<File>> getSkippedProjectsEventFiles() {
     return skippedProjectsEventFiles;
   }
 
 
-  /**
-   * Remove a particular event file which from the skipped list for a specific project.
-   * @param eventsFileToProcess
-   * @param projectName
-   */
   public void removeSkippedProjectEventFile(File eventsFileToProcess, String projectName) {
-    if (!containsSkippedEventsForProject(projectName)) {
+    if (!getSkippedProjectsEventFiles().containsKey(projectName)) {
       log.warn("Unable to delete skipped event file for project {} as its already gone", projectName);
       return;
     }
 
-    final PriorityBlockingQueue<File> projectSkippedEvents = getSkippedProjectEventFilesList(projectName);
-    projectSkippedEvents.remove(eventsFileToProcess);
-
-    // if we happen to have removed the final entry lets remove the entire key pointing to this queue.
-    if (projectSkippedEvents.isEmpty()) {
+    getSkippedProjectsEventFiles().get(projectName).remove(eventsFileToProcess);
+    if (getSkippedProjectsEventFiles().get(projectName).isEmpty()) {
       // lets remove this project set now - so its null and no key exists pointing to it
       getSkippedProjectsEventFiles().remove(projectName);
       log.debug("Deleting pointing key as no items remain in the set for project: {}", projectName);
     }
   }
 
-  public boolean containsSkippedEventsForProject(String projectName) {
-    return skippedProjectsEventFiles.containsKey(projectName);
-  }
-
   public File getFirstSkippedProjectEventFile(String projectName) {
-    if (!containsSkippedEventsForProject(projectName)) {
-      log.warn("Unable to delete skipped event file for project {} as its already gone, self healing.", projectName);
+    if (!getSkippedProjectsEventFiles().containsKey(projectName)) {
+      log.warn("Unable to delete skipped event file for project {} as its already gone", projectName);
       return null;
     }
 
-    // get all skipped events for this project, and return the HEAD of the queue.
-    return getSkippedProjectEventFilesList(projectName).iterator().next();
+    // get first item in our linked set.
+    return getSkippedProjectsEventFiles().get(projectName).getFirst();
   }
 
-  /**
-   * return the queue of skipped over event files for this given project.
-   * @param projectName
-   * @return
-   */
-  public PriorityBlockingQueue<File> getSkippedProjectEventFilesList(String projectName) {
-    if (!containsSkippedEventsForProject(projectName)) {
+  public Deque<File> getSkippedProjectEventFilesList(String projectName) {
+    if (!getSkippedProjectsEventFiles().containsKey(projectName)) {
       log.warn("Unable to delete skipped event file for project {} as its already gone", projectName);
       return null;
     }
@@ -365,12 +354,6 @@ public class ReplicatedScheduling {
     return getSkippedProjectsEventFiles().get(projectName);
   }
 
-  /**
-   * Does the skipped events contain a Queue of events for this specific project
-   * TRUE = yes its got skipped events
-   * @param projectName
-   * @return
-   */
   public boolean containsSkippedProjectEventFiles(String projectName) {
     return getSkippedProjectsEventFiles().containsKey(projectName);
   }
