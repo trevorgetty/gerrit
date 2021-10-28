@@ -110,8 +110,12 @@ public class ReplicatedIncomingEventWorker implements Runnable {
       return;
     }
 
-    // Make sure we clear out for a new iteration every time.
     ReplicatedScheduling replicatedScheduling = replicatedEventsCoordinator.getReplicatedScheduling();
+
+    // Make sure we clear out for a new iteration every time, note we can't clear the backoff list it needs persisted.
+    // The WIP can't be cleared it should only be added to here, but cleared by the worker that processes it.
+    // so that only leaves the skip list to be cleared down per iteration.
+    replicatedScheduling.clearSkippedProjectsEventFiles();
 
     try {
       File[] listFiles;
@@ -304,7 +308,7 @@ public class ReplicatedIncomingEventWorker implements Runnable {
    * @param dirtyCopyOfWIP
    * @return
    */
-  private Collection<File> buildDirtyWIPFiles(HashMap<String, ReplicatedEventTask> dirtyCopyOfWIP) {
+  public static Collection<File> buildDirtyWIPFiles(HashMap<String, ReplicatedEventTask> dirtyCopyOfWIP) {
     Collection<File> dirtyCopyOfWIPFiles = new ArrayList<>(dirtyCopyOfWIP.size());
     for (ReplicatedEventTask tmpTask : dirtyCopyOfWIP.values()) {
       dirtyCopyOfWIPFiles.add(tmpTask.getEventsFileToProcess());

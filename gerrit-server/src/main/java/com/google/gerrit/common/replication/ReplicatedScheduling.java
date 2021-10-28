@@ -293,6 +293,13 @@ public class ReplicatedScheduling {
       getSkippedProjectsEventFiles().put(projectName, new ArrayDeque<File>());
       log.debug("Creating new pointing key for project: {}", projectName);
     }
+
+    if ( getSkippedProjectsEventFiles().get(projectName).contains(eventsFileToProcess) ) {
+      log.warn("Caller has attempted to add an already skipped over event file to the end of the list - track this down eventFile: %s.",
+          eventsFileToProcess);
+      return;
+    }
+
     getSkippedProjectsEventFiles().get(projectName).addLast(eventsFileToProcess);
   }
   /**
@@ -503,9 +510,12 @@ public class ReplicatedScheduling {
    */
   public HashMap<String, ReplicatedEventTask> getCopyEventsFilesInProgress() {
     // Take a copy now to protect against changes later on.
-    HashMap<String, ReplicatedEventTask> shallowCopy = new HashMap<>(); // this isn't concurrent as doesn't get updated.
-    shallowCopy.putAll(eventsFilesInProgress);
-    return shallowCopy;
+    // take under lock to prevent external effect.
+    synchronized (getEventsFileInProgressLock()) {
+      HashMap<String, ReplicatedEventTask> shallowCopy = new HashMap<>(); // this isn't concurrent as doesn't get updated.
+      shallowCopy.putAll(eventsFilesInProgress);
+      return shallowCopy;
+    }
   }
 
   /**
@@ -518,6 +528,16 @@ public class ReplicatedScheduling {
     return eventsFilesInProgress;
   }
 
+  /**
+   *
+   * TRUE = Contains a event in progress for this project.
+   * @param projectname
+   * @return
+   */
+  public boolean containsEventsFileInProgress( final String projectname ){
+    // do we have a WIP for this project.
+    return eventsFilesInProgress.containsKey(projectname) && ( eventsFilesInProgress.get(projectname) != null );
+  }
 
   /**
    * Very specific code, to check if this project has skipped projects already in existance.
@@ -553,6 +573,13 @@ public class ReplicatedScheduling {
     removeSkippedProjectEventFile(eventsFileToReallyProcess, projectName);
 
     return eventsFileToReallyProcess;
+  }
+
+  /**
+   *  Clear the entire list of skipped over event files - this is created uniquely per iteration.
+    */
+  public void clearSkippedProjectsEventFiles(){
+    skippedProjectsEventFiles.clear();
   }
 
   /**

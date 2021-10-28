@@ -2,6 +2,7 @@ package com.google.gerrit.common.replication;
 
 import com.google.gerrit.common.AccountIndexEvent;
 import com.google.gerrit.common.GerritEventFactory;
+import com.google.gerrit.common.replication.workers.ReplicatedIncomingEventWorker;
 import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
 import nl.jqno.equalsverifier.EqualsVerifier;
 import nl.jqno.equalsverifier.Warning;
@@ -67,6 +68,52 @@ public class ReplicatedSchedulingTest extends AbstractReplicationTesting {
   }
 
 
+  @Test
+  public void testCopyOfWIPMaintainsEntries() throws IOException {
+    // this would start failing earlier if someone changes the coreProjects, so just checking otherwise change this test!!
+    Assert.assertNotNull(scheduling);
+    Assert.assertEquals(2, dummyTestCoordinator.getReplicatedConfiguration().getCoreProjects().size());
+    Assert.assertEquals(4, dummyTestCoordinator.getReplicatedConfiguration().getMaxNumberOfEventWorkerThreads());
+    Assert.assertEquals(0, scheduling.getNumEventFilesInProgress());
+    Assert.assertEquals(0, scheduling.getNumberOfCoreProjectsInProgress());
+
+    EventWrapper dummyWrapper = createIndexEventWrapper("SkipMe1");
+
+    // Note we use random UUIDs, so we need to ensure correct ordering for below to work its not just a FIFO now,
+    // its a prioritised queue to ensure we always keep the correct first event at HEAD of the queue.
+    // So take 5 randomly named event files, and order correctly as if by timestamp
+    File[] events = (File[]) Arrays.asList(createDummyEventFile(), createDummyEventFile(), createDummyEventFile(), createDummyEventFile()).toArray();
+    Arrays.sort(events);
+
+    // Now they are sorted, lets take them and assign correctly to our named items, so we can play arround with
+    // ordering correctly
+    final File eventInfoIndex0 = events[0];
+    final File eventInfoIndex1 = events[1];
+
+    // Lets dummy creation of replicated tasts - we could just attempt schedule - easy route.
+    // It should also add to WIP!!!
+    final ReplicatedEventTask scheduledTaskWIP = scheduling.tryScheduleReplicatedEventsTask(dummyWrapper, eventInfoIndex0);
+
+    // check is in progress first!!!
+    Assert.assertTrue(scheduling.containsEventsFileInProgress(dummyWrapper.getProjectName()));
+
+    HashMap<String, ReplicatedEventTask> copyWIP = scheduling.getCopyEventsFilesInProgress();
+    // we build a copy of the WIP as a collection for FILE based quick lookups - check this works as runtime expects it.
+    Collection<File> dirtyCopyOfWIPFiles = ReplicatedIncomingEventWorker.buildDirtyWIPFiles(copyWIP);
+
+    // ensure our copy can be found directly
+    Assert.assertTrue(dirtyCopyOfWIPFiles.contains(eventInfoIndex0));
+    Assert.assertTrue(scheduling.containsEventsFileInProgress(dummyWrapper.getProjectName()));
+
+    // make sure it doesn't find something thats not there.
+    Assert.assertFalse(dirtyCopyOfWIPFiles.contains(eventInfoIndex1));
+
+    // Now we need to make sure deletion from the core WIP doesn't actually delete it from our copy.
+    scheduling.clearEventsFileInProgress(scheduledTaskWIP, false);
+    // it should be gone locally in the wip real hashmap, but not the copy.
+    Assert.assertFalse(scheduling.containsEventsFileInProgress(dummyWrapper.getProjectName()));
+    Assert.assertTrue(dirtyCopyOfWIPFiles.contains(eventInfoIndex0));
+  }
   @Test
   public void testSchedulingOfSkippedEventsMaintainsOrderingOfEvents() throws IOException {
     // this would start failing earlier if someone changes the coreProjects, so just checking otherwise change this test!!
