@@ -114,6 +114,69 @@ public class ReplicatedSchedulingTest extends AbstractReplicationTesting {
     Assert.assertFalse(scheduling.containsEventsFileInProgress(dummyWrapper.getProjectName()));
     Assert.assertTrue(dirtyCopyOfWIPFiles.contains(eventInfoIndex0));
   }
+
+
+  @Test
+  public void testSkippedEventFilesCannotHoldDuplicates() throws IOException {
+    // this would start failing earlier if someone changes the coreProjects, so just checking otherwise change this test!!
+    Assert.assertNotNull(scheduling);
+    Assert.assertEquals(2, dummyTestCoordinator.getReplicatedConfiguration().getCoreProjects().size());
+    Assert.assertEquals(4, dummyTestCoordinator.getReplicatedConfiguration().getMaxNumberOfEventWorkerThreads());
+    Assert.assertEquals(0, scheduling.getNumEventFilesInProgress());
+    Assert.assertEquals(0, scheduling.getNumberOfCoreProjectsInProgress());
+
+    EventWrapper dummyWrapper = createIndexEventWrapper("SkipMe1");
+
+    // Note we use random UUIDs, so we need to ensure correct ordering for below to work its not just a FIFO now,
+    // its a prioritised queue to ensure we always keep the correct first event at HEAD of the queue.
+    // So take 5 randomly named event files, and order correctly as if by timestamp
+    File[] events = (File[]) Arrays.asList(createDummyEventFile(), createDummyEventFile(), createDummyEventFile(), createDummyEventFile()).toArray();
+    Arrays.sort(events);
+
+    // Now they are sorted, lets take them and assign correctly to our named items, so we can play arround with
+    // ordering correctly
+    final File eventInfoIndex0 = events[0];
+    final File eventInfoIndex1 = events[1];
+
+    // Lets dummy creation of replicated tasts - we could just attempt schedule - easy route.
+    // It should also add to WIP!!!
+    final ReplicatedEventTask scheduledTaskWIP = scheduling.tryScheduleReplicatedEventsTask(dummyWrapper, eventInfoIndex0);
+
+    // check is in progress first!!!
+    Assert.assertTrue(scheduling.containsEventsFileInProgress(dummyWrapper.getProjectName()));
+
+    HashMap<String, ReplicatedEventTask> copyWIP = scheduling.getCopyEventsFilesInProgress();
+    // we build a copy of the WIP as a collection for FILE based quick lookups - check this works as runtime expects it.
+    Collection<File> dirtyCopyOfWIPFiles = ReplicatedIncomingEventWorker.buildDirtyWIPFiles(copyWIP);
+
+    // ensure our copy can be found directly
+    Assert.assertTrue(dirtyCopyOfWIPFiles.contains(eventInfoIndex0));
+    Assert.assertTrue(scheduling.containsEventsFileInProgress(dummyWrapper.getProjectName()));
+    Assert.assertFalse(scheduling.containsSkippedProjectEventFiles(dummyWrapper.getProjectName()));
+
+    // Now if we try to schedule the same file again it should go into the skipped list.
+
+    final ReplicatedEventTask nothingTask = scheduling.tryScheduleReplicatedEventsTask(dummyWrapper, eventInfoIndex0);
+
+    // make sure it doesn't find something thats not there.
+    Assert.assertNull(nothingTask);
+
+    // now we should have the index0 not in the skipped list as it is already in progress!
+    Assert.assertFalse(scheduling.containsSkippedProjectEventFiles(dummyWrapper.getProjectName()));
+    // lets try prepend and append and check we can't duplicate entries
+    scheduling.addSkippedProjectEventFile(eventInfoIndex1, dummyWrapper.getProjectName());
+    Assert.assertEquals(1, scheduling.getSkippedProjectEventFilesList(dummyWrapper.getProjectName()).size());
+    // this shouldn't add twice.
+    scheduling.addSkippedProjectEventFile(eventInfoIndex1, dummyWrapper.getProjectName());
+    Assert.assertEquals(1, scheduling.getSkippedProjectEventFilesList(dummyWrapper.getProjectName()).size());
+
+    // ok lets prepend the earlier file I know its in progress but I am bypassing WIP check to test skipped handling!!
+    scheduling.prependSkippedProjectEventFile(eventInfoIndex0, dummyWrapper.getProjectName());
+    Assert.assertEquals(2, scheduling.getSkippedProjectEventFilesList(dummyWrapper.getProjectName()).size());
+    Assert.assertEquals(eventInfoIndex0, scheduling.getSkippedProjectEventFilesList(dummyWrapper.getProjectName()).getFirst());
+    Assert.assertEquals(eventInfoIndex1, scheduling.getSkippedProjectEventFilesList(dummyWrapper.getProjectName()).getLast());
+  }
+
   @Test
   public void testSchedulingOfSkippedEventsMaintainsOrderingOfEvents() throws IOException {
     // this would start failing earlier if someone changes the coreProjects, so just checking otherwise change this test!!

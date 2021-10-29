@@ -60,6 +60,7 @@ public class ReplicatedScheduling {
    * Sorry by adding a getInstance, make this class look much more public than it is,
    * and people expect they can just call getInstance - when in fact they should always request it via the
    * ReplicatedEventsCordinator.getReplicatedXWorker() methods.
+   *
    * @param replicatedEventsCoordinator
    */
   public ReplicatedScheduling(ReplicatedEventsCoordinator replicatedEventsCoordinator) {
@@ -211,7 +212,7 @@ public class ReplicatedScheduling {
       }
 
       // Another quick decision - should we be skipping this project entirely at the moment (for this iteration.)
-      if ( shouldStillSkipThisProjectForNow (eventsFileToProcess, projectName)) {
+      if (shouldStillSkipThisProjectForNow(eventsFileToProcess, projectName)) {
         // we have to skip all processing I could add this to the skipped list, and I will just for metrics of how many
         // skipped at the end.
         addSkippedProjectEventFile(eventsFileToProcess, projectName);
@@ -220,6 +221,15 @@ public class ReplicatedScheduling {
       }
 
       if (eventsFilesInProgress.containsKey(projectName)) {
+        // make a quick check to decide whether this is a skipped over file, or if its actually in progress from an earlier
+        // iteration.
+        ReplicatedEventTask wipTask = eventsFilesInProgress.get(projectName);
+        if ( wipTask.getEventsFileToProcess() == eventsFileToProcess ){
+          // this exact file is in progress - lets just skip over it, but DO NOT add to skip list as its in progress
+          // if it succeeds its completed, and if it fails its prepended onto the start of the skipped list.
+          log.debug("Not scheduling file: {} as its in progress for the project already. ", eventsFileToProcess);
+          return null;
+        }
         // We already have this project in progress, just schedule this as a skipped entry for this project so we can
         // come back to it.
         addSkippedProjectEventFile(eventsFileToProcess, projectName);
@@ -271,16 +281,6 @@ public class ReplicatedScheduling {
     return replicatedConfiguration.getCoreProjects().contains(projectName);
   }
 
-
-  /**
-   * handy override which allows a failed replicated task to be marked as a skipped event for later processing.
-   *
-   * @param replicatedEventTask
-   */
-  public void addSkippedProjectEventFile(final ReplicatedEventTask replicatedEventTask) {
-    addSkippedProjectEventFile(replicatedEventTask.getEventsFileToProcess(), replicatedEventTask.getProjectname());
-  }
-
   /**
    * Add a file for a given project to the skipped event files map per project, this allows correct ordering
    * so that a given event file can be plucked from the FIFO when the backoff failure period has elapsed.
@@ -289,19 +289,27 @@ public class ReplicatedScheduling {
    * @param projectName
    */
   public void addSkippedProjectEventFile(File eventsFileToProcess, String projectName) {
-    if (!getSkippedProjectsEventFiles().containsKey(projectName)) {
-      getSkippedProjectsEventFiles().put(projectName, new ArrayDeque<File>());
-      log.debug("Creating new pointing key for project: {}", projectName);
-    }
 
-    if ( getSkippedProjectsEventFiles().get(projectName).contains(eventsFileToProcess) ) {
-      log.warn("Caller has attempted to add an already skipped over event file to the end of the list - track this down eventFile: %s.",
-          eventsFileToProcess);
-      return;
-    }
+    // This shouldn't be necessary to lock as the only person adding to skipped events and then working on it is the
+    // same scheduling thread, but to protect us from future changes adding the lock here.
+    synchronized (getEventsFileInProgressLock()) {
+      if (!getSkippedProjectsEventFiles().containsKey(projectName)) {
+        getSkippedProjectsEventFiles().put(projectName, new ArrayDeque<File>());
+        log.debug("Creating new ArrayDeque pointing key for project: {}", projectName);
+      }
 
-    getSkippedProjectsEventFiles().get(projectName).addLast(eventsFileToProcess);
+      // get the queue
+      Deque<File> eventsBeingSkipped = getSkippedProjectsEventFiles().get(projectName);
+      if (eventsBeingSkipped.contains(eventsFileToProcess)) {
+        log.warn("Caller has attempted to add an already skipped over event file to the end of the list - track this down eventFile: %s.",
+            eventsFileToProcess);
+        return;
+      }
+
+      eventsBeingSkipped.addLast(eventsFileToProcess);
+    }
   }
+
   /**
    * Add a file for a given project to the skipped event files map per project but to the start of the list.
    * This allows us to maintain correct ordering for failed events which need to go back onto the start of
@@ -311,15 +319,28 @@ public class ReplicatedScheduling {
    * @param projectName
    */
   public void prependSkippedProjectEventFile(File eventsFileToProcess, String projectName) {
-    if (!getSkippedProjectsEventFiles().containsKey(projectName)) {
-      getSkippedProjectsEventFiles().put(projectName, new ArrayDeque<File>());
-      log.debug("Creating new pointing key for project: {}", projectName);
+    // This shouldn't be necessary to lock as the only person adding to skipped events and then working on it is the
+    // same scheduling thread, but to protect us from future changes adding the lock here.
+    synchronized (getEventsFileInProgressLock()) {
+      if (!getSkippedProjectsEventFiles().containsKey(projectName)) {
+        getSkippedProjectsEventFiles().put(projectName, new ArrayDeque<File>());
+        log.debug("PrependSkippedProjectEventFile: Creating new ArrayDeque pointing key for project: {}", projectName);
+      }
+
+      Deque<File> eventsBeingSkipped = getSkippedProjectsEventFiles().get(projectName);
+      if (eventsBeingSkipped.contains(eventsFileToProcess)) {
+        log.warn("Caller has attempted to prepend an already skipped over event file to the end of the list - track this down eventFile: %s.",
+            eventsFileToProcess);
+        return;
+      }
+
+      eventsBeingSkipped.addFirst(eventsFileToProcess);
     }
-    getSkippedProjectsEventFiles().get(projectName).addFirst(eventsFileToProcess);
   }
 
   /**
    * Return the actual hashmap of all events being skipped for all projects.
+   *
    * @return
    */
   public HashMap<String, Deque<File>> getSkippedProjectsEventFiles() {
@@ -334,7 +355,9 @@ public class ReplicatedScheduling {
     }
 
     getSkippedProjectsEventFiles().get(projectName).remove(eventsFileToProcess);
-    if (getSkippedProjectsEventFiles().get(projectName).isEmpty()) {
+
+    if (getSkippedProjectsEventFiles().containsKey(projectName) &&
+        getSkippedProjectEventFilesList(projectName).isEmpty()) {
       // lets remove this project set now - so its null and no key exists pointing to it
       getSkippedProjectsEventFiles().remove(projectName);
       log.debug("Deleting pointing key as no items remain in the set for project: {}", projectName);
@@ -429,6 +452,7 @@ public class ReplicatedScheduling {
 
       // if something went wrong we can skip a project even at this late state..
       if (eventsFileToReallyProcess == null) {
+        log.warn("Something went wrong considering event file: {}, it will be picked up later.", eventsFileToReallyProcess);
         return null;
       }
 
@@ -446,11 +470,12 @@ public class ReplicatedScheduling {
     }
   }
 
-  /** DO NOT CALL THIS for anything other than testing....
+  /**
+   * DO NOT CALL THIS for anything other than testing....
    *
    * @param newTask
    */
-  public void addForTestingInProgress(final ReplicatedEventTask newTask){
+  public void addForTestingInProgress(final ReplicatedEventTask newTask) {
     addEventsFileInProgress(newTask);
   }
 
@@ -529,14 +554,14 @@ public class ReplicatedScheduling {
   }
 
   /**
-   *
    * TRUE = Contains a event in progress for this project.
+   *
    * @param projectname
    * @return
    */
-  public boolean containsEventsFileInProgress( final String projectname ){
+  public boolean containsEventsFileInProgress(final String projectname) {
     // do we have a WIP for this project.
-    return eventsFilesInProgress.containsKey(projectname) && ( eventsFilesInProgress.get(projectname) != null );
+    return eventsFilesInProgress.containsKey(projectname) && (eventsFilesInProgress.get(projectname) != null);
   }
 
   /**
@@ -551,34 +576,38 @@ public class ReplicatedScheduling {
    */
   private File checkSwapoutSkippedProjectEvent(File eventsFileToProcess, String projectName) {
     // Only one caller / thread ever checks this, and only the same thread can swap out,
-    // so no locking needed currently.
-    if (!skippedProjectsEventFiles.containsKey(projectName)) {
-      return eventsFileToProcess;
+    // so no locking needed currently but for clarity I am locking - it wont add contention but helps for clarity
+    // that we can't be interrupted.
+    synchronized (getEventsFileInProgressLock()) {
+      if (!skippedProjectsEventFiles.containsKey(projectName)) {
+        return eventsFileToProcess;
+      }
+
+      // time to swap it out.
+      addSkippedProjectEventFile(eventsFileToProcess, projectName);
+
+      File eventsFileToReallyProcess = getFirstSkippedProjectEventFile(projectName);
+
+      if (eventsFileToReallyProcess == eventsFileToProcess) {
+        log.error("Invalid ordering of events processing discovered, where it picked up last event as LIFO not FIFO. File: {}", eventsFileToProcess);
+        // Failing this entire project, and do no more processing on it.
+        // When we finish this iteration we can pick up this project fresh with new state - and hopefully recover!
+        addSkipThisProjectsEventsForNow(projectName);
+        return null;
+      }
+
+      // lets remove the item we got back.
+      removeSkippedProjectEventFile(eventsFileToReallyProcess, projectName);
+      log.info("Swapped out supplied file: %s for an earlier file in the skipped list: %s",
+          eventsFileToProcess, eventsFileToReallyProcess);
+      return eventsFileToReallyProcess;
     }
-
-    // time to swap it out.
-    addSkippedProjectEventFile(eventsFileToProcess, projectName);
-
-    File eventsFileToReallyProcess = getFirstSkippedProjectEventFile(projectName);
-
-    if (eventsFileToReallyProcess == eventsFileToProcess) {
-      log.error("Invalid ordering of events processing discovered, where it picked up last event as LIFO not FIFO. File: {}", eventsFileToProcess);
-      // Failing this entire project, and do no more processing on it.
-      // When we finish this iteration we can pick up this project fresh with new state - and hopefully recover!
-      addSkipThisProjectsEventsForNow(projectName);
-      return null;
-    }
-
-    // lets remove the item we got back.
-    removeSkippedProjectEventFile(eventsFileToReallyProcess, projectName);
-
-    return eventsFileToReallyProcess;
   }
 
   /**
-   *  Clear the entire list of skipped over event files - this is created uniquely per iteration.
-    */
-  public void clearSkippedProjectsEventFiles(){
+   * Clear the entire list of skipped over event files - this is created uniquely per iteration.
+   */
+  public void clearSkippedProjectsEventFiles() {
     skippedProjectsEventFiles.clear();
   }
 

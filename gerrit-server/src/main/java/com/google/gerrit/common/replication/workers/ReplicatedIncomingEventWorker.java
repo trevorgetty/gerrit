@@ -128,6 +128,8 @@ public class ReplicatedIncomingEventWorker implements Runnable {
       // off for processing again!
       synchronized (replicatedScheduling.getEventsFileInProgressLock()) {
 
+        logger.atFinest().log("Starting new iteration of event processing.");
+
         logger.atFine().atMostEvery(replicatedConfiguration.getLoggingMaxPeriodValueMs(), TimeUnit.MILLISECONDS)
             .log("RE Event worker pool information : %s", replicatedScheduling
                 .getReplicatedWorkThreadPoolExecutor().toString());
@@ -271,7 +273,7 @@ public class ReplicatedIncomingEventWorker implements Runnable {
           // if null, we can't queue this project yet, try the next one.
           // All the logic around backoff, skipping and swapping events for ordering etc is within trySchedule above.
           if (eventTask == null) {
-            // go into a skip list of projects we can't do for the entire group of files in this iteration!
+            // This project is already in progress, or has been added to a skipped list for later consideration.
             continue;
           }
 
