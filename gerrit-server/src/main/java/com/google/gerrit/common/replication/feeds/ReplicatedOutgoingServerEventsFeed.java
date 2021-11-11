@@ -68,8 +68,8 @@ public class ReplicatedOutgoingServerEventsFeed implements LifecycleListener {
 
     @Override
     public void onEvent(Event event) {
-      if (!event.replicated) {
-
+      //If the event is in a skip list then we do not queue it for replication.
+      if(!isEventToBeSkipped(event)) {
         event.setNodeIdentity(configuration.getThisNodeIdentity());
         try {
           coordinator.queueEventForReplication(GerritEventFactory.createReplicatedChangeEvent(event,
@@ -77,9 +77,45 @@ public class ReplicatedOutgoingServerEventsFeed implements LifecycleListener {
         } catch (IOException e) {
           log.error("Unable to queue server event for replication {}", e.getMessage());
         }
+      } else {
+        log.debug("Event type {} is present in the event skip list. Skipping.", event.getType());
       }
     }
   };
+
+  /**
+   * isEventToBeSkipped uses 2 things.
+   * 1) has the event previously been replicated - if so we don't do it again!!
+   * 2) Is the event in a list of events we are not to replicate ( i.e a skip list )
+   *    NOTE: By default we are skipping two events associated with the Replication plugin
+   *    as these events should not be replicated.
+   *
+   * @param event The event instance to check is skipped
+   * @return true if event type is to be skipped.
+   */
+  public boolean isEventToBeSkipped(Event event) {
+    if (event.replicated) {
+      // don't cause cyclic loop replicating forever./
+      return true;
+    }
+
+    return isEventInSkipList(event);
+  }
+
+  /**
+   * This checks against the list of event class names to be skipped
+   * Skippable events are configured by a parameter in the application.properties
+   * as a comma separated list of class names for event types, e.g
+   * TopicChangedEvent, ReviewerDeletedEvent.
+   *
+   * @param event
+   * @return
+   */
+  public boolean isEventInSkipList(Event event) {
+    //Doesn't matter if the list is empty, check if the list contains the class name.
+    //All events are stored in the list as lowercase, so we check for our lowercase class name.
+    return configuration.getEventSkipList().contains(event.getClass().getSimpleName().toLowerCase()); //short name of the class
+  }
 
   /**
    * Since the event can be of many different types, and since the Gerrit engineers didn't want

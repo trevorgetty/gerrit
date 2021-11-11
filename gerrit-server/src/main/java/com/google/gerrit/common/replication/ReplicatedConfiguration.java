@@ -11,6 +11,7 @@ import org.eclipse.jgit.errors.ConfigInvalidException;
 import org.eclipse.jgit.lib.Config;
 import org.eclipse.jgit.storage.file.FileBasedConfig;
 import org.eclipse.jgit.util.FS;
+import org.eclipse.jgit.util.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,7 +20,10 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedList;
+import java.util.List;
+import java.util.ListIterator;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
@@ -41,6 +45,7 @@ import static com.google.gerrit.common.replication.ReplicationConstants.GERRIT_C
 import static com.google.gerrit.common.replication.ReplicationConstants.GERRIT_EVENTS_BACKOFF_CEILING_PERIOD;
 import static com.google.gerrit.common.replication.ReplicationConstants.GERRIT_EVENTS_BACKOFF_INITIAL_PERIOD;
 import static com.google.gerrit.common.replication.ReplicationConstants.GERRIT_EVENT_BASEPATH;
+import static com.google.gerrit.common.replication.ReplicationConstants.GERRIT_EVENT_TYPES_TO_BE_SKIPPED;
 import static com.google.gerrit.common.replication.ReplicationConstants.GERRIT_MAX_EVENTS_TO_APPEND_BEFORE_PROPOSING;
 import static com.google.gerrit.common.replication.ReplicationConstants.GERRIT_MAX_LOGGING_PERIOD_SECS;
 import static com.google.gerrit.common.replication.ReplicationConstants.GERRIT_MAX_MS_TO_WAIT_BEFORE_PROPOSING_EVENTS;
@@ -98,6 +103,7 @@ public class ReplicatedConfiguration {
   private File outgoingReplEventsDirectory = null;
   private File incomingReplEventsDirectory = null;
   private File incomingFailedReplEventsDirectory = null;
+  private List<String> eventSkipList = new ArrayList<>(); //Events that we skip replication for
 
   /*******************************************************************
    * Thread / workers wait times
@@ -225,6 +231,10 @@ public class ReplicatedConfiguration {
 
   public long getIndexBackoffCeilingPeriodMs() {
     return indexBackoffCeilingPeriodMs;
+  }
+
+  public List<String> getEventSkipList() {
+    return eventSkipList;
   }
 
   /**
@@ -423,6 +433,17 @@ public class ReplicatedConfiguration {
             .getProperty(GERRIT_EVENTS_BACKOFF_CEILING_PERIOD,
                 DEFAULT_GERRIT_EVENTS_BACKOFF_CEILING_PERIOD)));
 
+
+    // Read in a comma separated list of events that should be skipped. Arrays.asList returns
+    // a fixed size list and cannot be mutated so using an ArrayList here instead that takes a default list with an
+    // initial size in order to later on have the ability to use addAll() to join the default list
+    // with the events in property file list.
+    final List<String> defaultTypesToSkip
+        = new ArrayList<>(Arrays.asList("RefReplicatedEvent", "RefReplicationDoneEvent"));
+    eventSkipList = getPropertyAsList(props, GERRIT_EVENT_TYPES_TO_BE_SKIPPED, defaultTypesToSkip);
+    //Setting all to lowercase so user doesn't have to worry about correct casing.
+    replaceAll(eventSkipList);
+
     // Now we have the index backoff information - lets calculate the sequence of backoffs.
     indexBackoffPeriods = new LinkedList<>();
 
@@ -615,6 +636,36 @@ public class ReplicatedConfiguration {
     }
     //With the L or l stripped off, we need to convert to milliseconds now, e.g 5 -> 5000
     return convertToMs(sanitizedProp);
+  }
+
+
+  /**
+   * Version of getProperty that returns a property that contains a comma separated
+   * list of values as a list.
+   * e.g property=value1, value2, value3
+   * will return a List with value1, value2, value3 as entries in the list.
+   * @param propertyName This is the name in the GitMS application.properties to look for.
+   * @return A list with all the event types to be skipped.
+   */
+  public List<String> getPropertyAsList(final Properties properties, final String propertyName,
+                                        final List<String> defaultEventsTypesToSkip) {
+    //The call to getProperty will return a single string which could contain multiple values
+    //that need to be split into individual values.
+    final String strValue = properties.getProperty(propertyName);
+    if(StringUtils.isEmptyOrNull(strValue)){
+      return new ArrayList<>(defaultEventsTypesToSkip);
+    }
+    List<String> propFileEventsToSkip = Arrays.asList(strValue.split("\\s*,\\s*"));
+    defaultEventsTypesToSkip.addAll(propFileEventsToSkip);
+    return defaultEventsTypesToSkip;
+  }
+
+  //Utility method to replace all in a list of strings with lowercase string
+  public static void replaceAll(List<String> eventsToBeSkipped) {
+    ListIterator<String> iterator = eventsToBeSkipped.listIterator();
+    while (iterator.hasNext()) {
+      iterator.set(iterator.next().toLowerCase());
+    }
   }
 
 

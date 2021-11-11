@@ -98,4 +98,31 @@ public class ReplicatedConfigurationTest extends AbstractReplicationTesting{
     //300000ms is 5mins need to verify that the 300secs is converted correctly to 300000
     Assert.assertEquals(ReplicatedConfiguration.sanitizeLongValueAndConvertToMilliseconds(DEFAULT_MAX_LOGGING_PERIOD_VALUE_SECS), "300000");
   }
+
+
+  @Test
+  public void testDefaultEventsToSkip() throws Exception {
+
+    Properties testingProperties = new Properties();
+
+    testingProperties.put(GERRIT_EVENT_TYPES_TO_BE_SKIPPED, "");
+    dummyTestCoordinator = new TestingReplicatedEventsCoordinator(testingProperties);
+    Assert.assertEquals(dummyTestCoordinator.getReplicatedConfiguration()
+        .getEventSkipList().size(), 2);
+
+  }
+
+  @Test
+  public void testSkippingEvents() throws Exception {
+
+    Properties testingProperties = new Properties();
+
+    testingProperties.put(GERRIT_EVENT_TYPES_TO_BE_SKIPPED, "CommentAddedEvent");
+    dummyTestCoordinator = new TestingReplicatedEventsCoordinator(testingProperties);
+    Assert.assertEquals(dummyTestCoordinator.getReplicatedConfiguration()
+        .getEventSkipList().size(), 3);
+
+  }
+
+
 }

@@ -43,7 +43,9 @@ public final class ReplicationConstants {
   public static final String GERRIT_MINUTES_SINCE_CHANGE_LAST_INDEXED_CHECK_PERIOD = "gerrit.minutes.since.change.last.indexed.check.period";
   public static final String GERRIT_REPLICATED_EVENTS_ENABLED_RECEIVE = "gerrit.replicated.events.enabled.receive";
   public static final String GERRIT_REPLICATED_EVENTS_RECEIVE_ORIGINAL = "gerrit.replicated.events.enabled.receive.original";
-
+  //Events can be skipped by providing a comma seperated list of event types.
+  //e.g, TopicChangedEvent, ReviewerDeletedEvent, ReviewerUpdatedEvent
+  public static final String GERRIT_EVENT_TYPES_TO_BE_SKIPPED = "gerrit.event.types.disabled.list";
 
 
   /*****************************************************************************************
