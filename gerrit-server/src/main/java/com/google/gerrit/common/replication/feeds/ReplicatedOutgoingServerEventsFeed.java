@@ -69,11 +69,15 @@ public class ReplicatedOutgoingServerEventsFeed implements LifecycleListener {
     @Override
     public void onEvent(Event event) {
       //If the event is in a skip list then we do not queue it for replication.
-      if(!isEventToBeSkipped(event)) {
+      if (!isEventToBeSkipped(event)) {
         event.setNodeIdentity(configuration.getThisNodeIdentity());
         try {
-          coordinator.queueEventForReplication(GerritEventFactory.createReplicatedChangeEvent(event,
-              getChangeEventInfo(event)));
+          ReplicatedChangeEventInfo changeEventInfo = getChangeEventInfo(event);
+          if ( changeEventInfo == null ){
+            // we dont support this event, skip over it - we can't queue it for replication.
+            return;
+          }
+          coordinator.queueEventForReplication(GerritEventFactory.createReplicatedChangeEvent(event, changeEventInfo));
         } catch (IOException e) {
           log.error("Unable to queue server event for replication {}", e.getMessage());
         }
@@ -87,8 +91,8 @@ public class ReplicatedOutgoingServerEventsFeed implements LifecycleListener {
    * isEventToBeSkipped uses 2 things.
    * 1) has the event previously been replicated - if so we don't do it again!!
    * 2) Is the event in a list of events we are not to replicate ( i.e a skip list )
-   *    NOTE: By default we are skipping two events associated with the Replication plugin
-   *    as these events should not be replicated.
+   * NOTE: By default we are skipping two events associated with the Replication plugin
+   * as these events should not be replicated.
    *
    * @param event The event instance to check is skipped
    * @return true if event type is to be skipped.
@@ -147,10 +151,11 @@ public class ReplicatedOutgoingServerEventsFeed implements LifecycleListener {
       RefUpdatedEvent event = (RefUpdatedEvent) newEvent;
       if (event.refUpdate != null) {
         replicatedChangeEventInfo.setProjectName(event.refUpdate.get().project);
-        replicatedChangeEventInfo.setBranchName(new Branch.NameKey(new Project.NameKey(event.refUpdate.get().project), completeRef(event.refUpdate.get().refName)));
+        replicatedChangeEventInfo.setBranchName(new Branch.NameKey(new Project.NameKey(event.refUpdate.get().project),
+            completeRef(event.refUpdate.get().refName)));
       } else {
-        log.info("RE {} is not supported, project name or refupdate is null!", newEvent.getClass().getName());
-        replicatedChangeEventInfo.setSupported(false);
+        log.warn("RE {} is not supported, project name or refupdate is null, not replicating.", newEvent.getClass().getName());
+        return null;
       }
     } else if (newEvent instanceof com.google.gerrit.server.events.ReviewerAddedEvent) {
       replicatedChangeEventInfo.setChangeAttribute(((ReviewerAddedEvent) newEvent).change.get());
@@ -161,8 +166,9 @@ public class ReplicatedOutgoingServerEventsFeed implements LifecycleListener {
     } else if (newEvent instanceof com.google.gerrit.server.events.ProjectCreatedEvent) {
       replicatedChangeEventInfo.setProjectName(((ProjectCreatedEvent) newEvent).projectName);
     } else {
-      log.info("RE " + newEvent.getClass().getName() + " is not supported!");
-      replicatedChangeEventInfo.setSupported(false);
+      log.warn("RE {} is not supported!, no processing in our code for this type - add support, or add to skipped list to remove this warning.",
+          newEvent.getClass().getName());
+      return null;
     }
     return replicatedChangeEventInfo;
   }
@@ -176,7 +182,7 @@ public class ReplicatedOutgoingServerEventsFeed implements LifecycleListener {
     }
     // A refName can contain a "/" for example 'refs/heads/foo/bar' is a valid ref.
     // if refName starts with refs/heads/ already then just return refName otherwise prepend it with 'refs/heads'
-    return refName.contains("refs/heads/") ? refName : "refs/heads/"+refName;
+    return refName.contains("refs/heads/") ? refName : "refs/heads/" + refName;
   }
 
 }

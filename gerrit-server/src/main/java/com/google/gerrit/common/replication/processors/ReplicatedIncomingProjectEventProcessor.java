@@ -3,9 +3,10 @@ package com.google.gerrit.common.replication.processors;
 import com.google.gerrit.common.DeleteProjectChangeEvent;
 import com.google.gerrit.common.GerritEventFactory;
 import com.google.gerrit.common.ProjectInfoWrapper;
-import com.google.gerrit.common.replication.ConfigureReplication;
 import com.google.gerrit.common.replication.SingletonEnforcement;
 import com.google.gerrit.common.replication.coordinators.ReplicatedEventsCoordinator;
+import com.google.gerrit.common.replication.exceptions.ReplicatedEventsImmediateFailWithoutBackoffException;
+import com.google.gerrit.common.replication.exceptions.ReplicatedEventsUnknownTypeException;
 import com.google.gerrit.reviewdb.client.Project;
 import com.google.gerrit.server.git.GitRepositoryManager;
 import com.google.gson.JsonSyntaxException;
@@ -13,7 +14,6 @@ import com.google.inject.Singleton;
 import com.wandisco.gerrit.gitms.shared.events.DeleteProjectMessageEvent;
 import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
 import org.eclipse.jgit.errors.RepositoryNotFoundException;
-import org.eclipse.jgit.lib.Config;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.lib.RepositoryCache;
 import org.slf4j.Logger;
@@ -37,6 +37,7 @@ public class ReplicatedIncomingProjectEventProcessor extends GerritPublishableIm
    * Sorry by adding a getInstance, make this class look much more public than it is,
    * and people expect they can just call getInstance - when in fact they should always request it via the
    * ReplicatedEventsCordinator.getReplicatedXWorker() methods.
+   *
    * @param replicatedEventsCoordinator
    */
   public ReplicatedIncomingProjectEventProcessor(ReplicatedEventsCoordinator replicatedEventsCoordinator) {
@@ -53,27 +54,32 @@ public class ReplicatedIncomingProjectEventProcessor extends GerritPublishableIm
   }
 
   @Override
-  public boolean publishIncomingReplicatedEvents(EventWrapper newEvent) {
-    boolean result = false;
-    if (newEvent != null && newEvent.getEventOrigin() ==  EventWrapper.Originator.DELETE_PROJECT_EVENT) {
+  public void publishIncomingReplicatedEvents(EventWrapper newEvent) {
+
+    if (newEvent.getEventOrigin() == EventWrapper.Originator.DELETE_PROJECT_EVENT) {
       // We can get into the if statement in 2 ways :
       // 1. we are doing a hard delete on the project, i.e. we want to completely remove the repo
       // 2. we are doing a soft delete, i.e. we only want to remove the projects changes, reviews etc
       try {
         Class<?> eventClass = Class.forName(newEvent.getClassName());
         if (newEvent.getClassName().equals(DeleteProjectChangeEvent.class.getName())) {
-          result = deleteProjectChanges(newEvent, eventClass);
-        }else {
-          result = deleteProject(newEvent, eventClass);
+          deleteProjectChanges(newEvent, eventClass);
+        } else {
+          deleteProject(newEvent, eventClass);
         }
-
-      } catch(ClassNotFoundException e) {
-        log.error("PROJECT event has been lost. Could not find {}",newEvent.getClassName(),e);
+      } catch (ClassNotFoundException e) {
+        final String err = String.format("WARNING: Unable to publish a replicated event using Class: %s : Message: %s", e.getClass().getName(), e.getMessage());
+        log.warn(err);
+        throw new ReplicatedEventsImmediateFailWithoutBackoffException(err);
       }
-    } else if (newEvent != null && newEvent.getEventOrigin() !=  EventWrapper.Originator.DELETE_PROJECT_EVENT) {
-      log.error("DELETE_PROJECT_EVENT event has been sent here but originartor is not the right one ({})",newEvent.getEventOrigin());
+      return;
     }
-    return result;
+
+    log.error("Event has been sent here but originator / origin pair is not the right one for this event type.({})",
+        newEvent);
+
+    throw new ReplicatedEventsUnknownTypeException(
+        String.format("Event has been sent to DELETE_PROJECT_EVENT but originator is not the right one (%s)", newEvent));
   }
 
   /**
@@ -99,7 +105,7 @@ public class ReplicatedIncomingProjectEventProcessor extends GerritPublishableIm
       return result;
     }
 
-    log.info("RE Original event: {}",originalEvent.toString());
+    log.info("RE Original event: {}", originalEvent.toString());
     originalEvent.replicated = true; // not needed, but makes it clear
     originalEvent.setNodeIdentity(replicatedEventsCoordinator.getThisNodeIdentity());
     result = applyActionsForDeletingProject(originalEvent);
@@ -149,7 +155,7 @@ public class ReplicatedIncomingProjectEventProcessor extends GerritPublishableIm
       return result;
     }
 
-    log.info("RE Original event: {}",originalEvent.toString());
+    log.info("RE Original event: {}", originalEvent.toString());
     originalEvent.replicated = true; // not needed, but makes it clear
     originalEvent.setNodeIdentity(replicatedEventsCoordinator.getReplicatedConfiguration().getThisNodeIdentity());
     result = applyActionsForDeletingProjectChanges(originalEvent);
@@ -159,6 +165,7 @@ public class ReplicatedIncomingProjectEventProcessor extends GerritPublishableIm
 
   /**
    * Remove the project from the jgit cache on all nodes
+   *
    * @param originalEvent
    * @return
    */
@@ -183,6 +190,7 @@ public class ReplicatedIncomingProjectEventProcessor extends GerritPublishableIm
 
   /**
    * Remove the changes associated with the project on all nodes
+   *
    * @param originalEvent
    * @return
    */

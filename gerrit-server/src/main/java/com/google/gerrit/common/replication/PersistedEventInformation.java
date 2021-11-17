@@ -279,7 +279,7 @@ public class PersistedEventInformation {
    * Allow the creation of an events file name to be used by our real code, and integration testing
    * to keep naming consistent.
    * @param originalEvent
-   * @return
+   * @return String containing the new Events filename
    */
   public String createThisEventsFilename(final EventWrapper originalEvent) throws IOException {
     // Creating a GerritEventData object from the inner event JSON of the

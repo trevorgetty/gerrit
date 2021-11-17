@@ -46,7 +46,7 @@ public final class ConfigureReplication {
    * A specific version of getReplicationDisabled which reads the value from GerritServerConfig,
    * NOT our replicated configuration. Used by integration tests.
    *
-   * @return
+   * @return returns true is GerritMs replication should be disabled, used only by tests.
    */
   public boolean getReplicationDisabledServerConfig() {
     return config.getBoolean("wandisco", null, "gerritmsReplicationDisabled", false);

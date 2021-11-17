@@ -5,18 +5,18 @@ package com.google.gerrit.common.replication.exceptions;
  * This allows this file to be investigated and replayed later easily simply by moving back into the events incoming
  * directory.
  */
-public class ReplicatedEventsMoveToFailedDirectory extends RuntimeException {
+public class ReplicatedEventsImmediateFailWithoutBackoffException extends RuntimeException {
 
-  public ReplicatedEventsMoveToFailedDirectory(final String message) {
+  public ReplicatedEventsImmediateFailWithoutBackoffException(final String message) {
     super(message);
   }
 
 
-  public ReplicatedEventsMoveToFailedDirectory(final Throwable throwable) {
+  public ReplicatedEventsImmediateFailWithoutBackoffException(final Throwable throwable) {
     super(throwable);
   }
 
-  public ReplicatedEventsMoveToFailedDirectory(final String message, final Throwable throwable) {
+  public ReplicatedEventsImmediateFailWithoutBackoffException(final String message, final Throwable throwable) {
     super(message, throwable);
   }
 }

@@ -6,7 +6,9 @@ import com.google.gerrit.common.replication.IndexToReplicateComparable;
 import com.google.gerrit.common.replication.SingletonEnforcement;
 import com.google.gerrit.common.replication.coordinators.ReplicatedEventsCoordinator;
 import com.google.gerrit.common.replication.exceptions.ReplicatedEventsDBNotUpToDateException;
+import com.google.gerrit.common.replication.exceptions.ReplicatedEventsImmediateFailWithoutBackoffException;
 import com.google.gerrit.common.replication.exceptions.ReplicatedEventsMissingChangeInformationException;
+import com.google.gerrit.common.replication.exceptions.ReplicatedEventsTransientException;
 import com.google.gerrit.reviewdb.client.Change;
 import com.google.gerrit.reviewdb.server.ReviewDb;
 import com.google.gerrit.server.query.change.ChangeData;
@@ -42,6 +44,7 @@ public class ReplicatedIncomingIndexEventProcessor extends GerritPublishableImpl
    * Sorry by adding a getInstance, make this class look much more public than it is,
    * and people expect they can just call getInstance - when in fact they should always request it via the
    * ReplicatedEventsCordinator.getReplicatedXWorker() methods.
+   *
    * @param eventsCoordinator
    */
   public ReplicatedIncomingIndexEventProcessor(ReplicatedEventsCoordinator eventsCoordinator) {
@@ -65,52 +68,40 @@ public class ReplicatedIncomingIndexEventProcessor extends GerritPublishableImpl
    * @throws ReplicatedEventsDBNotUpToDateException
    */
   @Override
-  public boolean publishIncomingReplicatedEvents(EventWrapper newEvent) {
-    boolean success = false;
-
-    if (newEvent != null) {
-      switch (newEvent.getEventOrigin()) {
-        case INDEX_EVENT:
-          success = unwrapAndQueueAlreadyReplicatedIndexEvent(newEvent);
-          break;
-        default:
-          log.error("RC INDEX_EVENT has been sent here but originator is not the right one ({})", newEvent.getEventOrigin());
-      }
-    } else {
-      log.error("RC null event has been sent here");
+  public void publishIncomingReplicatedEvents(EventWrapper newEvent) {
+    switch (newEvent.getEventOrigin()) {
+      case INDEX_EVENT:
+        unwrapAndQueueAlreadyReplicatedIndexEvent(newEvent);
+        break;
+      default:
+        log.error("RC INDEX_EVENT has been sent here but originator is not the right one ({})", newEvent.getEventOrigin());
     }
-    return success;
   }
 
-  private boolean unwrapAndQueueAlreadyReplicatedIndexEvent(EventWrapper newEvent) throws JsonSyntaxException {
+  private void unwrapAndQueueAlreadyReplicatedIndexEvent(EventWrapper newEvent) throws JsonSyntaxException {
 
     try {
       Class<?> eventClass = Class.forName(newEvent.getClassName());
-      IndexToReplicateComparable originalEvent = null;
+      IndexToReplicate index = (IndexToReplicate) gson.fromJson(newEvent.getEvent(), eventClass);
 
-      try {
-        IndexToReplicate index = (IndexToReplicate) gson.fromJson(newEvent.getEvent(), eventClass);
-
-        if (index == null) {
-          log.error("fromJson method returned null for {}", newEvent.toString());
-          return false;
-        }
-
-        originalEvent = new IndexToReplicateComparable(index, replicatedEventsCoordinator.getReplicatedConfiguration().getThisNodeIdentity());
-      } catch (JsonSyntaxException je) {
-        log.error("PR Could not decode json event {}", newEvent.toString(), je);
-        return false;
+      if (index == null) {
+        throw new JsonSyntaxException("Event Json Parsing returning no valid event information from: " + newEvent);
       }
 
+      IndexToReplicateComparable originalEvent = new IndexToReplicateComparable(index, replicatedEventsCoordinator.getReplicatedConfiguration().getThisNodeIdentity());
       log.debug("RC Received this event from replication: {}", originalEvent);
 
       // Lets do this actual index change now!
-      return processIndexChangeCollection(originalEvent);
+      processIndexChangeCollection(originalEvent);
+      return;
+    } catch (JsonSyntaxException je) {
+      log.error("PR Could not decode json event {}", newEvent, je);
+      throw new JsonSyntaxException(String.format("PR Could not decode json event %s", newEvent), je);
     } catch (ClassNotFoundException e) {
-      log.error("RC INDEX_EVENT has been lost. Could not find {}", newEvent.getClassName(), e);
-      return false;
+      final String err = String.format("WARNING: Unable to publish a replicated INDEX_EVENT using Class: %s : Message: %s", e.getClass().getName(), e.getMessage());
+      log.warn(err);
+      throw new ReplicatedEventsImmediateFailWithoutBackoffException(err);
     }
-
   }
 
 
@@ -125,7 +116,7 @@ public class ReplicatedIncomingIndexEventProcessor extends GerritPublishableImpl
    * @param indexEventToBeProcessed
    * @return
    */
-  public boolean processIndexChangeCollection(IndexToReplicateComparable indexEventToBeProcessed) {
+  public void processIndexChangeCollection(IndexToReplicateComparable indexEventToBeProcessed) {
     NavigableMap<Change.Id, IndexToReplicateComparable> mapOfChanges = new TreeMap<>();
 
     // make the list of changes a set of unique changes based only on the change number
@@ -134,10 +125,10 @@ public class ReplicatedIncomingIndexEventProcessor extends GerritPublishableImpl
     mapOfChanges.put(new Change.Id(indexEventToBeProcessed.indexNumber), indexEventToBeProcessed);
 
     if (mapOfChanges.isEmpty()) {
-      return true;
+      return;
     }
 
-    return indexCollectionOfChanges(mapOfChanges);
+    indexCollectionOfChanges(mapOfChanges);
   }
 
   /**
@@ -150,10 +141,9 @@ public class ReplicatedIncomingIndexEventProcessor extends GerritPublishableImpl
    *
    * @param mapOfChanges
    */
-  private boolean indexCollectionOfChanges(NavigableMap<Change.Id, IndexToReplicateComparable> mapOfChanges) {
+  private void indexCollectionOfChanges(NavigableMap<Change.Id, IndexToReplicateComparable> mapOfChanges) {
     try {
       Provider<ReviewDb> dbProvider = Providers.of(replicatedEventsCoordinator.getSchemaFactory().open());
-      boolean failureExperienced = false;
       Collection<Integer> deletedIdsList = new HashSet<>(); // using a set so we have each id only once.
 
       try (final ReviewDb db = dbProvider.get()) {
@@ -252,8 +242,6 @@ public class ReplicatedIncomingIndexEventProcessor extends GerritPublishableImpl
                 continue;
               }
 
-              failureExperienced = true;
-
               if (e.getCause() instanceof org.eclipse.jgit.errors.MissingObjectException) {
                 // retry this 30secs or so from now - but only this event, not the entire group!
                 log.warn("Specific Change JGitMissingObject error noticed {} backoff this events file to retry later.", indexToReplicate.indexNumber);
@@ -270,6 +258,10 @@ public class ReplicatedIncomingIndexEventProcessor extends GerritPublishableImpl
 
                 throw new ReplicatedEventsMissingChangeInformationException("DB equals same timestamp retry failure process events group.");
               }
+
+              final String err = String.format("RC Error while trying to reindex change %s, failed events will be retried later.", changeOnDb.getChangeId());
+              log.error(err, e);
+              throw new ReplicatedEventsTransientException(err);
             }
           } catch (ReplicatedEventsDBNotUpToDateException | ReplicatedEventsMissingChangeInformationException e) {
             // this is a specific exception that we do not wish to catch and hide - we want to bubble this up
@@ -278,16 +270,14 @@ public class ReplicatedIncomingIndexEventProcessor extends GerritPublishableImpl
             // retries forcing a move to delete until the DB is up to date and its tried once more.
             throw e;
           } catch (Exception e) {
-            failureExperienced = true;
-            log.error("RC Error while trying to reindex change {}, failed events will be retried later.", changeOnDb.getChangeId(), e);
+            final String err = String.format("RC Error while trying to reindex change %s, failed events will be retried later.", changeOnDb.getChangeId());
+            log.error(err, e);
+            throw new ReplicatedEventsTransientException(err);
           }
         }
 
-        log.debug(String.format("RC Finished indexing %d changes... (%d) any failuresExperience=%s.",
-            mapOfChanges.size(), totalDone, failureExperienced));
+        log.debug(String.format("RC Finished indexing %d changes... (%d).", mapOfChanges.size(), totalDone));
       }
-
-      return !failureExperienced;
     } catch (OrmException e) {
       log.error("RC Error while trying to reindex change, unable to open the ReviewDB instance.", e);
       throw new ReplicatedEventsDBNotUpToDateException("RC Unable to open ReviewDB instance.");

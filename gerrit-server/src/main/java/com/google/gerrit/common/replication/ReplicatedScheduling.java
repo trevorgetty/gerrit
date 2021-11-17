@@ -1,6 +1,7 @@
 package com.google.gerrit.common.replication;
 
 import com.google.common.base.Strings;
+import com.google.common.flogger.FluentLogger;
 import com.google.gerrit.common.replication.coordinators.ReplicatedEventsCoordinator;
 import com.google.inject.Singleton;
 import com.wandisco.gerrit.gitms.shared.events.EventWrapper;
@@ -29,6 +30,7 @@ import java.util.concurrent.TimeUnit;
 public class ReplicatedScheduling {
 
   private static final Logger log = LoggerFactory.getLogger(ReplicatedScheduling.class);
+  private static final FluentLogger logger = FluentLogger.forEnclosingClass();
 
   private final ConcurrentHashMap<String, ReplicatedEventTask> eventsFilesInProgress; // map of project to event file of work in progress.
   private final HashMap<String, Deque<File>> skippedProjectsEventFiles; // map of project to event file of work in progress.
@@ -253,7 +255,8 @@ public class ReplicatedScheduling {
       if ((numEventFilesInProgress - numCoreProjectsInProgress) >= replicatedConfiguration.getNumberOfNonCoreWorkerThreads()) {
         // we are close to the limit - and no room for new non-core projects - bounce this one.
         addSkippedProjectEventFile(eventsFileToProcess, projectName);
-        log.debug("Not scheduling event file: {}. for project: {}, as all (project-only) worker threads are busy for now. ConfigurationDetails: {}",
+        logger.atInfo().atMostEvery(replicatedConfiguration.getLoggingMaxPeriodValueMs(), TimeUnit.MILLISECONDS)
+            .log("Not scheduling event file: {}. for project: {}, as all (project-only) worker threads are busy for now, please consider increasing the worker pool. ConfigurationDetails: {}. ",
             eventsFileToProcess, projectName, replicatedConfiguration);
         return null;
       }

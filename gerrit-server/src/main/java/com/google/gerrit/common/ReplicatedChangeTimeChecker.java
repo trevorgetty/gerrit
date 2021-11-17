@@ -82,7 +82,7 @@ public class ReplicatedChangeTimeChecker {
    * @param thisNodeTimeZoneOffset
    * @param indexToReplicate
    * @param landedIndexTimeZoneOffset
-   * @return
+   * @return True if the amount of time is over the allowed amount of minute since last index check
    */
   public boolean changeIndexedLastTime(long thisNodeTimeZoneOffset,
                                        IndexToReplicate indexToReplicate, long landedIndexTimeZoneOffset ){

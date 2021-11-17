@@ -160,7 +160,7 @@ public class ReplicatedConfiguration {
 
   /**
    * Get GerritServerConfig
-   * @return
+   * @return Instance of the Gerrit Server Configuration - N.B. not the replication configuration.
    */
   public Config getGerritServerConfig() {
     return gerritServerConfig;
@@ -601,7 +601,7 @@ public class ReplicatedConfiguration {
   /**
    * Returns the number of minutes since the change was last indexed
    *
-   * @return
+   * @return Returns number of Minutes since the last Indexed check period.
    */
   public long getMinutesSinceChangeLastIndexedCheckPeriod() {
     return minutesSinceChangeLastIndexedCheckPeriod;

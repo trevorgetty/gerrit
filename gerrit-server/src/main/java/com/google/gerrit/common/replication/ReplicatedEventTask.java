@@ -90,7 +90,7 @@ public class ReplicatedEventTask implements Runnable {
       //before moving to the failed folder.
       logger.error("Problem when dealing with events byte stream. {}", e.getMessage());
       replicatedEventsCoordinator.getReplicatedIncomingEventWorker().checkForFailureBackoff(this,
-          replicatedEventsCoordinator.getReplicatedScheduling(), false,
+          replicatedEventsCoordinator.getReplicatedScheduling(), false, false,
           null, null);
     }
   }
@@ -123,6 +123,14 @@ public class ReplicatedEventTask implements Runnable {
     sb.append("projectName='").append(projectName).append('\'');
     sb.append(", eventsFileToProcess=").append(eventsFileToProcess);
     sb.append(", replicatedEventsCoordinator=").append(replicatedEventsCoordinator);
+    sb.append('}');
+    return sb.toString();
+  }
+
+  public String toFriendlyInfo() {
+    final StringBuilder sb = new StringBuilder("ReplicatedEventTask{");
+    sb.append("projectName='").append(projectName).append('\'');
+    sb.append(", eventsFileToProcess=").append(eventsFileToProcess.getName());
     sb.append('}');
     return sb.toString();
   }

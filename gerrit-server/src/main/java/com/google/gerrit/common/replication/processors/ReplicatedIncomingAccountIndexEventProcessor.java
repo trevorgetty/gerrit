@@ -3,6 +3,9 @@ package com.google.gerrit.common.replication.processors;
 import com.google.gerrit.common.AccountIndexEvent;
 import com.google.gerrit.common.replication.SingletonEnforcement;
 import com.google.gerrit.common.replication.coordinators.ReplicatedEventsCoordinator;
+import com.google.gerrit.common.replication.exceptions.ReplicatedEventsImmediateFailWithoutBackoffException;
+import com.google.gerrit.common.replication.exceptions.ReplicatedEventsTransientException;
+import com.google.gerrit.common.replication.exceptions.ReplicatedEventsUnknownTypeException;
 import com.google.gerrit.reviewdb.client.Account;
 import com.google.gerrit.server.index.account.AccountIndexer;
 import com.google.gson.JsonSyntaxException;
@@ -29,57 +32,64 @@ public class ReplicatedIncomingAccountIndexEventProcessor extends GerritPublisha
    * Sorry by adding a getInstance, make this class look much more public than it is,
    * and people expect they can just call getInstance - when in fact they should always request it via the
    * ReplicatedEventsCordinator.getReplicatedXWorker() methods.
+   *
    * @param eventsCoordinator
    */
   public ReplicatedIncomingAccountIndexEventProcessor(ReplicatedEventsCoordinator eventsCoordinator) {
     super(ACCOUNT_INDEX_EVENT, eventsCoordinator);
     log.info("Creating main processor for event type: {}", eventType);
-    subscribeEvent( this);
+    subscribeEvent(this);
     SingletonEnforcement.registerClass(ReplicatedIncomingAccountIndexEventProcessor.class);
   }
 
   @Override
   public void stop() {
-    unsubscribeEvent( this);
+    unsubscribeEvent(this);
   }
 
   public AccountIndexer getIndexer() {
-    if(indexer == null){
+    if (indexer == null) {
       indexer = replicatedEventsCoordinator.getAccountIndexer();
     }
     return indexer;
   }
 
   @Override
-  public boolean publishIncomingReplicatedEvents(
-      EventWrapper newEvent) {
-    boolean result = false;
-    if (newEvent != null && newEvent.getEventOrigin() == EventWrapper.Originator.ACCOUNT_INDEX_EVENT) {
+  public void publishIncomingReplicatedEvents(EventWrapper newEvent) {
+
+    if (newEvent.getEventOrigin() == EventWrapper.Originator.ACCOUNT_INDEX_EVENT) {
       try {
         Class<?> eventClass = Class.forName(newEvent.getClassName());
-        result = reindexAccount(newEvent, eventClass);
+        reindexAccount(newEvent, eventClass);
+        return;
       } catch (ClassNotFoundException e) {
-        log.error("RC AccountReIndex has been lost. Could not find {}", newEvent.getClassName(), e);
+        final String err = String.format("WARNING: Unable to publish a replicated event using Class: %s : Message: %s", e.getClass().getName(), e.getMessage());
+        log.warn(err);
+        throw new ReplicatedEventsImmediateFailWithoutBackoffException(err);
       }
-    } else if (newEvent != null && newEvent.getEventOrigin() != EventWrapper.Originator.ACCOUNT_INDEX_EVENT) {
-      log.error("RC AccountReIndex event has been sent here but originator is not the right one ({})", newEvent.getEventOrigin());
     }
-    return result;
+
+    final String err = String.format("Event has been sent to ACCOUNT_INDEX_EVENT processor but originator is not the right one (%s)", newEvent);
+    log.error(err);
+    throw new ReplicatedEventsUnknownTypeException(err);
   }
 
-  private boolean reindexAccount(EventWrapper newEvent, Class<?> eventClass) {
-    boolean result = false;
+  private void reindexAccount(EventWrapper newEvent, Class<?> eventClass) {
     try {
       AccountIndexEvent originalEvent = (AccountIndexEvent) gson.fromJson(newEvent.getEvent(), eventClass);
+      if (originalEvent == null) {
+        throw new JsonSyntaxException("Event Json Parsing returning no valid event information from: " + newEvent);
+      }
       //Perform a local reindex.
       getIndexer().indexNoRepl(new Account.Id(originalEvent.indexNumber));
-      return true;
+      return;
     } catch (JsonSyntaxException je) {
-      log.error("RC AccountReIndex, Could not decode json event {}", newEvent.toString(), je);
-      return result;
+      log.error("PR Could not decode json event {}", newEvent, je);
+      throw new JsonSyntaxException(String.format("PR Could not decode json event %s", newEvent), je);
     } catch (IOException ie) {
-      log.error("RC AccountReindex issue hit while carrying out reindex of {}", newEvent.toString(), ie);
-      return result;
+      final String err = String.format("RC AccountReindex issue hit while carrying out reindex of %s", newEvent);
+      log.error(err, ie);
+      throw new ReplicatedEventsTransientException(err, ie);
     }
   }
 }

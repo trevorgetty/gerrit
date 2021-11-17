@@ -11,8 +11,6 @@ public class ReplicatedChangeEventInfo {
   private Branch.NameKey branchName = null;
   private String projectName = null;
 
-  private boolean supported = false;
-
   public void setChangeAttribute(ChangeAttribute changeAttr) {
     if(changeAttr == null){
       log.error("Cannot set ChangeAttribute. ChangeAttribute was null");
@@ -20,21 +18,14 @@ public class ReplicatedChangeEventInfo {
     }
     this.changeAttr = changeAttr;
     this.projectName = changeAttr.project;
-    this.supported = true;
   }
 
   public void setProjectName(String projectName) {
     this.projectName = projectName;
-    this.supported = true;
   }
 
   public void setBranchName(Branch.NameKey branchName) {
     this.branchName = branchName;
-    supported = true;
-  }
-
-  public void setSupported(boolean supported) {
-    this.supported = supported;
   }
 
   public ChangeAttribute getChangeAttr() {
@@ -49,7 +40,4 @@ public class ReplicatedChangeEventInfo {
     return projectName;
   }
 
-  public boolean isSupported() {
-    return supported;
-  }
 }
