@@ -442,7 +442,7 @@ public class ReplicatedConfiguration {
         = new ArrayList<>(Arrays.asList("RefReplicatedEvent", "RefReplicationDoneEvent"));
     eventSkipList = getPropertyAsList(props, GERRIT_EVENT_TYPES_TO_BE_SKIPPED, defaultTypesToSkip);
     //Setting all to lowercase so user doesn't have to worry about correct casing.
-    replaceAll(eventSkipList);
+    replaceAllAsLowerCase(eventSkipList);
 
     // Now we have the index backoff information - lets calculate the sequence of backoffs.
     indexBackoffPeriods = new LinkedList<>();
@@ -519,7 +519,7 @@ public class ReplicatedConfiguration {
           props.getProperty(GERRIT_REPLICATED_EVENT_WORKER_POOL_IDLE_TIME_SECS, "300"));
 
       log.info("RE Replicated events are to be processed using worker pool size: {} maxIdlePeriodSecs: {}.",
-              maxNumberOfEventWorkerThreads, maxIdlePeriodEventWorkerThreadInSeconds);
+          maxNumberOfEventWorkerThreads, maxIdlePeriodEventWorkerThreadInSeconds);
     } else {
       log.info("RE Replicated events are disabled"); // This could not apppear in the log... cause the log could not yet be ready
     }
@@ -656,12 +656,14 @@ public class ReplicatedConfiguration {
       return new ArrayList<>(defaultEventsTypesToSkip);
     }
     List<String> propFileEventsToSkip = Arrays.asList(strValue.split("\\s*,\\s*"));
-    defaultEventsTypesToSkip.addAll(propFileEventsToSkip);
-    return defaultEventsTypesToSkip;
+    if ( propFileEventsToSkip.isEmpty() ){
+      return defaultEventsTypesToSkip;
+    }
+    return propFileEventsToSkip;
   }
 
   //Utility method to replace all in a list of strings with lowercase string
-  public static void replaceAll(List<String> eventsToBeSkipped) {
+  public static void replaceAllAsLowerCase(List<String> eventsToBeSkipped) {
     ListIterator<String> iterator = eventsToBeSkipped.listIterator();
     while (iterator.hasNext()) {
       iterator.set(iterator.next().toLowerCase());

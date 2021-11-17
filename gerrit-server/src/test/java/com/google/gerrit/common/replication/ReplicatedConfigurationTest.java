@@ -100,6 +100,8 @@ public class ReplicatedConfigurationTest extends AbstractReplicationTesting{
   }
 
 
+//   The test is NOT using an override as we are passing an empty string for the GERRIT_EVENT_TYPES_TO_BE_SKIPPED property
+//   only the default events to skip ( RefReplicatedEvent and RefReplicationDoneEvent ) should be skipped.
   @Test
   public void testDefaultEventsToSkip() throws Exception {
 
@@ -107,20 +109,36 @@ public class ReplicatedConfigurationTest extends AbstractReplicationTesting{
 
     testingProperties.put(GERRIT_EVENT_TYPES_TO_BE_SKIPPED, "");
     dummyTestCoordinator = new TestingReplicatedEventsCoordinator(testingProperties);
-    Assert.assertEquals(dummyTestCoordinator.getReplicatedConfiguration()
-        .getEventSkipList().size(), 2);
+    Assert.assertEquals(2, dummyTestCoordinator.getReplicatedConfiguration()
+        .getEventSkipList().size());
 
   }
 
+  // The test is using an override so we do not want the defaults to be skipped anymore
+  // The only event that should be skipped is the CommentAddedEvent
   @Test
-  public void testSkippingEvents() throws Exception {
+  public void testOverrideSkipEvents() throws Exception {
 
     Properties testingProperties = new Properties();
 
     testingProperties.put(GERRIT_EVENT_TYPES_TO_BE_SKIPPED, "CommentAddedEvent");
     dummyTestCoordinator = new TestingReplicatedEventsCoordinator(testingProperties);
-    Assert.assertEquals(dummyTestCoordinator.getReplicatedConfiguration()
-        .getEventSkipList().size(), 3);
+    Assert.assertEquals(1, dummyTestCoordinator.getReplicatedConfiguration()
+        .getEventSkipList().size());
+
+  }
+
+  // The test is using an override so we do not want the defaults to be skipped anymore by default
+  // We should skip all the events specified such as CommentAddedEvent, RefReplicatedEvent, RefReplicationDoneEvent
+  @Test
+  public void testOverrideSkipEventsAll() throws Exception {
+
+    Properties testingProperties = new Properties();
+
+    testingProperties.put(GERRIT_EVENT_TYPES_TO_BE_SKIPPED, "CommentAddedEvent, RefReplicatedEvent, RefReplicationDoneEvent");
+    dummyTestCoordinator = new TestingReplicatedEventsCoordinator(testingProperties);
+    Assert.assertEquals(3, dummyTestCoordinator.getReplicatedConfiguration()
+        .getEventSkipList().size());
 
   }
 
