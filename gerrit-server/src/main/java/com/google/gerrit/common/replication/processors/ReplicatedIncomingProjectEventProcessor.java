@@ -56,30 +56,30 @@ public class ReplicatedIncomingProjectEventProcessor extends GerritPublishableIm
   @Override
   public void publishIncomingReplicatedEvents(EventWrapper newEvent) {
 
-    if (newEvent.getEventOrigin() == EventWrapper.Originator.DELETE_PROJECT_EVENT) {
-      // We can get into the if statement in 2 ways :
-      // 1. we are doing a hard delete on the project, i.e. we want to completely remove the repo
-      // 2. we are doing a soft delete, i.e. we only want to remove the projects changes, reviews etc
-      try {
-        Class<?> eventClass = Class.forName(newEvent.getClassName());
-        if (newEvent.getClassName().equals(DeleteProjectChangeEvent.class.getName())) {
-          deleteProjectChanges(newEvent, eventClass);
-        } else {
-          deleteProject(newEvent, eventClass);
-        }
-      } catch (ClassNotFoundException e) {
-        final String err = String.format("WARNING: Unable to publish a replicated event using Class: %s : Message: %s", e.getClass().getName(), e.getMessage());
-        log.warn(err);
-        throw new ReplicatedEventsImmediateFailWithoutBackoffException(err);
-      }
-      return;
+    if (newEvent.getEventOrigin() != EventWrapper.Originator.DELETE_PROJECT_EVENT) {
+      log.error("Event has been sent here but originator / origin pair is not the right one for this event type.({})",
+          newEvent);
+
+      throw new ReplicatedEventsUnknownTypeException(
+          String.format("Event has been sent to DELETE_PROJECT_EVENT but originator is not the right one (%s)", newEvent));
     }
 
-    log.error("Event has been sent here but originator / origin pair is not the right one for this event type.({})",
-        newEvent);
+    // We can get into the if statement in 2 ways :
+    // 1. we are doing a hard delete on the project, i.e. we want to completely remove the repo
+    // 2. we are doing a soft delete, i.e. we only want to remove the projects changes, reviews etc
+    try {
+      Class<?> eventClass = Class.forName(newEvent.getClassName());
+      if (newEvent.getClassName().equals(DeleteProjectChangeEvent.class.getName())) {
+        deleteProjectChanges(newEvent, eventClass);
+      } else {
+        deleteProject(newEvent, eventClass);
+      }
+    } catch (ClassNotFoundException e) {
+      final String err = String.format("WARNING: Unable to publish a replicated event using Class: %s : Message: %s", e.getClass().getName(), e.getMessage());
+      log.warn(err);
+      throw new ReplicatedEventsImmediateFailWithoutBackoffException(err);
+    }
 
-    throw new ReplicatedEventsUnknownTypeException(
-        String.format("Event has been sent to DELETE_PROJECT_EVENT but originator is not the right one (%s)", newEvent));
   }
 
   /**
@@ -141,25 +141,22 @@ public class ReplicatedIncomingProjectEventProcessor extends GerritPublishableIm
    * @param eventClass
    */
   private boolean deleteProjectChanges(EventWrapper newEvent, Class<?> eventClass) {
-    DeleteProjectChangeEvent originalEvent = null;
-    boolean result = false;
+    DeleteProjectChangeEvent originalEvent;
     try {
       originalEvent = (DeleteProjectChangeEvent) gson.fromJson(newEvent.getEvent(), eventClass);
     } catch (JsonSyntaxException je) {
-      log.error("DeleteProject, Could not decode json event {}", newEvent.toString(), je);
-      return result;
+      log.error("PR Could not decode json event {}", newEvent, je);
+      throw new JsonSyntaxException(String.format("PR Could not decode json event %s", newEvent), je);
     }
 
     if (originalEvent == null) {
-      log.error("DeleteProject, fromJson method returned null for {}", newEvent.toString());
-      return result;
+      throw new JsonSyntaxException("Event Json Parsing returning no valid event information from: " + newEvent);
     }
 
     log.info("RE Original event: {}", originalEvent.toString());
     originalEvent.replicated = true; // not needed, but makes it clear
     originalEvent.setNodeIdentity(replicatedEventsCoordinator.getReplicatedConfiguration().getThisNodeIdentity());
-    result = applyActionsForDeletingProjectChanges(originalEvent);
-    return result;
+    return applyActionsForDeletingProjectChanges(originalEvent);
   }
 
 

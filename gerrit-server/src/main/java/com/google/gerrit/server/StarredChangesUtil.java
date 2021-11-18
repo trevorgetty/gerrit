@@ -217,7 +217,11 @@ public class StarredChangesUtil {
               changeId.get(), command.getRefName(), command.getResult()));
         }
       }
-      indexer.index(dbProvider.get(), project, changeId);
+      // Mark the reindex on unstarAll as safeToIgnore if its missing, the reason why is that this normally happens
+      // during project deletion, and it calling to  updateIndex(unstarAll), deleteProject(reviewDb) may end up on remote
+      // system as the db deleting first (percona) then our events for index(update) and then delete project x, so the
+      // index isn't found and it causes backoff of the failed event - which can be safely ignored.
+      indexer.index(dbProvider.get(), project, changeId, true);
     } catch (IOException e) {
       throw new OrmException(
           String.format("Unstar change %d failed", changeId.get()), e);

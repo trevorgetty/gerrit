@@ -173,15 +173,26 @@ public class ChangeIndexer {
    * @throws IOException
    */
   public void queueIndexEventForReplication(Change change) throws IOException {
+    queueIndexEventForReplication(change, false);
+  }
+
+  /**
+   * Queues the index event for replication by adding the index event to the outgoing index events feed.
+   * @param change : Change instance
+   * @throws IOException
+   */
+  public void queueIndexEventForReplication(Change change, boolean safeToIgnoreMissingChange) throws IOException {
     if (!replicatedEventsCoordinator.isGerritIndexerRunning()) {
       log.info("Replication is disabled - not queuing index event for replication");
       return;
     }
 
     replicatedEventsCoordinator.getReplicatedOutgoingIndexEventsFeed()
-        .queueReplicationIndexEvent(change.getId().get(),change.getProject().get(),change.getLastUpdatedOn());
+        .queueReplicationIndexEvent(change.getId().get(),
+            change.getProject().get(),
+            change.getLastUpdatedOn(),
+            safeToIgnoreMissingChange);
   }
-
   /**
    * Start indexing a change.
    *
@@ -232,6 +243,14 @@ public class ChangeIndexer {
    * @param cd change to index.
    */
   public void index(ChangeData cd) throws IOException {
+    index( cd, false );
+  }
+  /**
+   * Synchronously index a change.
+   *
+   * @param cd change to index.
+   */
+  public void index(ChangeData cd, boolean safeToIgnoreMissingChange ) throws IOException {
     log.debug("RC Going sync to index {}",cd.getId().get());
     for (ChangeIndex i : getWriteIndexes()) {
       i.replace(cd);
@@ -241,7 +260,7 @@ public class ChangeIndexer {
     try {
       Change change = cd.change();
       log.debug("RC Finished SYNC index {}",change.getId().get());
-      queueIndexEventForReplication(change);
+      queueIndexEventForReplication(change, safeToIgnoreMissingChange);
 
     } catch (OrmException e) {
       log.error("RC Could not sync'ly reindex change! EVENT LOST {}",cd,e);
@@ -293,8 +312,21 @@ public class ChangeIndexer {
    */
   public void index(ReviewDb db, Project.NameKey project, Change.Id changeId)
       throws IOException, OrmException {
-    index(newChangeData(db, project, changeId));
+    index( db, project, changeId, false);
   }
+
+  /**
+   * Synchronously index a change.
+   *
+   * @param db review database.
+   * @param project the project to which the change belongs.
+   * @param changeId ID of the change to index.
+   */
+  public void index(ReviewDb db, Project.NameKey project, Change.Id changeId, boolean safeToIgnoreMissingChange)
+      throws IOException, OrmException {
+    index(newChangeData(db, project, changeId), safeToIgnoreMissingChange);
+  }
+
 
   /**
    * Synchronously index a change, but called by the replicator to avoid loops
@@ -446,8 +478,7 @@ public class ChangeIndexer {
     return changeDataFactory.create(db, change);
   }
 
-  private ChangeData newChangeData(ReviewDb db, Project.NameKey project,
-      Change.Id changeId) throws OrmException {
+  private ChangeData newChangeData(ReviewDb db, Project.NameKey project, Change.Id changeId) throws OrmException {
     if (!notesMigration.readChanges()) {
       ChangeNotes notes = changeNotesFactory.createWithAutoRebuildingDisabled(
           db, project, changeId);

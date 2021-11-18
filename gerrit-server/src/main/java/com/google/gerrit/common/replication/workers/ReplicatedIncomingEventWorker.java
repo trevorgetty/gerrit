@@ -349,6 +349,12 @@ public class ReplicatedIncomingEventWorker implements Runnable {
         ReplicatorMetrics.totalPublishedForeignGoodEvents.incrementAndGet();
         ReplicatorMetrics.totalPublishedForeignEventsByType
             .add(originalEvent.getEventOrigin());
+
+        if (originalEvent
+            .getEventOrigin() == EventWrapper.Originator.DELETE_PROJECT_MESSAGE_EVENT) {
+          continue;
+        }
+
         Set<GerritPublishable> clients =
             replicatedEventsCoordinator.getReplicatedProcessors().get(originalEvent.getEventOrigin());
 
@@ -357,11 +363,6 @@ public class ReplicatedIncomingEventWorker implements Runnable {
           logger.atSevere().log(err);
           // treat no processor for this type - like class not found, fail without backoff as this wont change.
           throw new ReplicatedEventsImmediateFailWithoutBackoffException(err);
-        }
-
-        if (originalEvent
-            .getEventOrigin() == EventWrapper.Originator.DELETE_PROJECT_MESSAGE_EVENT) {
-          continue;
         }
 
         // In 2.16 this clients list is a single client - even here there is a 1:1 match on processor to origin
@@ -588,7 +589,6 @@ public class ReplicatedIncomingEventWorker implements Runnable {
 // Here for handy use, makes code a bit nicer to read.
     final File eventsFileBeingProcessed = replicatedEventTask.getEventsFileToProcess();
     final ReplicatedScheduling replicatedScheduling = replicatedEventsCoordinator.getReplicatedScheduling();
-    final String projectName = replicatedEventTask.getProjectname();
 
     // Please note the failure / decision making has been placed here to make it centralized, but equally the
     // ReplicatedThreadPool before/afterExecute would allow us to also make decisions on each worker as it shuts down
@@ -657,7 +657,7 @@ public class ReplicatedIncomingEventWorker implements Runnable {
         return;
       }
 
-      logger.atWarning().log("RE Task [ %s ] has failures, have indicated to backoff project %s, for now (retry=1).",
+      logger.atWarning().log("RE Task [ %s ] has failures, have indicated to backoff project, for now (retry=1).",
           replicatedEventTask.toFriendlyInfo());
 
       // we didn't contain this skipped project info - as such lets just mark it to start the backoff.
@@ -706,9 +706,9 @@ public class ReplicatedIncomingEventWorker implements Runnable {
     }
 
     // ok we can attempt to fail this again.
-    logger.atWarning().log("RE Task [ %s ] has failures, is incrementing its backoff period to try again.",
-        replicatedEventTask.toFriendlyInfo());
     backoffPeriod.updateFailureInformation();
+    logger.atWarning().log("RE Task [ %s ] has failures, is incrementing its backoff period to try again retry(%s).",
+        replicatedEventTask.toFriendlyInfo(), backoffPeriod.getNumFailureRetries());
   }
 
   /**

@@ -41,8 +41,8 @@ public class ReplicatedOutgoingIndexEventsFeed extends ReplicatedOutgoingEventsF
    * @param projectName
    * @param lastUpdatedOn
    */
-  public void queueReplicationIndexEvent(int indexNumber, String projectName, Timestamp lastUpdatedOn) throws IOException {
-    queueReplicationIndexEvent(indexNumber, projectName, lastUpdatedOn, false);
+  public void queueReplicationIndexEvent(int indexNumber, String projectName, Timestamp lastUpdatedOn, boolean safeToIgnoreMissingChange) throws IOException {
+    queueReplicationIndexEvent(indexNumber, projectName, lastUpdatedOn, false, safeToIgnoreMissingChange);
   }
 
   /**
@@ -55,7 +55,7 @@ public class ReplicatedOutgoingIndexEventsFeed extends ReplicatedOutgoingEventsF
    * @param projectName
    */
   public void queueReplicationIndexDeletionEvent(int indexNumber, String projectName) throws IOException {
-    queueReplicationIndexEvent(indexNumber, projectName, new Timestamp(System.currentTimeMillis()), true);
+    queueReplicationIndexEvent(indexNumber, projectName, new Timestamp(System.currentTimeMillis()), true, false);
   }
 
   /**
@@ -69,10 +69,11 @@ public class ReplicatedOutgoingIndexEventsFeed extends ReplicatedOutgoingEventsF
    * @param projectName
    * @param lastUpdatedOn
    */
-  private void queueReplicationIndexEvent(int indexNumber, String projectName, Timestamp lastUpdatedOn, boolean deleteIndex) throws IOException {
+  private void queueReplicationIndexEvent(int indexNumber, String projectName, Timestamp lastUpdatedOn, boolean deleteIndex, boolean safeToIgnoreMissingChange) throws IOException {
     if (replicatedEventsCoordinator.isGerritIndexerRunning()) { // we only take the event if it's normal Gerrit functioning. If it's indexing we ignore them
       IndexToReplicate indexToReplicate =
-          new IndexToReplicate(indexNumber, projectName, lastUpdatedOn, deleteIndex, replicatedEventsCoordinator.getReplicatedConfiguration().getThisNodeIdentity());
+          new IndexToReplicate(indexNumber, projectName, lastUpdatedOn, deleteIndex,
+              replicatedEventsCoordinator.getReplicatedConfiguration().getThisNodeIdentity(), safeToIgnoreMissingChange);
       replicatedEventsCoordinator.queueEventForReplication(GerritEventFactory.createReplicatedIndexEvent(indexToReplicate));
       log.debug("RC Just added {} to cache queue", indexToReplicate);
     }

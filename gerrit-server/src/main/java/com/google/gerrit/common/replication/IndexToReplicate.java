@@ -17,40 +17,42 @@ public class IndexToReplicate extends ReplicatedEvent {
   public long currentTime;
   public int timeZoneRawOffset;
   public boolean delete;
+  public boolean safeToIgnoreMissingChange;
 
 
   public IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, String thisNodeIdentity) {
     super(thisNodeIdentity);
     final long currentTimeMs = super.getEventTimestamp();
-    setBaseMembers(indexNumber, projectName, lastUpdatedOn, currentTimeMs, getRawOffset(currentTimeMs), false);
+    setBaseMembers(indexNumber, projectName, lastUpdatedOn, currentTimeMs, getRawOffset(currentTimeMs), false, false);
   }
 
-  public IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, boolean delete, String thisNodeIdentity) {
+  public IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, boolean delete, String thisNodeIdentity, boolean safeToIgnoreMissingChange) {
     super(thisNodeIdentity);
     final long currentTimeMs = super.getEventTimestamp();
-    setBaseMembers(indexNumber, projectName, lastUpdatedOn, currentTimeMs, getRawOffset(currentTimeMs), delete);
+    setBaseMembers(indexNumber, projectName, lastUpdatedOn, currentTimeMs, getRawOffset(currentTimeMs), delete, safeToIgnoreMissingChange);
   }
 
   public IndexToReplicate(IndexToReplicateDelayed delayed, String thisNodeId) {
-    this(delayed.indexNumber, delayed.projectName, delayed.lastUpdatedOn, delayed.currentTime, getRawOffset(delayed.currentTime), false, thisNodeId);
+    this(delayed.indexNumber, delayed.projectName, delayed.lastUpdatedOn, delayed.currentTime, getRawOffset(delayed.currentTime), false, thisNodeId, false);
   }
 
   public IndexToReplicate(IndexToReplicate index, String thisNodeId){
-    this(index.indexNumber, index.projectName, index.lastUpdatedOn, index.currentTime, index.timeZoneRawOffset, index.delete, thisNodeId);
+    this(index.indexNumber, index.projectName, index.lastUpdatedOn, index.currentTime, index.timeZoneRawOffset, index.delete, thisNodeId, index.safeToIgnoreMissingChange);
   }
 
-  protected IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, long currentTime, int rawOffset, boolean delete, String thisNodeIdentity) {
+  protected IndexToReplicate(int indexNumber, String projectName, Timestamp lastUpdatedOn, long currentTime, int rawOffset, boolean delete, String thisNodeIdentity, boolean safeToIgnoreMissingChange) {
     super(thisNodeIdentity);
-    setBaseMembers(indexNumber, projectName, lastUpdatedOn, currentTime, rawOffset, delete);
+    setBaseMembers(indexNumber, projectName, lastUpdatedOn, currentTime, rawOffset, delete, safeToIgnoreMissingChange);
   }
 
-  private void setBaseMembers(int indexNumber, String projectName, Timestamp lastUpdatedOn, long currentTime, int rawOffset, boolean delete) {
+  private void setBaseMembers(int indexNumber, String projectName, Timestamp lastUpdatedOn, long currentTime, int rawOffset, boolean delete, boolean safeToIgnoreMissingChange) {
     this.indexNumber = indexNumber;
     this.projectName = projectName;
     this.lastUpdatedOn = new Timestamp(lastUpdatedOn.getTime());
     this.currentTime = currentTime;
     this.timeZoneRawOffset = rawOffset;
     this.delete = delete;
+    this.safeToIgnoreMissingChange = safeToIgnoreMissingChange;
   }
 
   public static int getRawOffset(final long currentTime) {
@@ -63,7 +65,8 @@ public class IndexToReplicate extends ReplicatedEvent {
     return TimeZone.getDefault().getRawOffset();
   }
 
-  @Override public String toString() {
+  @Override
+  public String toString() {
     final StringBuilder sb = new StringBuilder("IndexToReplicate{");
     sb.append("indexNumber=").append(indexNumber);
     sb.append(", projectName='").append(projectName).append('\'');
@@ -71,40 +74,27 @@ public class IndexToReplicate extends ReplicatedEvent {
     sb.append(", currentTime=").append(currentTime);
     sb.append(", timeZoneRawOffset=").append(timeZoneRawOffset);
     sb.append(", delete=").append(delete);
-    sb.append(", ").append(super.toString());
+    sb.append(", safeToIgnoreMissingChange=").append(safeToIgnoreMissingChange);
     sb.append('}');
     return sb.toString();
   }
 
   @Override
-  public int hashCode() {
-    int hash = 3;
-    hash = 41 * hash + this.indexNumber;
-    hash = 41 * hash + Objects.hashCode(this.projectName);
-    hash = 41 * hash + Objects.hashCode(this.lastUpdatedOn);
-    hash = 41 * hash + (int) (this.currentTime ^ (this.currentTime >>> 32));
-    return hash;
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (!(o instanceof IndexToReplicate)) return false;
+    IndexToReplicate that = (IndexToReplicate) o;
+    return indexNumber == that.indexNumber &&
+        currentTime == that.currentTime &&
+        timeZoneRawOffset == that.timeZoneRawOffset &&
+        delete == that.delete &&
+        safeToIgnoreMissingChange == that.safeToIgnoreMissingChange &&
+        Objects.equals(projectName, that.projectName) &&
+        Objects.equals(lastUpdatedOn, that.lastUpdatedOn);
   }
 
-
   @Override
-  public boolean equals(Object obj) {
-    if (obj == null) {
-      return false;
-    }
-    if (getClass() != obj.getClass()) {
-      return false;
-    }
-    final IndexToReplicate other = (IndexToReplicate) obj;
-    if (this.indexNumber != other.indexNumber) {
-      return false;
-    }
-    if (!Objects.equals(this.projectName, other.projectName)) {
-      return false;
-    }
-    if (!Objects.equals(this.lastUpdatedOn, other.lastUpdatedOn)) {
-      return false;
-    }
-    return this.currentTime == other.currentTime;
+  public int hashCode() {
+    return Objects.hash(indexNumber, projectName, lastUpdatedOn, currentTime, timeZoneRawOffset, delete, safeToIgnoreMissingChange);
   }
 }

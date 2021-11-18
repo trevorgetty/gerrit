@@ -26,8 +26,11 @@ import java.io.IOException;
 import java.sql.Timestamp;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.NavigableMap;
+import java.util.Set;
 import java.util.TreeMap;
 
 import static com.wandisco.gerrit.gitms.shared.events.EventWrapper.Originator.INDEX_EVENT;
@@ -148,7 +151,10 @@ public class ReplicatedIncomingIndexEventProcessor extends GerritPublishableImpl
 
       try (final ReviewDb db = dbProvider.get()) {
 
-        for (IndexToReplicateComparable i : mapOfChanges.values()) {
+        Iterator<Map.Entry<Change.Id, IndexToReplicateComparable>> iter = mapOfChanges.entrySet().iterator();
+        while(iter.hasNext()){
+          Map.Entry<Change.Id, IndexToReplicateComparable> item = iter.next();
+          IndexToReplicateComparable i = item.getValue();
           if (i.delete) {
             try {
               deleteChange(i.indexNumber);
@@ -158,9 +164,17 @@ public class ReplicatedIncomingIndexEventProcessor extends GerritPublishableImpl
               // might throw as its already been deleted?
               log.error("RC Error while trying to delete change index {}", i.indexNumber, e);
             }
+            iter.remove();
           }
         }
 
+        if ( mapOfChanges.isEmpty() ){
+          // all changes were deletes - lets exit now.
+          log.debug("RC All Events being processed where deletions - nothing more to do.");
+          return;
+        }
+
+        // We cannot be requesting index changes for items that have been deleted - lets
         log.debug("RC Going to index {} changes...", mapOfChanges.size());
 
         // fetch changes from db
@@ -182,8 +196,6 @@ public class ReplicatedIncomingIndexEventProcessor extends GerritPublishableImpl
 
         final int numMatchingDbChanges = changesList.size();
         if (numMatchingDbChanges < mapOfChanges.size()) {
-          log.warn("Number of matching changes found on the DB : {} doesn't match requested num changes: {}", numMatchingDbChanges, mapOfChanges.size());
-
           // Lets work out the missing ids, and report them in the exception only.
           Collection<Integer> listOfFoundIds = buildListFromChange(changesList);
           Collection<Integer> listOfRequestedIds = buildListFromChangeId(mapOfChanges);
@@ -191,6 +203,17 @@ public class ReplicatedIncomingIndexEventProcessor extends GerritPublishableImpl
           // populate a simple Ids list for quick manipulation.
           // add all requested ids, then remove the founds ones.
           Collection<Integer> listOfMissingIds = buildListOfMissingIds(listOfRequestedIds, listOfFoundIds);
+
+          // Lets check before failing, do any of the missing Ids have a safe to ignore missing flag, if so we can
+          // ignore this safely without reporting it as a failure / backoff event.
+          if ( areAllMissingItemsSafeToIgnore(mapOfChanges, listOfMissingIds) ){
+            // we have found all missing items are safe to be ignored - lets exit.
+            log.info("Safe to ignore already deleted INDEX_EVENT(s): {}", listOfMissingIds);
+            return;
+          }
+
+          log.warn("Number of matching changes found on the DB : {} doesn't match requested num changes: {}",
+              numMatchingDbChanges, mapOfChanges.size());
 
           // now we have the full picture - of requested, found, and missing lets raise exception
           // with the values of missing changes...
@@ -282,6 +305,20 @@ public class ReplicatedIncomingIndexEventProcessor extends GerritPublishableImpl
       log.error("RC Error while trying to reindex change, unable to open the ReviewDB instance.", e);
       throw new ReplicatedEventsDBNotUpToDateException("RC Unable to open ReviewDB instance.");
     }
+  }
+
+  private boolean areAllMissingItemsSafeToIgnore(final NavigableMap<Change.Id, IndexToReplicateComparable> mapOfChanges,
+                                                 final Collection<Integer> listOfMissingIds) {
+    int safeToIgnoreMissingItemCounter = 0;
+    for ( int missingItem : listOfMissingIds ){
+      IndexToReplicateComparable index = mapOfChanges.get(new Change.Id(missingItem));
+      if ( index != null && index.safeToIgnoreMissingChange ){
+        // we have found that this missing item is actually safe to be ignored, if all items can be ignored
+        // we can exit early!
+        safeToIgnoreMissingItemCounter++;
+      }
+    }
+    return listOfMissingIds.size() == safeToIgnoreMissingItemCounter;
   }
 
   public static Collection<Integer> buildListOfMissingIds(final Collection<Integer> listOfRequestedIds, final Collection<Integer> listOfFoundIds) {
