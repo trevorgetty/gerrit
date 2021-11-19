@@ -307,18 +307,24 @@ public class ReplicatedIncomingIndexEventProcessor extends GerritPublishableImpl
     }
   }
 
+  /**
+   * Simple check if all the missing items - were safe to be ignored currently.
+   * @param mapOfChanges
+   * @param listOfMissingIds
+   * @return
+   */
   private boolean areAllMissingItemsSafeToIgnore(final NavigableMap<Change.Id, IndexToReplicateComparable> mapOfChanges,
                                                  final Collection<Integer> listOfMissingIds) {
-    int safeToIgnoreMissingItemCounter = 0;
     for ( int missingItem : listOfMissingIds ){
       IndexToReplicateComparable index = mapOfChanges.get(new Change.Id(missingItem));
-      if ( index != null && index.safeToIgnoreMissingChange ){
-        // we have found that this missing item is actually safe to be ignored, if all items can be ignored
+      if ( index == null || !index.safeToIgnoreMissingChange ){
+        // we have found that this missing item, can't be found, or it can not be ignored.
+        // Either way ALL items can't be verified as safe to ignore, so exit early with FALSE.
         // we can exit early!
-        safeToIgnoreMissingItemCounter++;
+        return false;
       }
     }
-    return listOfMissingIds.size() == safeToIgnoreMissingItemCounter;
+    return true;
   }
 
   public static Collection<Integer> buildListOfMissingIds(final Collection<Integer> listOfRequestedIds, final Collection<Integer> listOfFoundIds) {

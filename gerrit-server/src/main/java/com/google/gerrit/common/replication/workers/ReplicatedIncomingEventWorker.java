@@ -323,7 +323,7 @@ public class ReplicatedIncomingEventWorker implements Runnable {
    * From the bytes we read from disk, we get passed the created EventWrapper list in a sorted order.
    * We then process this list, and send them off to the appropriate processessors, to handle index/account/project
    * type events differently.
-   *
+   * <p>
    * N.B. Error handling descriptions and processing are described by GER-1483 / GER-1769.
    *
    * @param replicatedEventTask
@@ -393,7 +393,7 @@ public class ReplicatedIncomingEventWorker implements Runnable {
                 "indicated by missing changes.", eventsFileBeingProcessed);
 
         // If we are on the last retry - then allow all events to be attempted by not breaking out at this one.
-        if ( !isLastRetry ){
+        if (!isLastRetry) {
           break;
         }
       } catch (ReplicatedEventsDBNotUpToDateException e) {
@@ -410,7 +410,7 @@ public class ReplicatedIncomingEventWorker implements Runnable {
             eventsFileBeingProcessed, originalEvent);
         failedEvents++;
         // If we are on the last retry - then allow all events to be attempted by not breaking out at this one.
-        if ( !isLastRetry ){
+        if (!isLastRetry) {
           break;
         }
       }
@@ -455,7 +455,7 @@ public class ReplicatedIncomingEventWorker implements Runnable {
    * @return
    */
   private boolean isLastBackoffRetry(final ReplicatedEventTask replicatedEventTask) {
-    if ( replicatedEventsCoordinator.getReplicatedScheduling().containsSkipThisProjectForNow(replicatedEventTask.getProjectname())) {
+    if (replicatedEventsCoordinator.getReplicatedScheduling().containsSkipThisProjectForNow(replicatedEventTask.getProjectname())) {
       ProjectBackoffPeriod backoffPeriod = replicatedEventsCoordinator.getReplicatedScheduling().getSkipThisProjectForNowBackoffInfo(replicatedEventTask.getProjectname());
 
       // Lets check if we can fail further.
@@ -642,7 +642,7 @@ public class ReplicatedIncomingEventWorker implements Runnable {
     // Decide failure behaviour - should we just back off this event file further, or should it be moved finally
     // to the failed directory.
     if (!replicatedScheduling.containsSkipThisProjectForNow(projectName)) {
-      if (useFailImmediately) {
+      if (useFailImmediately && !isDBStale) {
         // Fail immediately can happen without backoff - its essentially like being on the final backoff and treated
         // as such - but there is nothing to stop us being in backoff, then hitting this error later, so we need to
         // handle fail immediately WITH and WITHOUT this project being in the backoff list already. !
@@ -674,12 +674,12 @@ public class ReplicatedIncomingEventWorker implements Runnable {
       return;
     }
 
-    // otherwise we do have this failure in the skipped list, lets check what to do - has it exceeded its max retry
-    // limit.
+    // otherwise we do have this failure in the skipped list, get the backoff info about this project.
     ProjectBackoffPeriod backoffPeriod = replicatedScheduling.getSkipThisProjectForNowBackoffInfo(projectName);
 
-    // Lets check if we can fail further.
-    if (backoffPeriod.getNumFailureRetries() >= replicatedConfiguration.getMaxIndexBackoffRetries() || useFailImmediately) {
+    // Check if we are on the last backoff retry - its special case of lets move to failed, unless DbIsStale then
+    // we have to wait and keep retrying at max backoff ceiling.
+    if (backoffPeriod.getNumFailureRetries() >= replicatedConfiguration.getMaxIndexBackoffRetries()) {
       if (isDBStale) {
         logger.atWarning().atMostEvery(replicatedConfiguration.getLoggingMaxPeriodValueMs(), TimeUnit.MILLISECONDS).log(
             "RE Task [ %s ] has failures, it has been requested to move to failed directory, but will keep retrying as DB is currently stale. NumFailureRetries: %s, FailImmediately: %s",
@@ -688,7 +688,7 @@ public class ReplicatedIncomingEventWorker implements Runnable {
       }
 
       logger.atWarning().log("RE Task [ %s ] has failures, it has been requested to move to failed directory, due to " +
-          "max number of retries allowed: %s, or failImmediately: %s. Moving to failed.",
+              "max number of retries allowed: %s, or failImmediately: %s. Moving to failed.",
           replicatedEventTask.toFriendlyInfo(), backoffPeriod.getNumFailureRetries(), useFailImmediately);
 
       // Potentially update the file content without the items which succeeded, or maybe there are no changes
@@ -701,9 +701,36 @@ public class ReplicatedIncomingEventWorker implements Runnable {
         // we have failed this event file - lets free up future event files by removing this backoff lock.
         replicatedScheduling.clearSkipThisProjectsEventsForNow(projectName);
       }
-
       return;
     }
+
+    if (useFailImmediately) {
+      if (!isDBStale) {
+        // we have been requested to fail now and we have processed all we can, lets put this file into failed with whatever
+        // items are left.
+        logger.atWarning().log("RE Task [ %s ] has failures, it has been requested to move to failed directory with failImmediately=true. Moving to failed.",
+            replicatedEventTask.toFriendlyInfo());
+
+        // Potentially update the file content without the items which succeeded, or maybe there are no changes
+        // this updates the file atomically - it DOES NOT move the file to failed here.
+        checkPersistRemainingEntries(replicatedEventTask, allEventsBeingProcessed, correctlyProcessedEvents);
+
+        synchronized (replicatedScheduling.getEventsFileInProgressLock()) {
+          FailedEventUtil.moveFileToFailed(replicatedConfiguration, eventsFileBeingProcessed);
+          replicatedScheduling.clearEventsFileInProgress(replicatedEventTask, false);
+          // we have failed this event file - lets free up future event files by removing this backoff lock.
+          replicatedScheduling.clearSkipThisProjectsEventsForNow(projectName);
+        }
+        return;
+      }
+
+      // DbIsStale it takes prescedence over fail immediately - just let it continue and bump backoff counter.
+      logger.atWarning().atMostEvery(replicatedConfiguration.getLoggingMaxPeriodValueMs(), TimeUnit.MILLISECONDS).log(
+          "RE Task [ %s ] has failures, it has been requested to move to failed directory with failImmediately=true, but will keep retrying as DB is currently stale. NumFailureRetries: %s",
+          replicatedEventTask.toFriendlyInfo(), backoffPeriod.getNumFailureRetries());
+      // do not return here - let it fall through...
+    }
+
 
     // ok we can attempt to fail this again.
     backoffPeriod.updateFailureInformation();
