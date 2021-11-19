@@ -46,9 +46,9 @@ public class ProjectBackoffPeriod {
     setStartTimeInMs(System.currentTimeMillis());
     final int curNumFailures = numFailureRetries.get();
     if (curNumFailures >= replicatedConfiguration.getMaxIndexBackoffRetries()) {
-      // we shouldn't be called this many times - throw.
-      throw new IndexOutOfBoundsException(
-          String.format("InvalidRequest - someone has requested to backoff and fail this item, more than the max number of times: %s.", numFailureRetries.get()));
+      // Keeping the counter at max retry count, so we keep backing off at the ceiling period, and not
+      // jump back down to smallest value.
+      return;
     }
     numFailureRetries.incrementAndGet();
   }

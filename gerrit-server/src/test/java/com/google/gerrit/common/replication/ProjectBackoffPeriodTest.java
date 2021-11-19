@@ -38,7 +38,7 @@ public class ProjectBackoffPeriodTest extends AbstractReplicationTesting {
   }
 
   @AfterClass
-  public static void shutdown(){
+  public static void shutdown() {
     dummyTestCoordinator.stop();
   }
 
@@ -102,23 +102,24 @@ public class ProjectBackoffPeriodTest extends AbstractReplicationTesting {
   }
 
   @Test
-  public void testBackoffPeriodMaxFailureRetries() {
+  public void testBackoffPeriodMaxFailureRetriesAndBeyond() {
     // check the default sequence makes sense.
     final String projectName = StringUtils.createUniqueString("testMe");
     ProjectBackoffPeriod projectBackoffPeriod = new ProjectBackoffPeriod(projectName, dummyTestCoordinator.getReplicatedConfiguration());
 
     Assert.assertEquals(1, projectBackoffPeriod.getNumFailureRetries());
 
-    exception.expect(IndexOutOfBoundsException.class);
-
-    // simple check after we get above our max retry counter of 10, it should throw!
-    for (int index = 1; index <= dummyTestCoordinator.getReplicatedConfiguration().getMaxIndexBackoffRetries(); index++) {
+    // simple check after we get above our max retry counter of 10, it shouldn't continue incrementing, but
+    // should stop at that point.
+    for (int index = 1; index <= dummyTestCoordinator.getReplicatedConfiguration().getMaxIndexBackoffRetries() + 5; index++) {
       projectBackoffPeriod.updateFailureInformation();
     }
+    // so we should still be at max retries here, check start time still updates though.
+    Assert.assertEquals(projectBackoffPeriod.getNumFailureRetries(), dummyTestCoordinator.getReplicatedConfiguration().getMaxIndexBackoffRetries());
   }
 
   @Test
-  public void testBackoffUpdateFailureInformation() throws Exception {
+  public void testBackoffUpdateFailureInformationStartTimeBeyondMaxRetries() throws Exception {
     Properties testingProperties = new Properties();
 
     // SET our pool to 2 items, plus the 2 core projects.
@@ -137,19 +138,20 @@ public class ProjectBackoffPeriodTest extends AbstractReplicationTesting {
     ProjectBackoffPeriod projectBackoffPeriod = new ProjectBackoffPeriod("testme", localTestCoordinator.getReplicatedConfiguration());
 
     // calling more than the allowed amount, but catching it and continue - to test the actual backoff period didn't get incremented.
-    try {
-      for (int index = 1; index <= 10; index++) {
-        projectBackoffPeriod.updateFailureInformation();
-      }
-      Assert.fail("Shouldn't ever be here should of thrown when max update retries got above 8.");
-    }
-    catch(IndexOutOfBoundsException e){
-      // ignoring this as it should of bailed out on the 9th element.
+    for (int index = 1; index <= 10; index++) {
+      projectBackoffPeriod.updateFailureInformation();
     }
 
-    // make sure we didn't get to call this 9 times, 8 time should of thrown
-    // so we should have retry count 1 - 9 ( 8 updates ) as its a 1 based index.
-    Assert.assertEquals(8, projectBackoffPeriod.getNumFailureRetries());
+    Assert.assertEquals(localTestCoordinator.getReplicatedConfiguration().getMaxIndexBackoffRetries(), projectBackoffPeriod.getNumFailureRetries());
+
+    // Check start time - then call update, and check again.
+    long startTimeForThisCheck = projectBackoffPeriod.getStartTimeInMs();
+    Thread.sleep(1000); // make sure we wait some time - was getting random errors when processed quickly.
+    projectBackoffPeriod.updateFailureInformation();
+    long startTimeForLaterCheck = projectBackoffPeriod.getStartTimeInMs();
+
+    Assert.assertNotEquals(startTimeForLaterCheck, startTimeForThisCheck);
+    Assert.assertTrue(startTimeForLaterCheck > startTimeForThisCheck);
   }
 
   /**

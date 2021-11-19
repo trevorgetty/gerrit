@@ -680,10 +680,14 @@ public class ReplicatedIncomingEventWorker implements Runnable {
     // Check if we are on the last backoff retry - its special case of lets move to failed, unless DbIsStale then
     // we have to wait and keep retrying at max backoff ceiling.
     if (backoffPeriod.getNumFailureRetries() >= replicatedConfiguration.getMaxIndexBackoffRetries()) {
-      if (isDBStale) {
-        logger.atWarning().atMostEvery(replicatedConfiguration.getLoggingMaxPeriodValueMs(), TimeUnit.MILLISECONDS).log(
-            "RE Task [ %s ] has failures, it has been requested to move to failed directory, but will keep retrying as DB is currently stale. NumFailureRetries: %s, FailImmediately: %s",
-            replicatedEventTask.toFriendlyInfo(), backoffPeriod.getNumFailureRetries(), useFailImmediately);
+      if (isDBStale) { // perform checkPersistRemainingEntries
+        // Potentially update the file content without the items which succeeded, or maybe there are no changes
+        // this updates the file atomically - it DOES NOT move the file to failed here.
+        checkPersistRemainingEntries(replicatedEventTask, allEventsBeingProcessed, correctlyProcessedEvents);
+        // we can't increase the counter any more, but we still need to update the last start time we tried this.
+        backoffPeriod.updateFailureInformation();
+        logger.atWarning().log("RE Task [ %s ] has failures, it has been requested to move to failed directory, but will keep retrying as DB is currently stale. FailImmediately: %s BackoffInfo: %s",
+            replicatedEventTask.toFriendlyInfo(), useFailImmediately, backoffPeriod);
         return;
       }
 
@@ -728,14 +732,17 @@ public class ReplicatedIncomingEventWorker implements Runnable {
       logger.atWarning().atMostEvery(replicatedConfiguration.getLoggingMaxPeriodValueMs(), TimeUnit.MILLISECONDS).log(
           "RE Task [ %s ] has failures, it has been requested to move to failed directory with failImmediately=true, but will keep retrying as DB is currently stale. NumFailureRetries: %s",
           replicatedEventTask.toFriendlyInfo(), backoffPeriod.getNumFailureRetries());
+      // Potentially update the file content without the items which succeeded, or maybe there are no changes
+      // this updates the file atomically - it DOES NOT move the file to failed here.
+      checkPersistRemainingEntries(replicatedEventTask, allEventsBeingProcessed, correctlyProcessedEvents);
       // do not return here - let it fall through...
     }
 
 
     // ok we can attempt to fail this again.
     backoffPeriod.updateFailureInformation();
-    logger.atWarning().log("RE Task [ %s ] has failures, is incrementing its backoff period to try again retry(%s).",
-        replicatedEventTask.toFriendlyInfo(), backoffPeriod.getNumFailureRetries());
+    logger.atWarning().log("RE Task [ %s ] has failures, updating backoff information: [ %s ].",
+        replicatedEventTask.toFriendlyInfo(), backoffPeriod);
   }
 
   /**
