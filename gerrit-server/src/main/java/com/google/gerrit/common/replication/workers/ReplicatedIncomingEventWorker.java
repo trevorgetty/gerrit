@@ -639,6 +639,10 @@ public class ReplicatedIncomingEventWorker implements Runnable {
     final String projectName = replicatedEventTask.getProjectname();
     final File eventsFileBeingProcessed = replicatedEventTask.getEventsFileToProcess();
 
+    // Potentially update the file content without the items which succeeded, or maybe there are no changes
+    // this updates the file atomically - it DOES NOT move the file to failed here.
+    checkPersistRemainingEntries(replicatedEventTask, allEventsBeingProcessed, correctlyProcessedEvents);
+
     // Decide failure behaviour - should we just back off this event file further, or should it be moved finally
     // to the failed directory.
     if (!replicatedScheduling.containsSkipThisProjectForNow(projectName)) {
@@ -648,8 +652,6 @@ public class ReplicatedIncomingEventWorker implements Runnable {
         // handle fail immediately WITH and WITHOUT this project being in the backoff list already. !
         logger.atWarning().log("RE Task [ %s ] has failures, we have indicated to fail immediately with remaining failures.",
             replicatedEventTask.toFriendlyInfo());
-        checkPersistRemainingEntries(replicatedEventTask, allEventsBeingProcessed, correctlyProcessedEvents);
-
         synchronized (replicatedScheduling.getEventsFileInProgressLock()) {
           FailedEventUtil.moveFileToFailed(replicatedConfiguration, eventsFileBeingProcessed);
           replicatedScheduling.clearEventsFileInProgress(replicatedEventTask, false);
@@ -667,10 +669,6 @@ public class ReplicatedIncomingEventWorker implements Runnable {
       // Note this should be a prepend for a simple list, but we use an ordered queue to regardless if will
       // jump to the HEAD of the FIFO.
       replicatedScheduling.prependSkippedProjectEventFile(eventsFileBeingProcessed, projectName);
-
-      // Potentially update the file content without the items which succeeded, or maybe there are no changes
-      // this updates the file atomically - it DOES NOT move the file to failed here.
-      checkPersistRemainingEntries(replicatedEventTask, allEventsBeingProcessed, correctlyProcessedEvents);
       return;
     }
 
@@ -681,9 +679,6 @@ public class ReplicatedIncomingEventWorker implements Runnable {
     // we have to wait and keep retrying at max backoff ceiling.
     if (backoffPeriod.getNumFailureRetries() >= replicatedConfiguration.getMaxIndexBackoffRetries()) {
       if (isDBStale) { // perform checkPersistRemainingEntries
-        // Potentially update the file content without the items which succeeded, or maybe there are no changes
-        // this updates the file atomically - it DOES NOT move the file to failed here.
-        checkPersistRemainingEntries(replicatedEventTask, allEventsBeingProcessed, correctlyProcessedEvents);
         // we can't increase the counter any more, but we still need to update the last start time we tried this.
         backoffPeriod.updateFailureInformation();
         logger.atWarning().log("RE Task [ %s ] has failures, it has been requested to move to failed directory, but will keep retrying as DB is currently stale. FailImmediately: %s BackoffInfo: %s",
@@ -694,10 +689,6 @@ public class ReplicatedIncomingEventWorker implements Runnable {
       logger.atWarning().log("RE Task [ %s ] has failures, it has been requested to move to failed directory, due to " +
               "max number of retries allowed: %s, or failImmediately: %s. Moving to failed.",
           replicatedEventTask.toFriendlyInfo(), backoffPeriod.getNumFailureRetries(), useFailImmediately);
-
-      // Potentially update the file content without the items which succeeded, or maybe there are no changes
-      // this updates the file atomically - it DOES NOT move the file to failed here.
-      checkPersistRemainingEntries(replicatedEventTask, allEventsBeingProcessed, correctlyProcessedEvents);
 
       synchronized (replicatedScheduling.getEventsFileInProgressLock()) {
         FailedEventUtil.moveFileToFailed(replicatedConfiguration, eventsFileBeingProcessed);
@@ -715,10 +706,6 @@ public class ReplicatedIncomingEventWorker implements Runnable {
         logger.atWarning().log("RE Task [ %s ] has failures, it has been requested to move to failed directory with failImmediately=true. Moving to failed.",
             replicatedEventTask.toFriendlyInfo());
 
-        // Potentially update the file content without the items which succeeded, or maybe there are no changes
-        // this updates the file atomically - it DOES NOT move the file to failed here.
-        checkPersistRemainingEntries(replicatedEventTask, allEventsBeingProcessed, correctlyProcessedEvents);
-
         synchronized (replicatedScheduling.getEventsFileInProgressLock()) {
           FailedEventUtil.moveFileToFailed(replicatedConfiguration, eventsFileBeingProcessed);
           replicatedScheduling.clearEventsFileInProgress(replicatedEventTask, false);
@@ -732,9 +719,6 @@ public class ReplicatedIncomingEventWorker implements Runnable {
       logger.atWarning().atMostEvery(replicatedConfiguration.getLoggingMaxPeriodValueMs(), TimeUnit.MILLISECONDS).log(
           "RE Task [ %s ] has failures, it has been requested to move to failed directory with failImmediately=true, but will keep retrying as DB is currently stale. NumFailureRetries: %s",
           replicatedEventTask.toFriendlyInfo(), backoffPeriod.getNumFailureRetries());
-      // Potentially update the file content without the items which succeeded, or maybe there are no changes
-      // this updates the file atomically - it DOES NOT move the file to failed here.
-      checkPersistRemainingEntries(replicatedEventTask, allEventsBeingProcessed, correctlyProcessedEvents);
       // do not return here - let it fall through...
     }
 

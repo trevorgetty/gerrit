@@ -200,7 +200,12 @@ public class ReplicatedOutgoingEventWorker implements Runnable{
         //Check we have something to write to disk, then do atomic rename now, otherwise just remove from the map.
         if(persistedEventInformation.setFileReady()){
           // Then do atomic rename of the .tmp file to its final event file name.
-          persistedEventInformation.atomicRenameTmpFilename();
+          if ( persistedEventInformation.atomicRenameTmpFilename() )
+          {
+            // The rename was successful
+            logger.atInfo().log("RE Created new file [ %s ] for project [ %s ] to be proposed",
+                persistedEventInformation.getFinalEventFileName(), persistedEventInformation.getProjectName() );
+          }
         }
         //then remove entry from the map
         iter.remove();

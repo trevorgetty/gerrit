@@ -99,9 +99,15 @@ public final class FailedEventUtil {
     // Set the file ready and atomically rename the file from its .tmp name back to its original name.
     if(persistedEventInformation.setFileReady()){
       // Then do atomic rename of the .tmp file to its final event file name.
-      persistedEventInformation.atomicRenameTmpFilename();
+      if (persistedEventInformation.atomicRenameTmpFilename()) {
+        // The rename was successful
+        log.info("RE Removed completed events from existing event file [ {} ] for project [ {} ].",
+            persistedEventInformation.getFinalEventFileName(),
+            persistedEventInformation.getProjectName());
+      }
       return;
     }
+
     //If we get here we haven't written any of the remaining events to the original file.
     log.error("Unable to write remaining events to {}", replicatedEventTask.getEventsFileToProcess());
   }

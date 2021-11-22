@@ -206,14 +206,15 @@ public class PersistedEventInformation {
    * construction of the PersistedEventInformation instance.
    * See {@link PersistedEventInformation#createThisEventsFilename(EventWrapper)} ()} ()} for how
    * this filename is composed.
+   * @return Returns TRUE when it has successfully renamed the temp file to its final named variety(atomically)
    */
-  public void atomicRenameTmpFilename() {
+  public boolean atomicRenameTmpFilename() {
 
     //The final event file name is set upon construction if we encounter a project that is not
     //in our outgoingEventInformationMap
     if (Strings.isNullOrEmpty(getFinalEventFileName())) {
       logger.atSevere().log("RE finalEventFileName was not set correctly, losing events!");
-      return;
+      return false;
     }
 
     File projectTmpEventFile = getEventFile();
@@ -236,13 +237,11 @@ public class PersistedEventInformation {
     if (!renamed) {
       logger.atSevere().log("RE Could not rename file to be picked up, losing events! %s",
           projectTmpEventFile.getAbsolutePath());
+      return false;
     }
 
-    // The rename was successful
-    logger.atInfo().log("RE Created new file [ %s ] for project [ %s ] to be proposed",
-        newFile.getAbsolutePath(), getProjectName());
-
     ReplicatorMetrics.totalPublishedLocalEventsProsals.incrementAndGet();
+    return true;
   }
 
 
