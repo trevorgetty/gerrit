@@ -1071,11 +1071,14 @@ maven_jar(
 # WANdisco maven assets
 _GERRIT_GITMS_VERSION = "1.1.2.1-SNAPSHOT"
 
+# We don't use the sha1 below when we are in SNAPSHOT
+# Comment sha1 back in for release versions
+
 maven_jar(
     name = "gerrit-gitms-interface",
     artifact = "com.wandisco:gerrit-gitms-interface:" + _GERRIT_GITMS_VERSION,
     repository = WANDISCO_ASSETS,
-    sha1 = "7be05330c4be7784f44ea85d4618249c8def021a",
+    #sha1 = "deca1013bf5ecc947b658bb2b6e4c5abb936e3d9",
 )
 
 load("//tools/bzl:js.bzl", "bower_archive", "npm_binary")
