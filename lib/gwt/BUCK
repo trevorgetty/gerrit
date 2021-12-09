@@ -3,7 +3,7 @@ include_defs('//lib/WD_REPOSITORY')
 include_defs('//tools/gwt-constants.defs')
 
 #  WD Release assets
-GWT_REPO = REPO_WD
+GWT_REPO = MAVEN_CENTRAL
 
 # Local maven repo.
 # GWT_REPO = MAVEN_LOCAL
